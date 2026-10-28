@@ -34,7 +34,16 @@ const monthStart = (offset) => {
 
 async function wipe() {
   const events = check(await db.from("events").select("id").eq("created_by", DEMO), "events");
-  if (events.length) check(await db.from("events").delete().in("id", events.map((e) => e.id)), "delete events");
+  const ids = events.map((e) => e.id);
+  if (ids.length) {
+    // Finance records keep events from being deleted: remove the demo's first.
+    const claims = check(await db.from("reimbursements").select("id, receipt_id").in("event_id", ids), "claims");
+    if (claims.length) {
+      check(await db.from("reimbursements").delete().in("id", claims.map((c) => c.id)), "delete claims");
+      check(await db.from("receipts").delete().in("id", claims.map((c) => c.receipt_id)), "delete receipts");
+    }
+    check(await db.from("events").delete().in("id", ids), "delete events");
+  }
   check(await db.from("event_ideas").delete().like("title", "[demo]%"), "delete ideas");
   const cycles = check(await db.from("planning_cycles").select("id").eq("created_by", DEMO), "cycles");
   if (cycles.length) check(await db.from("planning_cycles").delete().in("id", cycles.map((c) => c.id)), "delete cycles");
@@ -76,6 +85,22 @@ async function main() {
   }
   const { public_token: cafeToken } = check(await db.from("attendance_lists").select("public_token").eq("event_id", cafe).single(), "token");
 
+  // Last week: done, list signed off, receipts in Finance's queue.
+  const crawl = await event({ cycle_id: now, title: "Pub Crawl Maxvorstadt", type: "standard", status: "confirmed", starts_at: at(-6, 20), helpers_needed: 1, price_cents: 0 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  check(await db.from("attendance_lists").update({ signed_off_at: at(-5, 12), signed_off_by: "oc@esnmesa.org", headcount: 23 }).eq("event_id", crawl), "sign-off");
+  const { data: v1 } = await db.from("reimbursement_policies").select("id, version").eq("version", 1).single();
+  const rules = check(await db.from("reimbursement_rules").select("id, expense_kind, event_type").eq("policy_id", v1.id), "rules");
+  const ruleId = (kind, type) => rules.find((r) => r.expense_kind === kind && r.event_type === type).id;
+  for (const [claimant, role, kind, type, vendor, amount, suggested, status, payout] of [
+    [U.helper, "helper", "ticket", "standard", "Augustiner Keller", 2500, 800, "not_submitted", { iban: "DE89370400440532013000", account_holder: "Hugo Helper" }],
+    [U.oc, "oc", "ticket", "standard", "Schelling-Salon", 1400, 1400, "beleg_received", { paypal_email: "olga@example.com" }],
+    [U.oc, "oc", "ancillary", "any", "Decorations shop", 3150, 3150, "beleg_received", null],
+  ]) {
+    const receipt = check(await db.from("receipts").insert({ event_id: crawl, claimant_id: claimant, expense_kind: kind, vendor, amount_cents: amount, purchased_on: at(-6).slice(0, 10), ...(status !== "not_submitted" ? { beleg_received_at: at(-2, 10), beleg_received_by: "finance@esnmesa.org" } : {}) }).select("id").single(), "receipt");
+    const claim = check(await db.from("reimbursements").insert({ receipt_id: receipt.id, event_id: crawl, claimant_id: claimant, claimant_role: role, category: kind === "ancillary" ? "ancillary_costs" : "team_costs", policy_id: v1.id, policy_version: 1, rule_id: ruleId(kind, type), suggested_cents: suggested, flags: suggested < amount ? ["capped"] : [], status, payout_method: payout ? (payout.iban ? "bank" : "paypal") : null }).select("id").single(), "claim");
+    if (payout) check(await db.from("payout_details").insert({ reimbursement_id: claim.id, ...payout }), "payout");
+  }
+
   // A published description to start templates from.
   check(
     await db.from("descriptions").upsert({
@@ -113,6 +138,7 @@ async function main() {
   console.log(`  Quiz:   http://localhost:3000/events/${quiz}`);
   console.log(`  Hike:   http://localhost:3000/events/${hike} (under-staffed)`);
   console.log(`  Alps:   http://localhost:3000/events/${alps}`);
+  console.log(`  Crawl:  http://localhost:3000/events/${crawl}/hand-in (receipts; Finance: /team/finance)`);
   console.log(`  Café:   http://localhost:3000/events/${cafe}/attendance (list open)  form: http://localhost:3000/event/${cafeToken}`);
 }
 

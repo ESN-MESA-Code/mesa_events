@@ -165,6 +165,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"event_photos": {
+                  Row: {
+                    "created_at": string,"drive_file_id": string | null,"drive_url": string | null,"event_id": string,"file_name": string,"id": string,"mime_type": string,"size_bytes": number,"status": string,"storage_path": string,"uploaded_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"drive_file_id"?: string | null,"drive_url"?: string | null,"event_id": string,"file_name": string,"id"?: string,"mime_type": string,"size_bytes": number,"status"?: string,"storage_path": string,"uploaded_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"drive_file_id"?: string | null,"drive_url"?: string | null,"event_id"?: string,"file_name"?: string,"id"?: string,"mime_type"?: string,"size_bytes"?: number,"status"?: string,"storage_path"?: string,"uploaded_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_photos_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"event_series": {
                   Row: {
                     "created_at": string,"id": string,"title": string
@@ -361,6 +381,40 @@ isOneToOne: false
       referencedColumns: ["event_id"]
     }
                   ]
+                },"payout_batches": {
+                  Row: {
+                    "created_at": string,"id": string,"month": string,"paid_at": string | null,"paid_by": string | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"month": string,"paid_at"?: string | null,"paid_by"?: string | null,"status"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"month"?: string,"paid_at"?: string | null,"paid_by"?: string | null,"status"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"payout_details": {
+                  Row: {
+                    "account_holder": string | null,"iban": string | null,"paypal_email": string | null,"reimbursement_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_holder"?: string | null,"iban"?: string | null,"paypal_email"?: string | null,"reimbursement_id": string
+                  }
+                  Update: {
+                    "account_holder"?: string | null,"iban"?: string | null,"paypal_email"?: string | null,"reimbursement_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payout_details_reimbursement_id_fkey"
+      columns: ["reimbursement_id"]
+isOneToOne: true
+      referencedRelation: "reimbursements"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"planning_cycles": {
                   Row: {
                     "allocated_at": string | null,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"created_by": string | null,"description_deadline": string | null,"form_closes_at": string | null,"id": string,"month": string,"status": Database["public"]['Enums']["cycle_status"],"updated_at": string
@@ -375,6 +429,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"preapprovals": {
+                  Row: {
+                    "created_at": string,"decided_at": string | null,"decided_by": string | null,"description": string,"estimated_cents": number,"event_id": string,"id": string,"note": string,"requester_id": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"description": string,"estimated_cents": number,"event_id": string,"id"?: string,"note"?: string,"requester_id": string,"status"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"description"?: string,"estimated_cents"?: number,"event_id"?: string,"id"?: string,"note"?: string,"requester_id"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "preapprovals_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "preapprovals_requester_id_fkey"
+      columns: ["requester_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"profiles": {
                   Row: {
                     "created_at": string,"email": string,"full_name": string,"id": string
@@ -388,6 +468,122 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"receipts": {
+                  Row: {
+                    "amount_cents": number,"beleg_received_at": string | null,"beleg_received_by": string | null,"claimant_id": string,"created_at": string,"days": number | null,"description": string,"event_id": string,"expense_kind": string,"id": string,"purchased_on": string,"reference_path": string | null,"vendor": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents": number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id": string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id": string,"expense_kind": string,"id"?: string,"purchased_on": string,"reference_path"?: string | null,"vendor": string
+                  }
+                  Update: {
+                    "amount_cents"?: number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id"?: string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id"?: string,"expense_kind"?: string,"id"?: string,"purchased_on"?: string,"reference_path"?: string | null,"vendor"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "receipts_claimant_id_fkey"
+      columns: ["claimant_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "receipts_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"reimbursement_policies": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"effective_from": string,"id": string,"notes": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"effective_from": string,"id"?: string,"notes"?: string,"version": number
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"effective_from"?: string,"id"?: string,"notes"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"reimbursement_rules": {
+                  Row: {
+                    "category": string,"condition_note": string,"event_type": string,"expense_kind": string,"helper_cap_cents": number | null,"helper_rate_bp": number,"id": string,"oc_cap_cents": number | null,"oc_rate_bp": number,"per_day": boolean,"policy_id": string,"requires_preapproval": boolean,"within_trip_budget": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category": string,"condition_note"?: string,"event_type": string,"expense_kind": string,"helper_cap_cents"?: number | null,"helper_rate_bp": number,"id"?: string,"oc_cap_cents"?: number | null,"oc_rate_bp": number,"per_day"?: boolean,"policy_id": string,"requires_preapproval"?: boolean,"within_trip_budget"?: boolean
+                  }
+                  Update: {
+                    "category"?: string,"condition_note"?: string,"event_type"?: string,"expense_kind"?: string,"helper_cap_cents"?: number | null,"helper_rate_bp"?: number,"id"?: string,"oc_cap_cents"?: number | null,"oc_rate_bp"?: number,"per_day"?: boolean,"policy_id"?: string,"requires_preapproval"?: boolean,"within_trip_budget"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reimbursement_rules_policy_id_fkey"
+      columns: ["policy_id"]
+isOneToOne: false
+      referencedRelation: "reimbursement_policies"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"reimbursements": {
+                  Row: {
+                    "approved_cents": number | null,"batch_id": string | null,"category": string,"checked_at": string | null,"checked_by": string | null,"claimant_id": string,"claimant_role": string,"created_at": string,"early_payout": boolean,"event_id": string,"finance_note": string,"flags": (string)[],"id": string,"paid_at": string | null,"paid_by": string | null,"payout_method": string | null,"policy_id": string,"policy_version": number,"preapproval_id": string | null,"receipt_id": string,"rejected_reason": string | null,"rule_id": string,"status": string,"suggested_cents": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_cents"?: number | null,"batch_id"?: string | null,"category": string,"checked_at"?: string | null,"checked_by"?: string | null,"claimant_id": string,"claimant_role": string,"created_at"?: string,"early_payout"?: boolean,"event_id": string,"finance_note"?: string,"flags"?: (string)[],"id"?: string,"paid_at"?: string | null,"paid_by"?: string | null,"payout_method"?: string | null,"policy_id": string,"policy_version": number,"preapproval_id"?: string | null,"receipt_id": string,"rejected_reason"?: string | null,"rule_id": string,"status"?: string,"suggested_cents": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "approved_cents"?: number | null,"batch_id"?: string | null,"category"?: string,"checked_at"?: string | null,"checked_by"?: string | null,"claimant_id"?: string,"claimant_role"?: string,"created_at"?: string,"early_payout"?: boolean,"event_id"?: string,"finance_note"?: string,"flags"?: (string)[],"id"?: string,"paid_at"?: string | null,"paid_by"?: string | null,"payout_method"?: string | null,"policy_id"?: string,"policy_version"?: number,"preapproval_id"?: string | null,"receipt_id"?: string,"rejected_reason"?: string | null,"rule_id"?: string,"status"?: string,"suggested_cents"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reimbursements_batch_id_fkey"
+      columns: ["batch_id"]
+isOneToOne: false
+      referencedRelation: "payout_batches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_claimant_id_fkey"
+      columns: ["claimant_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_policy_id_fkey"
+      columns: ["policy_id"]
+isOneToOne: false
+      referencedRelation: "reimbursement_policies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_preapproval_id_fkey"
+      columns: ["preapproval_id"]
+isOneToOne: false
+      referencedRelation: "preapprovals"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_receipt_id_fkey"
+      columns: ["receipt_id"]
+isOneToOne: true
+      referencedRelation: "receipts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reimbursements_rule_id_fkey"
+      columns: ["rule_id"]
+isOneToOne: false
+      referencedRelation: "reimbursement_rules"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"reviews": {
                   Row: {
@@ -422,6 +618,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"trip_budgets": {
+                  Row: {
+                    "amount_cents": number,"event_id": string,"note": string,"set_at": string,"set_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents": number,"event_id": string,"note"?: string,"set_at"?: string,"set_by"?: string | null
+                  }
+                  Update: {
+                    "amount_cents"?: number,"event_id"?: string,"note"?: string,"set_at"?: string,"set_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "trip_budgets_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"volunteer_choices": {
                   Row: {
@@ -487,6 +703,9 @@ isOneToOne: false
 "acknowledge_confidentiality":
 { Args: { "accepted_version": string }; Returns: undefined
                            },
+"add_event_photo":
+{ Args: { "event": string,"file_name": string,"mime_type": string,"path": string,"size_bytes": number }; Returns: string
+                           },
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -500,6 +719,9 @@ isOneToOne: false
 { Args: { "event": string }; Returns: {
               "email": string,"full_name": string,"kind": string
             }[]
+                           },
+"check_reimbursement":
+{ Args: { "approved": number,"claim": string,"note"?: string }; Returns: undefined
                            },
 "claim_jobs":
 { Args: { "max_jobs"?: number,"worker": string }; Returns: {
@@ -546,6 +768,9 @@ isOneToOne: false
               "chosen_at": string,"email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
             }[]
                            },
+"decide_preapproval":
+{ Args: { "approve": boolean,"decision_note"?: string,"preapproval": string }; Returns: undefined
+                           },
 "delete_expired_acknowledgements":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
@@ -568,6 +793,9 @@ isOneToOne: false
                            },
 "event_accepts_signins":
 { Args: { "event": string }; Returns: boolean
+                           },
+"event_claims_summary":
+{ Args: { "event": string }; Returns: Json
                            },
 "event_list_open":
 { Args: { "event": string }; Returns: boolean
@@ -615,6 +843,9 @@ isOneToOne: false
 "is_workspace_member":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"mark_beleg_received":
+{ Args: { "claim": string }; Returns: undefined
+                           },
 "mark_description_published":
 { Args: { "event": string,"message_name": string,"posted_text": string }; Returns: undefined
                            },
@@ -632,17 +863,38 @@ isOneToOne: false
 "open_volunteer_form":
 { Args: { "closes_at": string,"cycle": string }; Returns: undefined
                            },
+"pay_batch":
+{ Args: { "batch": string }; Returns: number
+                           },
+"pay_early":
+{ Args: { "claim": string }; Returns: undefined
+                           },
+"policy_for":
+{ Args: { "day": string }; Returns: string
+                           },
 "publish_description":
 { Args: { "event": string }; Returns: undefined
                            },
+"publish_policy":
+{ Args: { "effective_from": string,"notes"?: string,"rules": Json }; Returns: number
+                           },
 "purge_auth_ip_addresses":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"register_receipt":
+{ Args: { "account_holder"?: string,"amount_cents": number,"days"?: number,"description"?: string,"event": string,"iban"?: string,"kind": string,"payout_method"?: string,"paypal_email"?: string,"preapproval"?: string,"purchased_on": string,"reference_path"?: string,"vendor": string }; Returns: string
+                           },
+"reject_reimbursement":
+{ Args: { "claim": string,"reason": string }; Returns: undefined
                            },
 "replace_group_role":
 { Args: { "emails": (string)[],"member_role": Database["public"]['Enums']["app_role"] }; Returns: number
                            },
 "request_chat_space":
 { Args: { "event": string }; Returns: undefined
+                           },
+"request_preapproval":
+{ Args: { "description": string,"estimated": number,"event": string }; Returns: string
                            },
 "retry_job":
 { Args: { "job_id": number }; Returns: undefined
@@ -664,6 +916,12 @@ isOneToOne: false
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
                            },
+"set_payout_details":
+{ Args: { "account_holder"?: string,"claim": string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: undefined
+                           },
+"set_trip_budget":
+{ Args: { "amount": number,"event": string,"note"?: string }; Returns: undefined
+                           },
 "sign_in":
 { Args: { "esn_card"?: boolean,"event": string,"exchange_program"?: string,"first_name": string,"kiosk"?: boolean,"last_name": string,"nationality"?: string,"notice_version": string,"terms_version": string,"university"?: string }; Returns: undefined
                            },
@@ -679,6 +937,11 @@ isOneToOne: false
 "submit_volunteer_form":
 { Args: { "choices": Json,"cycle": string,"note"?: string }; Returns: string
                            },
+"suggest_reimbursement":
+{ Args: { "amount_cents": number,"budget_left_cents"?: number,"claim_role": string,"days"?: number,"preapproved"?: boolean,"rule": string }; Returns: {
+              "flags": (string)[],"suggested_cents": number
+            }[]
+                           },
 "test_close_due_forms":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
@@ -689,6 +952,9 @@ isOneToOne: false
                            },
 "test_invoke_job_runner":
 { Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"withdraw_receipt":
+{ Args: { "claim": string }; Returns: undefined
                            },
 "workspace_domain":
 { Args: Record<PropertyKey, never>; Returns: string

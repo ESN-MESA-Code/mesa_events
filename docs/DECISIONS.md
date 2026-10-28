@@ -141,3 +141,35 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
   Realtime refuses their subscription instead of sending nothing.
 - **Digital lists for every event type**, with a warning on trips that LMU-funded trips still need
   the paper list (MESAttendance's rule).
+
+## 2026-10-28 – Milestone 6 (hand-in and reimbursements)
+
+- **Rules as versioned data** (`reimbursement_policies` + `reimbursement_rules`, version 1 = the
+  SPEC table). The Treasurer publishes a whole new version with an "in force from" date; a claim
+  uses the version in force on its **event's date** and stores it. Rates in basis points, money
+  in integer cents, half-up rounding.
+- **One formula, two implementations:** `lib/reimbursement.ts` (UI preview, unit tests) and
+  `public.suggest_reimbursement()` (the stored suggestion – a client cannot inject its own
+  number). A DB test compares both over every rule, role, amount, day count, pre-approval and
+  budget combination.
+- **Allowances** ("€16 / €8") are modelled as 100 % with a cap, per day on weekend trips; days
+  default to 1. Further expenses without an approved pre-approval suggest €0; social ancillary
+  costs suggest at most what is left of the trip budget (€0 without a budget). Finance confirms or
+  overrides in every case.
+- **Who claims:** the event's active OC and helpers. **Who sees receipts, claims, bank details:**
+  Finance (incl. Treasurer) and the claimant only – not the OC, not executives, not admins. The
+  event's people see counts (`event_claims_summary`).
+- **Bank/PayPal details** live in their own table per claim and are deleted when the claim is paid
+  or rejected (trigger). Checking a claim requires them.
+- **Statuses** follow the spec; "checked" claims join the open batch of the current month (the
+  next month's if that one was paid). Above the `early_payout_threshold_cents` setting (default
+  €100) Finance can pay a checked claim at once ("Pay early").
+- **Trip budgets** are set by Finance (incl. Treasurer) before the weekend trip starts; the
+  Treasurer alone decides pre-approvals.
+- **Receipt photos** go straight from the browser to the private `receipts` bucket
+  (`<event>/<claimant>/<uuid>.<ext>`, 5 MB, JPG/PNG/WebP/PDF enforced by the bucket); the claim
+  checks the object belongs to the claimant. Downloads go through `/api/receipts/[id]/file`, a
+  one-minute signed URL after RLS checks.
+- **Event photos** are uploaded to the private `event-photos` bucket (15 MB), then a job copies
+  them to the event's Drive folder and deletes them from Storage. Real Drive upload cannot be
+  exercised locally (fake Drive client records the files).

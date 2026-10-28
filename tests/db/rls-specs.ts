@@ -166,6 +166,117 @@ SPECS_EXTRA.push(
   }
 );
 
+const FINANCE: Role[] = ["finance", "treasurer"];
+const CLAIMANT_A: Role[] = [...FINANCE, "helper"];
+
+async function policyV1() {
+  const { data: pol } = await admin.from("reimbursement_policies").select("id, version").eq("version", 1).single();
+  const { data: rule } = await admin.from("reimbursement_rules").select("id").eq("policy_id", pol!.id).eq("expense_kind", "ticket").eq("event_type", "standard").single();
+  return { policy_id: pol!.id, policy_version: pol!.version, rule_id: rule!.id };
+}
+const receiptOf = (eventId: string) =>
+  insertRow("receipts", { event_id: eventId, claimant_id: USERS.helper.id, expense_kind: "ticket", vendor: "RLS", amount_cents: 100, purchased_on: "2026-11-01" });
+async function claimOf(eventId: string): Promise<Match> {
+  const receipt = await receiptOf(eventId);
+  return insertRow("reimbursements", {
+    receipt_id: receipt.id as string, event_id: eventId, claimant_id: USERS.helper.id, claimant_role: "helper", category: "team_costs", suggested_cents: 50, ...(await policyV1()),
+  });
+}
+async function payoutOf(eventId: string): Promise<Match> {
+  const claim = await claimOf(eventId);
+  await admin.from("payout_details").insert({ reimbursement_id: claim.id as string, iban: "DE89370400440532013000", account_holder: "RLS" });
+  return { reimbursement_id: claim.id };
+}
+const preapprovalOf = (eventId: string) => insertRow("preapprovals", { event_id: eventId, requester_id: USERS.helper.id, description: "RLS", estimated_cents: 100 });
+async function budgetOf(eventId: string): Promise<Match> {
+  await admin.from("trip_budgets").upsert({ event_id: eventId, amount_cents: 1000 });
+  return { event_id: eventId };
+}
+const batch = () => insertRow("payout_batches", { month: `${3000 + Math.floor(Math.random() * 6000)}-${String(1 + Math.floor(Math.random() * 12)).padStart(2, "0")}-01` });
+const photoOf = (eventId: string) =>
+  insertRow("event_photos", { event_id: eventId, storage_path: `${eventId}/${uid()}.png`, file_name: "rls.png", mime_type: "image/png", size_bytes: 10 });
+
+const readOnly = (table: string, rows: Spec["select"], make: (w: World) => Promise<Match>, insert: (w: World) => Record<string, unknown>, patch: Record<string, unknown>): Spec => ({
+  table: table as Spec["table"],
+  select: rows,
+  insert: [{ payload: (w) => insert(w), allowed: NOBODY, match: () => ({ id: "00000000-0000-0000-0000-000000000000" }) }],
+  update: [{ name: "a row", make, patch: () => patch, allowed: NOBODY }],
+  delete: [{ name: "a row", make, allowed: NOBODY }],
+});
+
+SPECS_EXTRA.push(
+  readOnly(
+    "reimbursement_policies",
+    [{ name: "version 1", make: async () => ({ version: 1 }), allowed: MEMBERS }],
+    async () => ({ version: 1 }),
+    () => ({ version: 999, effective_from: "2030-01-01" }),
+    { notes: "hacked" }
+  ),
+  readOnly(
+    "reimbursement_rules",
+    [{ name: "a rule of version 1", make: async () => ({ id: (await policyV1()).rule_id }), allowed: MEMBERS }],
+    async () => ({ id: (await policyV1()).rule_id }),
+    () => ({ policy_id: "00000000-0000-0000-0000-000000000000", event_type: "any", expense_kind: "ticket", category: "team_costs", oc_rate_bp: 1, helper_rate_bp: 1 }),
+    { oc_cap_cents: 999999 }
+  ),
+  readOnly(
+    "receipts",
+    [
+      { name: "helper's receipt at event A", make: (w) => receiptOf(w.eventA.id), allowed: CLAIMANT_A },
+      { name: "helper's receipt at event B", make: (w) => receiptOf(w.eventB.id), allowed: CLAIMANT_A },
+    ],
+    (w) => receiptOf(w.eventA.id),
+    (w) => ({ event_id: w.eventA.id, claimant_id: USERS.member.id, expense_kind: "ticket", vendor: "x", amount_cents: 1, purchased_on: "2026-11-01" }),
+    { amount_cents: 999999 }
+  ),
+  readOnly(
+    "reimbursements",
+    [{ name: "helper's claim at event A", make: (w) => claimOf(w.eventA.id), allowed: CLAIMANT_A }],
+    (w) => claimOf(w.eventA.id),
+    (w) => ({ event_id: w.eventA.id, claimant_id: USERS.member.id }),
+    { status: "paid", approved_cents: 999999 }
+  ),
+  readOnly(
+    "payout_details",
+    [{ name: "helper's IBAN", make: (w) => payoutOf(w.eventA.id), allowed: CLAIMANT_A }],
+    (w) => payoutOf(w.eventA.id),
+    () => ({ reimbursement_id: "00000000-0000-0000-0000-000000000000", iban: "DE89370400440532013000" }),
+    { iban: "DE02120300000000202051" }
+  ),
+  readOnly(
+    "preapprovals",
+    [{ name: "helper's request", make: (w) => preapprovalOf(w.eventA.id), allowed: CLAIMANT_A }],
+    (w) => preapprovalOf(w.eventA.id),
+    (w) => ({ event_id: w.eventA.id, requester_id: USERS.member.id, description: "x", estimated_cents: 1 }),
+    { status: "approved" }
+  ),
+  readOnly(
+    "trip_budgets",
+    [
+      { name: "budget of event A", make: (w) => budgetOf(w.eventA.id), allowed: [...FINANCE, "oc", "helper"] },
+      { name: "budget of event B", make: (w) => budgetOf(w.eventB.id), allowed: FINANCE },
+    ],
+    (w) => budgetOf(w.eventA.id),
+    (w) => ({ event_id: w.eventD.id, amount_cents: 1 }),
+    { amount_cents: 999999 }
+  ),
+  readOnly("payout_batches", [{ name: "a batch", make: () => batch(), allowed: FINANCE }], () => batch(), () => ({ month: "2999-01-01" }), { status: "paid" }),
+  readOnly(
+    "event_photos",
+    [
+      { name: "photo of event A", make: (w) => photoOf(w.eventA.id), allowed: STAFF_A },
+      { name: "photo of event B", make: (w) => photoOf(w.eventB.id), allowed: TEAM },
+    ],
+    (w) => photoOf(w.eventA.id),
+    (w) => ({ event_id: w.eventA.id, storage_path: "x", file_name: "x", mime_type: "image/png", size_bytes: 1 }),
+    { status: "uploaded" }
+  )
+);
+
 export async function cleanupExtra() {
   await admin.from("event_ideas").delete().like("title", "RLS%");
+  const { data: claims } = await admin.from("reimbursements").select("id, receipt_id").eq("claimant_id", USERS.helper.id).eq("suggested_cents", 50);
+  if (claims?.length) await admin.from("reimbursements").delete().in("id", claims.map((c) => c.id));
+  await admin.from("receipts").delete().eq("vendor", "RLS");
+  await admin.from("payout_batches").delete().gte("month", "3000-01-01");
 }
