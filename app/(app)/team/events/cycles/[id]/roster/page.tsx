@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, monthLabel } from "@/lib/dates";
+import { cycleLabel, formatDateTime } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { findConflicts } from "@/lib/allocation";
@@ -63,7 +63,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <PageHeader title={`Roster – ${monthLabel(cycle.month)}`} description="Drag people between events and roles, or use “Move to…”. Changes save at once.">
+      <PageHeader title={`Roster – ${cycleLabel(cycle.month)}`} description="Drag people between events and roles, or use “Move to…”. Changes save at once.">
         <div className="flex items-center gap-3 self-center">
           <Badge tone={cycle.status === "confirmed" ? "green" : "blue"}>{CYCLE_STATUS_LABELS[cycle.status]}</Badge>
           <Link href={`/team/events/cycles/${id}`} className="text-sm text-esn hover:underline">

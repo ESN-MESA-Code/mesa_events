@@ -53,6 +53,20 @@ export function monthLabel(month: string): string {
   return format(new Date(Date.UTC(y, m - 1, 15)), "MMMM yyyy");
 }
 
+/**
+ * A planning cycle by the month its events take place in:
+ * "2026-12-01" → "December 2026 events". Used everywhere a cycle is named.
+ */
+export function cycleLabel(month: string): string {
+  return `${monthLabel(month)} events`;
+}
+
+/** When a cycle is planned: the month before its events, "planned in November". */
+export function cyclePlannedIn(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `planned in ${format(new Date(Date.UTC(y, m - 2, 15)), "MMMM")}`;
+}
+
 /** First day of the month (Berlin) of an ISO timestamp, as "2026-11-01". */
 export function monthOf(iso: string): string {
   return `${berlinDate(iso).slice(0, 7)}-01`;

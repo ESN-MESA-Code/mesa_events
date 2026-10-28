@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { dbError, defineAction, PAGES, forbidden, notFound, requireEventOc, requireRole, uuid, ActionError, type ActionContext } from "@/lib/actions/core";
 import { allocate, type AllocationChoice, type Rank } from "@/lib/allocation";
-import { berlinInputToIso, monthOf } from "@/lib/dates";
+import { berlinInputToIso, monthLabel, monthOf } from "@/lib/dates";
 import { EVENT_TYPES } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 
@@ -123,13 +123,14 @@ export const createEvent = defineAction(z.object({ cycle_id: uuid, ...eventField
   if (!cycle) throw notFound();
   if (!["planning", "form_open"].includes(cycle.status)) throw new ActionError("failed", "Events can only be added while the schedule is being planned.");
   if (i.ends_at && i.ends_at < i.starts_at) throw new ActionError("failed", "The end is before the start.");
+  if (monthOf(i.starts_at) !== cycle.month) throw new ActionError("failed", `The event must take place in ${monthLabel(cycle.month)} – the month of this cycle.`);
   const { data, error } = await ctx.supabase
     .from("events")
     .insert({ ...i, status: cycle.status === "form_open" ? "scheduled" : "draft" })
     .select("id")
     .single();
   dbError(error);
-  return { id: data!.id, outsideMonth: monthOf(i.starts_at) !== cycle.month };
+  return { id: data!.id };
 }, { revalidate: [PAGES.eventsTeam, PAGES.calendar, PAGES.home] });
 
 /** Event details: Events changes everything, the OC location, price and capacity. */

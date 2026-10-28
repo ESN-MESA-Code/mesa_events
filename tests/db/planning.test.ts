@@ -7,6 +7,7 @@ import * as P from "@/lib/actions/planning";
 import { isoToBerlinInput } from "@/lib/dates";
 
 const ctx = actionContext;
+const Y = 2100 + Math.floor(Math.random() * 800);
 const local = (iso: string) => isoToBerlinInput(iso);
 
 describe("planning cycle end to end", () => {
@@ -17,7 +18,8 @@ describe("planning cycle end to end", () => {
   let ghostId: string;
 
   beforeAll(async () => {
-    cycleId = (await createCycle()).id;
+    // A December far in the future: the cycle's events must take place in its month.
+    cycleId = (await createCycle({ month: `${Y}-12-01` })).id;
   });
   afterAll(async () => {
     await admin.from("events").delete().eq("cycle_id", cycleId);
@@ -26,7 +28,7 @@ describe("planning cycle end to end", () => {
   });
 
   it("a member proposes an idea; only they and the teams see it", async () => {
-    const r = await P.proposeIdea(await ctx(USERS.member), { title: "Pub quiz (planning test)", proposed_date: "2026-12-03", pitch: "Trivia night", helpers_needed: 2 });
+    const r = await P.proposeIdea(await ctx(USERS.member), { title: "Pub quiz (planning test)", proposed_date: `${Y}-12-03`, pitch: "Trivia night", helpers_needed: 2 });
     expect(r.ok).toBe(true);
     ideaId = (r as { data: { id: string } }).data.id;
     expect((await (await as(USERS.helper)).from("event_ideas").select("id").eq("id", ideaId)).data).toEqual([]);
@@ -34,7 +36,7 @@ describe("planning cycle end to end", () => {
   });
 
   it("the proposer cannot accept their own idea; only Events can", async () => {
-    const asMember = await P.acceptIdea(await ctx(USERS.member), { idea_id: ideaId, cycle_id: cycleId, type: "standard", starts_at: "2026-12-03T19:00" });
+    const asMember = await P.acceptIdea(await ctx(USERS.member), { idea_id: ideaId, cycle_id: cycleId, type: "standard", starts_at: `${Y}-12-03T19:00` });
     expect(asMember).toMatchObject({ ok: false, error: "forbidden" });
     // Even straight to the database (skipping the action's check):
     const direct = await (await as(USERS.member)).rpc("accept_idea", { idea: ideaId, cycle: cycleId, event_type: "standard", starts: new Date().toISOString() });
@@ -42,11 +44,11 @@ describe("planning cycle end to end", () => {
     const sneaky = await (await as(USERS.member)).from("event_ideas").update({ status: "accepted" }).eq("id", ideaId);
     expect(sneaky.error).not.toBeNull();
 
-    const r = await P.acceptIdea(await ctx(USERS.events), { idea_id: ideaId, cycle_id: cycleId, type: "special", starts_at: "2026-12-03T19:00" });
+    const r = await P.acceptIdea(await ctx(USERS.events), { idea_id: ideaId, cycle_id: cycleId, type: "special", starts_at: `${Y}-12-03T19:00` });
     expect(r.ok).toBe(true);
     quizId = (r as { data: { event_id: string } }).data.event_id;
     const { data: ev } = await admin.from("events").select("status, type, proposed_by, starts_at").eq("id", quizId).single();
-    expect(ev).toMatchObject({ status: "draft", type: "special", proposed_by: USERS.member.id, starts_at: "2026-12-03T18:00:00+00:00" });
+    expect(ev).toMatchObject({ status: "draft", type: "special", proposed_by: USERS.member.id, starts_at: `${Y}-12-03T18:00:00+00:00` });
     const { data: idea } = await admin.from("event_ideas").select("status, decided_by").eq("id", ideaId).single();
     expect(idea).toEqual({ status: "accepted", decided_by: USERS.events.email });
   });
@@ -57,12 +59,32 @@ describe("planning cycle end to end", () => {
     expect(bad).toMatchObject({ ok: false, error: "invalid_input" });
     expect((bad as { issues: string[] }).issues.length).toBeGreaterThanOrEqual(4);
 
-    const hike = await P.createEvent(e, { cycle_id: cycleId, title: "Hike", type: "day_trip", starts_at: "2026-12-12T08:00", ends_at: "2026-12-12T18:00", helpers_needed: 1 });
+    const hike = await P.createEvent(e, { cycle_id: cycleId, title: "Hike", type: "day_trip", starts_at: `${Y}-12-12T08:00`, ends_at: `${Y}-12-12T18:00`, helpers_needed: 1 });
     hikeId = (hike as { data: { id: string } }).data.id;
-    const ghost = await P.createEvent(e, { cycle_id: cycleId, title: "Ghost tour", type: "standard", starts_at: "2026-12-20T20:00", helpers_needed: 1 });
+    const ghost = await P.createEvent(e, { cycle_id: cycleId, title: "Ghost tour", type: "standard", starts_at: `${Y}-12-20T20:00`, helpers_needed: 1 });
     ghostId = (ghost as { data: { id: string } }).data.id;
     expect(hike.ok && ghost.ok).toBe(true);
-    expect((await P.createEvent(await ctx(USERS.comms), { cycle_id: cycleId, title: "X", type: "standard", starts_at: "2026-12-20T20:00", helpers_needed: 1 })).ok).toBe(false);
+    expect((await P.createEvent(await ctx(USERS.comms), { cycle_id: cycleId, title: "X", type: "standard", starts_at: `${Y}-12-20T20:00`, helpers_needed: 1 })).ok).toBe(false);
+  });
+
+  it("an event's date must be in its cycle's month (review C2)", async () => {
+    const e = await ctx(USERS.events);
+    // November is the month the December cycle is planned in, not its events' month.
+    const early = await P.createEvent(e, { cycle_id: cycleId, title: "Too early", type: "standard", starts_at: `${Y}-11-28T19:00`, helpers_needed: 1 });
+    expect(early).toMatchObject({ ok: false, error: "failed" });
+    expect((early as { message: string }).message).toMatch(/December/);
+    // 1 January 00:30 in Berlin is still 31 December in UTC: Berlin decides.
+    expect((await P.createEvent(e, { cycle_id: cycleId, title: "New Year", type: "standard", starts_at: `${Y + 1}-01-01T00:30`, helpers_needed: 1 })).ok).toBe(false);
+    // Straight to the database, and moving an existing event out of the month.
+    const events = await as(USERS.events);
+    const direct = await events.from("events").insert({ cycle_id: cycleId, title: "Sneaky", starts_at: `${Y}-11-30T18:00:00Z` });
+    expect(direct.error?.code).toBe("22023");
+    expect((await events.from("events").update({ starts_at: `${Y + 1}-01-02T18:00:00Z` }).eq("id", hikeId)).error?.code).toBe("22023");
+    expect((await P.acceptIdea(e, { idea_id: ideaId, cycle_id: cycleId, type: "special", starts_at: `${Y}-11-03T19:00` })).ok).toBe(false);
+    // The cycle's month cannot change under its events.
+    expect((await events.from("planning_cycles").update({ month: `${Y}-11-01` }).eq("id", cycleId)).error?.code).toBe("22023");
+    const { data } = await admin.from("events").select("title").eq("cycle_id", cycleId).order("title");
+    expect(data!.map((r) => r.title)).toEqual(["Ghost tour", "Hike", "Pub quiz (planning test)"]);
   });
 
   it("the cycle status cannot be changed directly, only through the actions", async () => {
@@ -215,17 +237,17 @@ describe("planning cycle end to end", () => {
   it("the OC changes location, price and capacity, but not the date (review B3)", async () => {
     const oc = await ctx(USERS.oc);
     expect((await P.updateEvent(oc, { id: hikeId, location: "Kampenwand car park", price_cents: 1200, capacity: 20 })).ok).toBe(true);
-    expect(await P.updateEvent(oc, { id: hikeId, starts_at: "2026-12-13T08:00" })).toMatchObject({ ok: false, error: "forbidden" });
-    expect(await P.updateEvent(oc, { id: hikeId, ends_at: "2026-12-12T20:00" })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.updateEvent(oc, { id: hikeId, starts_at: `${Y}-12-13T08:00` })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.updateEvent(oc, { id: hikeId, ends_at: `${Y}-12-12T20:00` })).toMatchObject({ ok: false, error: "forbidden" });
     // Straight to the database too.
-    for (const patch of [{ starts_at: "2026-12-13T07:00:00Z" }, { ends_at: "2026-12-12T19:00:00Z" }]) {
+    for (const patch of [{ starts_at: `${Y}-12-13T07:00:00Z` }, { ends_at: `${Y}-12-12T19:00:00Z` }]) {
       const { error } = await (await as(USERS.oc)).from("events").update(patch).eq("id", hikeId);
       expect(error?.code, JSON.stringify(patch)).toBe("42501");
     }
     const { data } = await admin.from("events").select("starts_at, location, price_cents, capacity").eq("id", hikeId).single();
-    expect(data).toEqual({ starts_at: "2026-12-12T07:00:00+00:00", location: "Kampenwand car park", price_cents: 1200, capacity: 20 });
+    expect(data).toEqual({ starts_at: `${Y}-12-12T07:00:00+00:00`, location: "Kampenwand car park", price_cents: 1200, capacity: 20 });
     // Events moves it.
-    expect((await P.updateEvent(await ctx(USERS.events), { id: hikeId, starts_at: "2026-12-12T09:00" })).ok).toBe(true);
+    expect((await P.updateEvent(await ctx(USERS.events), { id: hikeId, starts_at: `${Y}-12-12T09:00` })).ok).toBe(true);
   });
 
   it("every step is in the activity log", async () => {

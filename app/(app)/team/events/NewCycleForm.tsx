@@ -19,8 +19,9 @@ export function NewCycleForm() {
       }}
     >
       <div>
-        <Label htmlFor="cycle-month">New cycle for</Label>
+        <Label htmlFor="cycle-month">New cycle: events in</Label>
         <Input id="cycle-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} required />
+        <p className="mt-1 text-xs text-gray-500">The month the events take place in – usually next month.</p>
       </div>
       <Button disabled={pending || !month}>Start planning</Button>
       {error && <Alert tone="error" className="w-full">{error}</Alert>}

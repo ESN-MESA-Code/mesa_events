@@ -1,9 +1,11 @@
 // `npm run seed:demo` – a realistic month in the LOCAL database to click
-// through: a confirmed month with Chat spaces requested, the next month's
-// volunteer form open, ideas for the month after, an event happening now
-// (attendance open) and a past event ready for hand-in with receipts.
-// Run it again to start over: it replaces only what it created before
-// (everything created_by demo@esnmesa.org). Never touches .env.local.
+// through: confirmed events around today with Chat spaces requested (each in
+// the cycle of the month it takes place in), the following month's volunteer
+// form open, ideas for the month after, an event happening now (attendance
+// open) and a past event ready for hand-in with receipts.
+// Run it again to start over: it replaces what it created before (everything
+// created_by demo@esnmesa.org, and whatever was added to its cycles). Never
+// touches .env.local.
 import { createClient } from "@supabase/supabase-js";
 import { LOCAL_ENV } from "./local-supabase.mjs";
 
@@ -27,10 +29,14 @@ const at = (offsetDays, hour = 19) => {
   d.setUTCHours(hour - 1, 0, 0, 0); // Berlin winter time
   return d.toISOString();
 };
-const monthStart = (offset) => {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1)).toISOString().slice(0, 10);
+// A cycle's month is the month its events take place in (Berlin): "2026-11-01".
+const berlinMonth = (iso) => `${new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit" }).format(new Date(iso))}-01`;
+const addMonths = (month, n) => {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10);
 };
+/** 19:00 (Berlin winter time) on `day` of `month`. */
+const onDay = (month, day, hour = 19) => new Date(`${month.slice(0, 8)}${String(day).padStart(2, "0")}T${String(hour - 1).padStart(2, "0")}:00:00Z`).toISOString();
 
 async function wipe() {
   // Everything in the demo's cycles goes, including events added there by
@@ -70,25 +76,35 @@ async function event(e, staff = []) {
 async function main() {
   const removed = await wipe();
 
-  // This month: confirmed roster, Chat spaces requested (pg_cron runs the jobs while dev:local is up).
-  const now = await cycle(monthStart(0), "confirmed", { description_deadline: at(3, 20), confirmed_at: new Date().toISOString(), confirmed_by: "events@esnmesa.org" });
-  const quiz = await event({ cycle_id: now, title: "Pub Quiz Night", type: "standard", status: "confirmed", starts_at: at(5), helpers_needed: 2, price_cents: 500 }, [[U.oc, "oc"], [U.helper, "helper"], [U.volunteer2, "helper"]]);
-  const hike = await event({ cycle_id: now, title: "Hike to the Kampenwand", type: "day_trip", status: "understaffed", starts_at: at(9, 8), ends_at: at(9, 18), helpers_needed: 2 }, [[U.oc, "oc"], [U.helper, "helper"]]);
-  const museum = await event({ cycle_id: now, title: "Museum Night", type: "special", status: "confirmed", starts_at: at(12), helpers_needed: 1, price_cents: 1500 }, [[U.volunteer1, "oc"], [U.member, "helper"]]);
-  const alps = await event({ cycle_id: now, title: "Weekend in the Alps", type: "weekend_trip", status: "confirmed", starts_at: at(16, 8), ends_at: at(18, 18), helpers_needed: 1 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  // The weeks around today: confirmed rosters, Chat spaces requested (pg_cron
+  // runs the jobs while dev:local is up). Each event belongs to the cycle of
+  // the month it takes place in – near the end of a month that is two cycles.
+  const confirmed = new Map();
+  const cycleOf = async (iso) => {
+    const month = berlinMonth(iso);
+    if (!confirmed.has(month)) {
+      confirmed.set(month, await cycle(month, "confirmed", { description_deadline: at(3, 20), confirmed_at: new Date().toISOString(), confirmed_by: "events@esnmesa.org" }));
+    }
+    return confirmed.get(month);
+  };
+  const ev = async (e, staff) => event({ ...e, cycle_id: await cycleOf(e.starts_at) }, staff);
+  const quiz = await ev({ title: "Pub Quiz Night", type: "standard", status: "confirmed", starts_at: at(5), helpers_needed: 2, price_cents: 500 }, [[U.oc, "oc"], [U.helper, "helper"], [U.volunteer2, "helper"]]);
+  const hike = await ev({ title: "Hike to the Kampenwand", type: "day_trip", status: "understaffed", starts_at: at(9, 8), ends_at: at(9, 18), helpers_needed: 2 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  const museum = await ev({ title: "Museum Night", type: "special", status: "confirmed", starts_at: at(12), helpers_needed: 1, price_cents: 1500 }, [[U.volunteer1, "oc"], [U.member, "helper"]]);
+  const alps = await ev({ title: "Weekend in the Alps", type: "weekend_trip", status: "confirmed", starts_at: at(16, 8), ends_at: at(18, 18), helpers_needed: 1 }, [[U.oc, "oc"], [U.helper, "helper"]]);
   for (const id of [quiz, hike, museum, alps]) {
     check(await db.from("events").update({ chat_space_requested_at: new Date().toISOString() }).eq("id", id), "space");
     check(await db.rpc("enqueue_job", { job_kind: "chat.create_space", job_payload: { event_id: id }, key: `chat.create_space:${id}` }), "job");
   }
   // Happening right now: the attendance list is open (QR code, kiosk, live names).
-  const cafe = await event({ cycle_id: now, title: "Language Café", type: "standard", status: "confirmed", starts_at: new Date(Date.now() + 30 * 60_000).toISOString(), helpers_needed: 1 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  const cafe = await ev({ title: "Language Café", type: "standard", status: "confirmed", starts_at: new Date(Date.now() + 30 * 60_000).toISOString(), helpers_needed: 1 }, [[U.oc, "oc"], [U.helper, "helper"]]);
   for (const [first_name, last_name, nationality] of [["Giulia", "Rossi", "IT"], ["Lucas", "Martin", "FR"], ["Ana", "García", "ES"]]) {
     check(await db.rpc("sign_in", { event: cafe, first_name, last_name, notice_version: "2026-10-23", terms_version: "2026-10-23", nationality, university: "LMU", exchange_program: "Erasmus+", esn_card: true }), "sign-in");
   }
   const { public_token: cafeToken } = check(await db.from("attendance_lists").select("public_token").eq("event_id", cafe).single(), "token");
 
   // Last week: done, list signed off, receipts in Finance's queue.
-  const crawl = await event({ cycle_id: now, title: "Pub Crawl Maxvorstadt", type: "standard", status: "confirmed", starts_at: at(-6, 20), helpers_needed: 1, price_cents: 0 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  const crawl = await ev({ title: "Pub Crawl Maxvorstadt", type: "standard", status: "confirmed", starts_at: at(-6, 20), helpers_needed: 1, price_cents: 0 }, [[U.oc, "oc"], [U.helper, "helper"]]);
   check(await db.from("attendance_lists").update({ signed_off_at: at(-5, 12), signed_off_by: "oc@esnmesa.org", headcount: 23 }).eq("event_id", crawl), "sign-off");
   const { data: v1 } = await db.from("reimbursement_policies").select("id, version").eq("version", 1).single();
   const rules = check(await db.from("reimbursement_rules").select("id, expense_kind, event_type").eq("policy_id", v1.id), "rules");
@@ -115,19 +131,21 @@ async function main() {
     "description"
   );
 
-  // Next month: the volunteer form is open.
-  const next = await cycle(monthStart(1), "form_open", { form_closes_at: at(4, 23) });
-  for (const [title, type, offset] of [
-    ["Language Café", "standard", 35],
-    ["International Dinner", "special", 40],
-    ["Day Trip to Salzburg", "day_trip", 44],
+  // The month after those: the volunteer form is open.
+  const formMonth = addMonths([...confirmed.keys()].sort().at(-1), 1);
+  const next = await cycle(formMonth, "form_open", { form_closes_at: at(4, 23) });
+  for (const [title, type, day] of [
+    ["Language Café", "standard", 6],
+    ["International Dinner", "special", 12],
+    ["Day Trip to Salzburg", "day_trip", 19],
   ]) {
-    await event({ cycle_id: next, title, type, status: "scheduled", starts_at: at(offset), helpers_needed: 2 });
+    await event({ cycle_id: next, title, type, status: "scheduled", starts_at: onDay(formMonth, day, type === "day_trip" ? 8 : 19), helpers_needed: 2 });
   }
 
-  // The month after: planning, with ideas waiting.
-  await cycle(monthStart(2), "planning");
-  const ideaDate = monthStart(2).slice(0, 8) + "12";
+  // And the month after: planning, with ideas waiting.
+  const planningMonth = addMonths(formMonth, 1);
+  await cycle(planningMonth, "planning");
+  const ideaDate = planningMonth.slice(0, 8) + "12";
   check(
     await db.from("event_ideas").insert([
       { title: "[demo] Bouldering evening", proposed_date: ideaDate, pitch: "Beginner-friendly bouldering with rental shoes.", helpers_needed: 2, proposer_id: U.member, wants_to_oc: true },

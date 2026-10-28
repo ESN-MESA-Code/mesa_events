@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { formatDateTime, monthLabel } from "@/lib/dates";
+import { cycleLabel, formatDateTime } from "@/lib/dates";
 import { EVENT_TYPE_LABELS } from "@/lib/labels";
 import { RANK_LABELS } from "@/lib/volunteer";
 import { Alert, Badge, Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
@@ -44,11 +44,11 @@ export default async function VolunteerPage() {
       )}
       <div className="space-y-8">
         {forms.map(({ cycle, events, response }) => {
-          const label = monthLabel(cycle.month);
+          const label = cycleLabel(cycle.month);
           const chosen = new Map((response?.volunteer_choices ?? []).map((c) => [c.event_id, c]));
           return (
             <section key={cycle.id} aria-label={`Volunteer form ${label}`}>
-              <h2 className="text-lg font-semibold text-gray-900">{label} events</h2>
+              <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
               <p className="text-sm text-gray-500 mb-3">{cycle.form_closes_at ? `Open until ${formatDateTime(cycle.form_closes_at)}.` : "Open."}</p>
               {response ? (
                 <Card data-testid="volunteer-summary">

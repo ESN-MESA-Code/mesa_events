@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, monthLabel, nowMs } from "@/lib/dates";
+import { cycleLabel, formatDateTime, nowMs } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS, EVENT_STATUS_LABELS, EVENT_STATUS_TONES } from "@/lib/labels";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 
@@ -88,7 +88,7 @@ export async function EventsDashboard() {
               {(cycles ?? []).map((c) => (
                 <li key={c.id}>
                   <Link href={`/team/events/cycles/${c.id}`} className="font-medium text-esn hover:underline">
-                    {monthLabel(c.month)}
+                    {cycleLabel(c.month)}
                   </Link>
                   <span className="text-gray-500">
                     {" "}

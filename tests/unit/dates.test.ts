@@ -8,6 +8,8 @@ import {
   formatCents,
   formatDateTime,
   isoToBerlinInput,
+  cycleLabel,
+  cyclePlannedIn,
   monthLabel,
   monthOf,
   monthStartIso,
@@ -54,6 +56,10 @@ describe("Berlin wall clock ↔ UTC", () => {
 describe("months", () => {
   it("labels and finds months in Berlin", () => {
     expect(monthLabel("2026-11-01")).toBe("November 2026");
+    // A cycle is named by the month of its events, planned the month before.
+    expect(cycleLabel("2026-12-01")).toBe("December 2026 events");
+    expect(cyclePlannedIn("2026-12-01")).toBe("planned in November");
+    expect(cyclePlannedIn("2027-01-01")).toBe("planned in December");
     // 23:30 UTC on 31 Oct is already November in Berlin.
     expect(monthOf("2026-10-31T23:30:00Z")).toBe("2026-11-01");
     expect(monthStartIso("2026-11-01")).toBe("2026-10-31T23:00:00.000Z");

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, monthLabel } from "@/lib/dates";
+import { cycleLabel, cyclePlannedIn, formatDateTime } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
@@ -36,7 +36,10 @@ export default async function EventsTeamPage() {
               {(cycles ?? []).map((c) => (
                 <li key={c.id}>
                   <Link href={`/team/events/cycles/${c.id}`} className="flex flex-wrap items-center gap-3 py-3 hover:bg-gray-50 px-1">
-                    <span className="font-medium text-gray-900 w-40">{monthLabel(c.month)}</span>
+                    <span className="w-48">
+                      <span className="block font-medium text-gray-900">{cycleLabel(c.month)}</span>
+                      <span className="block text-xs text-gray-500">{cyclePlannedIn(c.month)}</span>
+                    </span>
                     <Badge tone={c.status === "confirmed" ? "green" : c.status === "form_open" ? "blue" : "gray"}>{CYCLE_STATUS_LABELS[c.status]}</Badge>
                     {c.form_closes_at && c.status === "form_open" && <span className="text-xs text-gray-500">form closes {formatDateTime(c.form_closes_at)}</span>}
                     {c.description_deadline && <span className="text-xs text-gray-500 ml-auto">descriptions due {formatDateTime(c.description_deadline)}</span>}

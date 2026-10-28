@@ -3,7 +3,7 @@
 // description with a Comms review → publish → attendance → receipt →
 // Finance → paid.
 import { USERS, admin, hoursFromNow } from "../helpers/local";
-import { monthLabel } from "../../lib/dates";
+import { cycleLabel } from "../../lib/dates";
 import { expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
 
 test("a month from idea to paid reimbursement", async ({ page, context, baseURL, browser }) => {
@@ -61,7 +61,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     const answer = async (user: (typeof USERS)[keyof typeof USERS], picks: Array<[string, string]>, count: number) => {
       await as(user);
       await page.goto("/volunteer");
-      const form = page.getByRole("region", { name: `Volunteer form ${monthLabel(`${month}-01`)}` });
+      const form = page.getByRole("region", { name: `Volunteer form ${cycleLabel(`${month}-01`)}` });
       for (const [label, choice] of picks) await form.getByLabel(label).selectOption({ label: choice });
       await form.getByRole("button", { name: "Submit my answers" }).click();
       const summary = form.getByTestId("volunteer-summary");

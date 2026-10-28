@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, isoToBerlinInput, monthLabel } from "@/lib/dates";
+import { cycleLabel, cyclePlannedIn, formatDateTime, isoToBerlinInput } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
@@ -47,7 +47,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <PageHeader title={`${monthLabel(cycle.month)}`} description="Month schedule: ideas, events and their types, the volunteer form and the roster.">
+      <PageHeader title={cycleLabel(cycle.month)} description={`Month schedule (${cyclePlannedIn(cycle.month)}): ideas, events and their types, the volunteer form and the roster.`}>
         <Badge tone={cycle.status === "confirmed" ? "green" : "blue"} className="self-center text-sm">
           {CYCLE_STATUS_LABELS[cycle.status]}
         </Badge>
