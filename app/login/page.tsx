@@ -64,7 +64,8 @@ function LoginForm() {
         {loading ? "Redirecting…" : "Sign in with Google"}
       </button>
 
-      {localLoginEnabled() && (
+      {/* NODE_ENV is a build-time constant: production builds drop this block entirely (tests/bundle). */}
+      {process.env.NODE_ENV !== "production" && localLoginEnabled() && (
         <form action="/auth/local-login" method="post" className="mt-4 pt-4 border-t border-dashed border-gray-300 text-left space-y-2">
           <input type="hidden" name="next" value={next} />
           <label htmlFor="local-user" className="block text-xs font-medium text-gray-600">

@@ -173,3 +173,18 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
 - **Event photos** are uploaded to the private `event-photos` bucket (15 MB), then a job copies
   them to the event's Drive folder and deletes them from Storage. Real Drive upload cannot be
   exercised locally (fake Drive client records the files).
+
+## 2026-10-28 – Milestone 7 (dashboards, tests, packaging)
+
+- **E2E runs against the production standalone build** (`build:local` + `start-standalone`), not
+  the dev server, so CSP, headers and "no local sign-in in production" are tested as shipped.
+  Sessions are real Supabase Auth sessions put into cookies. One step "time-travels" an event's
+  start (service role) to open its attendance list.
+- **Local sign-in is removed from production bundles at build time** (`NODE_ENV` guard around the
+  login markup); the bundle scan enforces it.
+- **Explicit environment wins over local defaults** in `scripts/start-standalone.mjs` (Playwright
+  sets `APP_BASE_URL` for links in Chat messages).
+- **Docker image** runs as a non-root user, copies `legal/` (texts are read at runtime) and takes
+  the `NEXT_PUBLIC_*` values as build args.
+- **Checklist** rules live in a pure function (`lib/checklist.ts`) so they are unit-tested;
+  cancelled events only list open receipts.

@@ -17,6 +17,7 @@ const local = process.argv.includes("--local");
 const child = spawn(process.execPath, ["server.js"], {
   cwd: ".next/standalone",
   stdio: "inherit",
-  env: { ...process.env, ...(local ? LOCAL_ENV : {}), PORT: process.env.PORT ?? "3000", HOSTNAME: process.env.HOSTNAME ?? "127.0.0.1" },
+  // Variables set by the caller (e.g. APP_BASE_URL from Playwright) win over the local defaults.
+  env: { ...(local ? LOCAL_ENV : {}), ...process.env, PORT: process.env.PORT ?? "3000", HOSTNAME: process.env.HOSTNAME ?? "127.0.0.1" },
 });
 child.on("exit", (code) => process.exit(code ?? 0));
