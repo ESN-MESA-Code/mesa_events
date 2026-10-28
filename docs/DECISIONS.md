@@ -188,3 +188,9 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
   the `NEXT_PUBLIC_*` values as build args.
 - **Checklist** rules live in a pure function (`lib/checklist.ts`) so they are unit-tested;
   cancelled events only list open receipts.
+
+## 2026-10-28 – After hand-over
+
+- **`dev:local` removes `.next/standalone` before starting.** A production standalone build left
+  in `.next` by `build:local` / the E2E run made the dev server reload every page in an endless
+  loop; the E2E run rebuilds it anyway.
