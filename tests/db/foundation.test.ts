@@ -149,6 +149,27 @@ describe("jobs queue", () => {
     expect(job).toEqual({ status: "pending", attempts: 0 });
   });
 
+  it("a job whose worker keeps dying is re-claimed, then given up after max_attempts (review B4)", async () => {
+    const key = `test.stale.${Date.now()}`;
+    await admin.rpc("enqueue_job", { job_kind: "system.noop", job_payload: {}, key });
+    const stale = new Date(Date.now() - 11 * 60_000).toISOString();
+    // The runner claimed it twice and died both times (locked > 10 minutes ago).
+    await admin.from("jobs").update({ status: "running", attempts: 1, max_attempts: 2, locked_at: stale, locked_by: "dead-worker" }).eq("idempotency_key", key);
+    let { data: claimed } = await admin.rpc("claim_jobs", { worker: "test-stale", max_jobs: 100 });
+    expect(claimed!.find((j) => j.idempotency_key === key)).toMatchObject({ status: "running", attempts: 2, locked_by: "test-stale" });
+
+    await admin.from("jobs").update({ locked_at: stale }).eq("idempotency_key", key);
+    ({ data: claimed } = await admin.rpc("claim_jobs", { worker: "test-stale", max_jobs: 100 }));
+    expect(claimed!.find((j) => j.idempotency_key === key)).toBeUndefined();
+    const { data: job } = await admin.from("jobs").select("status, attempts, locked_at, last_error").eq("idempotency_key", key).single();
+    expect(job).toMatchObject({ status: "dead", attempts: 2, locked_at: null });
+    expect(job!.last_error).toMatch(/Gave up: the worker stopped without finishing \(attempt 2 of 2\)/);
+    // A recently locked job is left alone.
+    await admin.from("jobs").update({ status: "running", attempts: 5, max_attempts: 2, locked_at: new Date().toISOString() }).eq("idempotency_key", key);
+    await admin.rpc("claim_jobs", { worker: "test-stale", max_jobs: 100 });
+    expect((await admin.from("jobs").select("status").eq("idempotency_key", key).single()).data!.status).toBe("running");
+  });
+
   it("a coalescing job runs again after it finished, and once more if enqueued while running", async () => {
     const key = `test.coalesce.${Date.now()}`;
     const enqueue = (n: number) => admin.rpc("enqueue_job", { job_kind: "system.noop", job_payload: { n }, key, coalescing: true });
