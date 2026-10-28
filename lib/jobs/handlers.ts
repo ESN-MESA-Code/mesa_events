@@ -2,6 +2,7 @@
 // failure or a crash halfway through.
 import { roleGroups, type AppRole } from "@/lib/roles";
 import type { JobHandler } from "@/lib/jobs/runner";
+import { createSpace, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
 
 /** Mirrors the configured Google groups into public.role_members ('group' rows). */
 export const syncRoles: JobHandler = async (_job, { admin, google, env }) => {
@@ -23,4 +24,7 @@ export const noop: JobHandler = async (job) => ({ echoed: job.payload });
 export const HANDLERS: Record<string, JobHandler> = {
   "directory.sync_roles": syncRoles,
   "system.noop": noop,
+  "chat.create_space": createSpace,
+  "chat.sync_members": syncSpaceMembers,
+  "chat.roster_message": rosterChange,
 };

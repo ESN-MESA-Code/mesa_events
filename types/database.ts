@@ -59,6 +59,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"event_chat_members": {
+                  Row: {
+                    "added_at": string,"email": string,"event_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_at"?: string,"email": string,"event_id": string
+                  }
+                  Update: {
+                    "added_at"?: string,"email"?: string,"event_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_chat_members_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"event_ideas": {
                   Row: {
                     "created_at": string,"decided_by": string | null,"decision_note": string | null,"event_id": string | null,"helpers_needed": number,"id": string,"pitch": string,"proposed_date": string,"proposer_id": string,"status": string,"title": string,"updated_at": string,"wants_to_oc": boolean
@@ -101,14 +121,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "capacity": number | null,"chat_space_name": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"updated_at": string,"visibility": string
+                    "capacity": number | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
+                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
+                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -353,6 +373,11 @@ isOneToOne: false
 "can_read_event":
 { Args: { "event": string }; Returns: boolean
                            },
+"chat_space_roster":
+{ Args: { "event": string }; Returns: {
+              "email": string,"full_name": string,"kind": string
+            }[]
+                           },
 "claim_jobs":
 { Args: { "max_jobs"?: number,"worker": string }; Returns: {
               "attempts": number,
@@ -378,6 +403,9 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"claim_slot":
+{ Args: { "event": string,"slot_role": string }; Returns: string
+                           },
 "close_volunteer_form":
 { Args: { "cycle": string }; Returns: undefined
                            },
@@ -400,6 +428,9 @@ isOneToOne: false
                            },
 "delete_expired_activity":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"drop_out":
+{ Args: { "assignment": string,"reason"?: string }; Returns: undefined
                            },
 "enqueue_job":
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
@@ -450,6 +481,9 @@ isOneToOne: false
                            },
 "replace_group_role":
 { Args: { "emails": (string)[],"member_role": Database["public"]['Enums']["app_role"] }; Returns: number
+                           },
+"request_chat_space":
+{ Args: { "event": string }; Returns: undefined
                            },
 "retry_job":
 { Args: { "job_id": number }; Returns: undefined

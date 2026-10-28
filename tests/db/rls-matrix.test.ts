@@ -117,7 +117,7 @@ const FOUNDATION: Spec[] = [
   {
     table: "profiles",
     select: [{ name: "a profile", make: async () => ({ id: USERS.oc.id }), allowed: MEMBERS }],
-    insert: [{ payload: () => ({ id: uid(), email: `x${uid().slice(0, 6)}@esnmesa.org` }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
+    insert: [{ payload: () => ({ id: uid(), email: `rlstest-x${uid().slice(0, 6)}@esnmesa.org` }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
     update: [{ name: "a profile", make: async () => ({ id: USERS.member.id }), patch: () => ({ full_name: "Hacked" }), allowed: NOBODY }],
     delete: [{ name: "a profile", make: async () => ({ id: USERS.signout.id }), allowed: NOBODY }],
   },
@@ -128,13 +128,13 @@ const FOUNDATION: Spec[] = [
       { name: "Treasurer role", make: async () => ({ email: USERS.treasurer.email, role: "treasurer" }), allowed: ["treasurer", "admin"] },
     ],
     insert: [
-      { name: "manual", payload: () => ({ email: `m${uid().slice(0, 6)}@esnmesa.org`, role: "events", source: "manual" }), allowed: ["admin"], match: (p) => ({ email: p.email as string }) },
-      { name: "pretend group row", payload: () => ({ email: `g${uid().slice(0, 6)}@esnmesa.org`, role: "events", source: "group" }), allowed: NOBODY, match: (p) => ({ email: p.email as string }) },
+      { name: "manual", payload: () => ({ email: `rlstest-m${uid().slice(0, 6)}@esnmesa.org`, role: "events", source: "manual" }), allowed: ["admin"], match: (p) => ({ email: p.email as string }) },
+      { name: "pretend group row", payload: () => ({ email: `rlstest-g${uid().slice(0, 6)}@esnmesa.org`, role: "events", source: "group" }), allowed: NOBODY, match: (p) => ({ email: p.email as string }) },
     ],
     update: [{ name: "role", make: async () => ({ email: USERS.events.email, role: "events" }), patch: () => ({ role: "admin" }), allowed: NOBODY }],
     delete: [
-      { name: "manual role", make: async () => ins("role_members", { email: `d${uid().slice(0, 6)}@esnmesa.org`, role: "comms", source: "manual" }, "email"), allowed: ["admin"] },
-      { name: "group role", make: async () => ins("role_members", { email: `e${uid().slice(0, 6)}@esnmesa.org`, role: "comms", source: "group" }, "email"), allowed: NOBODY },
+      { name: "manual role", make: async () => ins("role_members", { email: `rlstest-d${uid().slice(0, 6)}@esnmesa.org`, role: "comms", source: "manual" }, "email"), allowed: ["admin"] },
+      { name: "group role", make: async () => ins("role_members", { email: `rlstest-e${uid().slice(0, 6)}@esnmesa.org`, role: "comms", source: "group" }, "email"), allowed: NOBODY },
     ],
   },
   {
@@ -191,6 +191,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await cleanupExtra();
+  await admin.from("role_members").delete().like("email", "rlstest-%");
   await admin.from("activity_log").delete().in("action", ["test", "t", "changed", "forged"]);
   await admin.from("jobs").delete().like("idempotency_key", "rls.%");
   await admin.from("events").delete().in("title", ["RLS assignment", "New", "Del"]);

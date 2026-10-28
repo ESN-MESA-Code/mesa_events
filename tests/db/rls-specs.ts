@@ -68,6 +68,14 @@ export const SPECS_EXTRA: Spec[] = [
   },
 ];
 
+SPECS_EXTRA.push({
+  table: "event_chat_members",
+  select: [{ name: "member of A's space", make: async (w) => { await admin.from("event_chat_members").upsert({ event_id: w.eventA.id, email: USERS.oc.email }); return { event_id: w.eventA.id, email: USERS.oc.email }; }, allowed: NOBODY }],
+  insert: [{ payload: (w) => ({ event_id: w.eventA.id, email: "intruder@esnmesa.org" }), allowed: NOBODY, match: (p) => ({ email: p.email as string }) }],
+  update: [{ name: "member of A's space", make: async (w) => { await admin.from("event_chat_members").upsert({ event_id: w.eventA.id, email: USERS.oc.email }); return { event_id: w.eventA.id, email: USERS.oc.email }; }, patch: () => ({ email: "x@esnmesa.org" }), allowed: NOBODY }],
+  delete: [{ name: "member of A's space", make: async (w) => { await admin.from("event_chat_members").upsert({ event_id: w.eventA.id, email: USERS.helper.email }); return { event_id: w.eventA.id, email: USERS.helper.email }; }, allowed: NOBODY }],
+});
+
 export async function cleanupExtra() {
   await admin.from("event_ideas").delete().like("title", "RLS%");
 }

@@ -1,0 +1,63 @@
+// Texts the platform posts to Google Chat (pure, unit-tested).
+import { formatDateTime } from "@/lib/dates";
+import { MENTION_ALL, SPACE_DESCRIPTION_MAX, mention } from "@/lib/google/types";
+import { truncate } from "@/lib/google/chat";
+
+export interface SpacePerson {
+  email: string;
+  name: string;
+  kind: "oc" | "helper" | "team";
+}
+
+export interface SpaceEvent {
+  id: string;
+  title: string;
+  starts_at: string;
+}
+
+export function spaceDisplayName(e: SpaceEvent): string {
+  return truncate(`${e.title} · ${formatDateTime(e.starts_at)}`, 128);
+}
+
+/** The space description: date and OC (Chat allows 150 characters, plain text). */
+export function spaceDescription(e: SpaceEvent, people: SpacePerson[]): string {
+  const oc = people.find((p) => p.kind === "oc");
+  return truncate(`📅 ${formatDateTime(e.starts_at)} · OC: ${oc?.name ?? "open"}`, SPACE_DESCRIPTION_MAX);
+}
+
+export function spaceGuidelines(e: SpaceEvent, people: SpacePerson[], eventUrl: string): string {
+  const oc = people.filter((p) => p.kind === "oc");
+  const helpers = people.filter((p) => p.kind === "helper");
+  return [
+    `${e.title} – ${formatDateTime(e.starts_at)}`,
+    `OC: ${oc.map((p) => p.name).join(", ") || "open"}`,
+    `Helpers: ${helpers.map((p) => p.name).join(", ") || "none yet"}`,
+    `Event page (details, description, attendance, receipts): ${eventUrl}`,
+  ].join("\n");
+}
+
+/** The first message in a new space, @-mentioning OC and helpers. */
+export function welcomeMessage(e: SpaceEvent, people: SpacePerson[], eventUrl: string): string {
+  const oc = people.filter((p) => p.kind === "oc");
+  const helpers = people.filter((p) => p.kind === "helper");
+  return [
+    `👋 Welcome to the space for *${e.title}* on ${formatDateTime(e.starts_at)}!`,
+    `OC: ${oc.map((p) => mention(p.email)).join(", ") || "open – claim it on the event page"}`,
+    `Helpers: ${helpers.map((p) => mention(p.email)).join(", ") || "none yet"}`,
+    `Event page: ${eventUrl}`,
+  ].join("\n");
+}
+
+export function rosterMessage(kind: "dropout" | "claim", person: string, role: "oc" | "helper", ocEmail: string | null, eventUrl: string, title: string): string {
+  const roleName = role === "oc" ? "OC" : "helper";
+  const tellOc = ocEmail ? ` ${mention(ocEmail)}` : "";
+  if (kind === "dropout") {
+    return `⚠️ ${person} dropped out as ${roleName} of *${title}*. The ${roleName} slot is open – anyone can claim it on the event page: ${eventUrl}${tellOc}`;
+  }
+  return `✅ ${person} took the open ${roleName} slot of *${title}*.${tellOc}`;
+}
+
+/** The published description as posted to the space: the text plus @all. */
+export function publishedPost(chatText: string): string {
+  return `${chatText}\n\n${MENTION_ALL}`;
+}

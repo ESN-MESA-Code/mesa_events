@@ -1,0 +1,181 @@
+import type { Metadata } from "next";
+import { loadEventForPage } from "@/lib/events";
+import { formatCents, formatDateTime, isoToBerlinInput, nowMs } from "@/lib/dates";
+import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { ActionButton } from "@/components/ActionButton";
+import { claimSlot, decideUnderstaffed, requestChatSpace } from "@/app/actions/roster";
+import { DropOutButton, EventDetailsForm } from "./EventClient";
+import { EventChecklist } from "./EventChecklist";
+
+export const metadata: Metadata = { title: "Event" };
+
+export default async function EventOverviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam } = await loadEventForPage(id);
+
+  const [{ data: roster }, { data: slots }, { data: log }] = await Promise.all([
+    supabase.from("assignments").select("id, role, status, source, drop_reason, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
+    supabase.rpc("open_slots"),
+    supabase.from("activity_log").select("id, at, actor_email, entity, action").eq("event_id", id).order("at", { ascending: false }).limit(10),
+  ]);
+  const active = (roster ?? []).filter((a) => a.status === "active");
+  const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
+  const slot = (slots ?? []).find((s) => s.event_id === id);
+  const upcoming = Date.parse(event.starts_at) > nowMs();
+  const name = (a: (typeof active)[number]) => (a.profiles as { full_name: string } | null)?.full_name ?? "?";
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="space-y-6">
+        {event.status === "understaffed" && (
+          <Alert tone="warning" data-testid="understaffed-banner">
+            <p className="font-medium">This event is short of people.</p>
+            <p className="mt-1">
+              {slot?.open_oc ? "It has no OC. " : ""}
+              {slot && slot.open_helpers > 0 ? `${slot.open_helpers} helper slot(s) are open. ` : ""}
+              {canManage ? "As OC you decide whether it runs as it is or is cancelled." : "The OC decides whether it runs."}
+            </p>
+            {canManage && (
+              <div className="mt-2 flex gap-2">
+                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success">
+                  Run it anyway
+                </ActionButton>
+                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "cancel" }} variant="destructive" confirm="Cancel this event?">
+                  Cancel the event
+                </ActionButton>
+              </div>
+            )}
+          </Alert>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
+              <dt className="text-gray-500">Starts</dt>
+              <dd>{formatDateTime(event.starts_at)}</dd>
+              <dt className="text-gray-500">Ends</dt>
+              <dd>{event.ends_at ? formatDateTime(event.ends_at) : "–"}</dd>
+              <dt className="text-gray-500">Location</dt>
+              <dd>{event.location || "–"}</dd>
+              <dt className="text-gray-500">Price</dt>
+              <dd>{event.price_cents === null ? "TBA" : event.price_cents === 0 ? "Free" : formatCents(event.price_cents)}</dd>
+              <dt className="text-gray-500">Capacity</dt>
+              <dd>{event.capacity ?? "–"}</dd>
+              <dt className="text-gray-500">Helpers needed</dt>
+              <dd>{event.helpers_needed}</dd>
+            </dl>
+            {canManage && !["dropped", "cancelled"].includes(event.status) && (
+              <EventDetailsForm
+                eventsTeam={isEvents}
+                event={{
+                  id,
+                  startsAt: isoToBerlinInput(event.starts_at),
+                  endsAt: event.ends_at ? isoToBerlinInput(event.ends_at) : "",
+                  location: event.location ?? "",
+                  price: event.price_cents === null ? "" : (event.price_cents / 100).toFixed(2),
+                  capacity: event.capacity ? String(event.capacity) : "",
+                }}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Team</CardTitle>
+            <span className="text-sm text-gray-500">
+              {active.filter((a) => a.role === "helper").length}/{event.helpers_needed} helpers
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!roster?.length && <EmptyState>The roster is not published yet.</EmptyState>}
+            <ul className="space-y-1.5 text-sm" data-testid="roster">
+              {active
+                .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))
+                .map((a) => (
+                  <li key={a.id} className="flex items-center gap-2">
+                    <Badge tone={a.role === "oc" ? "blue" : "gray"}>{a.role === "oc" ? "OC" : "Helper"}</Badge>
+                    <span className="font-medium text-gray-900">{name(a)}</span>
+                    {a.source === "replacement" && <span className="text-xs text-gray-500">(took an open slot)</span>}
+                    {a.profile_id === viewer.id && upcoming && (
+                      <span className="ml-auto">
+                        <DropOutButton assignmentId={a.id} role={a.role as "oc" | "helper"} />
+                      </span>
+                    )}
+                  </li>
+                ))}
+            </ul>
+            {slot && upcoming && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm space-y-2" data-testid="open-slots">
+                <p className="font-medium text-amber-900">Open slots</p>
+                <div className="flex flex-wrap gap-2">
+                  {slot.open_oc && !isStaff && (
+                    <ActionButton action={claimSlot} input={{ event_id: id, role: "oc" }} confirm="Become the OC of this event?">
+                      Claim the OC slot
+                    </ActionButton>
+                  )}
+                  {slot.open_helpers > 0 && !isStaff && (
+                    <ActionButton action={claimSlot} input={{ event_id: id, role: "helper" }} confirm="Help at this event?">
+                      Claim a helper slot ({slot.open_helpers} open)
+                    </ActionButton>
+                  )}
+                  {isStaff && <span className="text-amber-900">{slot.open_oc ? "The OC slot" : `${slot.open_helpers} helper slot(s)`} open – find a replacement in the Chat space.</span>}
+                </div>
+              </div>
+            )}
+            {dropped.length > 0 && (isTeam || isOc) && (
+              <p className="text-xs text-gray-500">
+                Dropped out: {dropped.map((a) => `${name(a)} (${a.role}${a.drop_reason ? `: ${a.drop_reason}` : ""})`).join("; ")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-6">
+        <EventChecklist eventId={id} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Chat space</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2" data-testid="chat-space">
+            {event.chat_space_url ? (
+              <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="text-esn font-medium hover:underline">
+                Open the event&apos;s Chat space ↗
+              </a>
+            ) : event.chat_space_requested_at ? (
+              <p className="text-gray-600">The space is being created…</p>
+            ) : (
+              <p className="text-gray-600">No space yet – it is created when the month&apos;s roster is confirmed.</p>
+            )}
+            {isEvents && !event.chat_space_requested_at && !["draft", "dropped"].includes(event.status) && (
+              <ActionButton action={requestChatSpace} input={{ event_id: id }} variant="outline">
+                Create Chat space now
+              </ActionButton>
+            )}
+          </CardContent>
+        </Card>
+        {myAssignment && !upcoming && <p className="text-xs text-gray-500">The event has started; dropping out is no longer possible here.</p>}
+        {(log ?? []).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-xs text-gray-600 space-y-1">
+                {(log ?? []).map((l) => (
+                  <li key={l.id}>
+                    {formatDateTime(l.at)} · {l.actor_email ?? "system"} · {l.entity} {l.action}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
