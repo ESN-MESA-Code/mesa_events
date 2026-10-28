@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, Input, Label, Select } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { APP_ROLES, ROLE_LABELS } from "@/lib/roles";
-import { addManualRole, updateSetting } from "./actions";
+import { addManualRole, updateSetting } from "@/app/actions/admin";
 
 export function AddRoleForm() {
   const { run, pending, error } = useAction();

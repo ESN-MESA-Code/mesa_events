@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/dates";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { AddRoleForm, SettingsForm } from "./forms";
-import { removeManualRole, retryJob, syncRolesNow } from "./actions";
+import { removeManualRole, retryJob, syncRolesNow } from "@/app/actions/admin";
 
 export const metadata: Metadata = { title: "Admin" };
 

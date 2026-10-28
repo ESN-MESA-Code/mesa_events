@@ -29,7 +29,8 @@ export function contentSecurityPolicy(nonce: string, opts: { supabaseUrl?: strin
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "blob:", "data:", supabase].filter(Boolean),
     "font-src": ["'self'"],
-    "connect-src": ["'self'", supabase, supabaseWs].filter(Boolean),
+    // Development: the dev server's hot reload websocket.
+    "connect-src": ["'self'", supabase, supabaseWs, ...(opts.dev ? ["ws://localhost:*", "ws://127.0.0.1:*"] : [])].filter(Boolean),
     "frame-ancestors": ["'none'"],
     "frame-src": ["'none'"],
     "base-uri": ["'self'"],

@@ -17,19 +17,7 @@ export type Database = {
                     "action"?: string,"actor_email"?: string | null,"at"?: string,"cycle_id"?: string | null,"details"?: NonNullable<Json>,"entity"?: string,"entity_id"?: string | null,"event_id"?: string | null,"id"?: never
                   }
                   Relationships: [
-                    {
-      foreignKeyName: "activity_log_cycle_id_fkey"
-      columns: ["cycle_id"]
-isOneToOne: false
-      referencedRelation: "planning_cycles"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "activity_log_event_id_fkey"
-      columns: ["event_id"]
-isOneToOne: false
-      referencedRelation: "events"
-      referencedColumns: ["id"]
-    }
+                    
                   ]
                 },"app_settings": {
                   Row: {
@@ -66,6 +54,32 @@ isOneToOne: false
     },{
       foreignKeyName: "assignments_profile_id_fkey"
       columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"event_ideas": {
+                  Row: {
+                    "created_at": string,"decided_by": string | null,"decision_note": string | null,"event_id": string | null,"helpers_needed": number,"id": string,"pitch": string,"proposed_date": string,"proposer_id": string,"status": string,"title": string,"updated_at": string,"wants_to_oc": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"helpers_needed"?: number,"id"?: string,"pitch"?: string,"proposed_date": string,"proposer_id"?: string,"status"?: string,"title": string,"updated_at"?: string,"wants_to_oc"?: boolean
+                  }
+                  Update: {
+                    "created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"helpers_needed"?: number,"id"?: string,"pitch"?: string,"proposed_date"?: string,"proposer_id"?: string,"status"?: string,"title"?: string,"updated_at"?: string,"wants_to_oc"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_ideas_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "event_ideas_proposer_id_fkey"
+      columns: ["proposer_id"]
 isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
@@ -269,13 +283,68 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"volunteer_choices": {
+                  Row: {
+                    "chosen_at": string,"event_id": string,"helper_rank": number | null,"oc_rank": number | null,"response_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chosen_at"?: string,"event_id": string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id": string
+                  }
+                  Update: {
+                    "chosen_at"?: string,"event_id"?: string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "volunteer_choices_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "volunteer_choices_response_id_fkey"
+      columns: ["response_id"]
+isOneToOne: false
+      referencedRelation: "volunteer_responses"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"volunteer_responses": {
+                  Row: {
+                    "cycle_id": string,"id": string,"note": string,"profile_id": string,"submitted_at": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cycle_id": string,"id"?: string,"note"?: string,"profile_id": string,"submitted_at"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "cycle_id"?: string,"id"?: string,"note"?: string,"profile_id"?: string,"submitted_at"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "volunteer_responses_cycle_id_fkey"
+      columns: ["cycle_id"]
+isOneToOne: false
+      referencedRelation: "planning_cycles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "volunteer_responses_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "acknowledge_confidentiality":
+            "accept_idea":
+{ Args: { "cycle": string,"event_type": Database["public"]['Enums']["event_type"],"helpers"?: number,"idea": string,"starts": string }; Returns: string
+                           },
+"acknowledge_confidentiality":
 { Args: { "accepted_version": string }; Returns: undefined
                            },
 "auth_email":
@@ -309,13 +378,27 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"close_volunteer_form":
+{ Args: { "cycle": string }; Returns: undefined
+                           },
 "complete_job":
 { Args: { "job_id": number,"job_result"?: Json }; Returns: undefined
                            },
 "confidentiality_version":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"confirm_allocation":
+{ Args: { "cycle": string }; Returns: undefined
+                           },
+"cycle_signups":
+{ Args: { "cycle": string }; Returns: {
+              "chosen_at": string,"email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
+            }[]
+                           },
 "delete_expired_acknowledgements":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"delete_expired_activity":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "enqueue_job":
@@ -359,6 +442,9 @@ isOneToOne: false
               "event_id": string,"open_helpers": number,"open_oc": boolean
             }[]
                            },
+"open_volunteer_form":
+{ Args: { "closes_at": string,"cycle": string }; Returns: undefined
+                           },
 "purge_auth_ip_addresses":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -371,8 +457,17 @@ isOneToOne: false
 "roster_published":
 { Args: { "event": string }; Returns: boolean
                            },
+"save_allocation":
+{ Args: { "cycle": string,"rows": Json }; Returns: number
+                           },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
+                           },
+"submit_volunteer_form":
+{ Args: { "choices": Json,"cycle": string,"note"?: string }; Returns: string
+                           },
+"test_close_due_forms":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "test_cron_jobs":
 { Args: Record<PropertyKey, never>; Returns: {

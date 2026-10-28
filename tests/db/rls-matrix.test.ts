@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin } from "../helpers/local";
 import { MEMBERS, NOBODY, ROLES, TEAM, buildWorld, clientFor, destroyWorld, type Role, type World } from "./world";
-import { SPECS_EXTRA } from "./rls-specs";
+import { SPECS_EXTRA, cleanupExtra } from "./rls-specs";
 import type { Database } from "@/types/database";
 
 export type Table = keyof Database["public"]["Tables"];
@@ -190,6 +190,7 @@ beforeAll(async () => {
   world = await buildWorld();
 });
 afterAll(async () => {
+  await cleanupExtra();
   await admin.from("activity_log").delete().in("action", ["test", "t", "changed", "forged"]);
   await admin.from("jobs").delete().like("idempotency_key", "rls.%");
   await admin.from("events").delete().in("title", ["RLS assignment", "New", "Del"]);

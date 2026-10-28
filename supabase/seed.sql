@@ -90,6 +90,17 @@ as $$
   from (select private.job_runner_request() as r) x;
 $$;
 
+create or replace function public.test_close_due_forms()
+returns integer
+language sql
+security definer
+set search_path = ''
+as $$
+  select private.close_due_forms();
+$$;
+revoke all on function public.test_close_due_forms() from public, anon, authenticated;
+grant execute on function public.test_close_due_forms() to service_role;
+
 revoke all on function public.test_cron_jobs() from public, anon, authenticated;
 revoke all on function public.test_invoke_job_runner() from public, anon, authenticated;
 grant execute on function public.test_cron_jobs() to service_role;
