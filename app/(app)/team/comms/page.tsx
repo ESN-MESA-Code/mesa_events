@@ -2,12 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, nowMs } from "@/lib/dates";
+import { cycleLabel, formatDateTime, formatDue, nowMs } from "@/lib/dates";
+import { DESCRIPTION_STATUS } from "@/components/status";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Comms" };
 
-type Row = { event_id: string; title: string; starts_at: string; deadline: string | null; status: string; submitted_at: string | null; published_at: string | null; late: boolean };
+type Row = {
+  event_id: string;
+  title: string;
+  starts_at: string;
+  deadline: string | null;
+  status: string;
+  submitted_at: string | null;
+  published_at: string | null;
+  late: boolean;
+  cycle_id: string | null;
+  cycle_month: string | null;
+};
 
 function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testId: string; show: (r: Row) => React.ReactNode }) {
   if (!rows.length) return <EmptyState>{empty}</EmptyState>;
@@ -26,8 +38,9 @@ function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testI
   );
 }
 
-// The Comms team's overview: what to review, what is ready to publish, and
-// which descriptions are due or late (one deadline per month).
+// The Comms team's overview: progress per month, what to review, what is
+// ready to publish, and which descriptions are due or late (late: the
+// month's deadline passed or the event already started).
 export default async function CommsPage() {
   await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const supabase = await createSessionClient();
@@ -39,10 +52,36 @@ export default async function CommsPage() {
   const late = rows.filter((r) => r.late);
   const due = rows.filter((r) => !r.late && ["missing", "draft", "changes_requested"].includes(r.status));
   const published = rows.filter((r) => r.status === "published");
+  // Progress per cycle, over all its running events (also those already past).
+  const all = (data ?? []) as Row[];
+  const cycles = [...new Set(all.filter((r) => r.cycle_month && Date.parse(r.starts_at) > now - 7 * 86_400_000).map((r) => r.cycle_month!))].sort();
+  const progress = cycles.map((month) => {
+    const list = all.filter((r) => r.cycle_month === month);
+    const done = list.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;
+    return { month, total: list.length, done, published: list.filter((r) => r.status === "published").length, late: list.filter((r) => r.late).length, deadline: list[0]?.deadline ?? null };
+  });
 
   return (
     <>
       <PageHeader title="Comms" description="Review event descriptions and publish them to the events' Chat spaces." />
+      {progress.length > 0 && (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="comms-progress">
+          {progress.map((p) => (
+            <Card key={p.month} className="p-4 space-y-2">
+              <p className="text-sm font-medium text-gray-900">{cycleLabel(p.month)}</p>
+              <p className="text-xl font-semibold tabular-nums">
+                {p.done} of {p.total} <span className="text-sm font-normal text-gray-500">descriptions in</span>
+              </p>
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
+                <div className="h-full bg-esn" style={{ width: `${p.total ? Math.round((p.done / p.total) * 100) : 0}%` }} />
+              </div>
+              <p className="text-xs text-gray-500">
+                {p.published} published{p.late ? ` · ${p.late} late` : ""} · {p.deadline ? formatDue(p.deadline, now) : "no deadline set"}
+              </p>
+            </Card>
+          ))}
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -68,7 +107,17 @@ export default async function CommsPage() {
             <Badge tone={late.length ? "red" : "gray"}>{late.length}</Badge>
           </CardHeader>
           <CardContent>
-            <List rows={late} empty="Nothing late." testId="late-descriptions" show={(r) => <span className="text-xs text-red-700">was due {r.deadline ? formatDateTime(r.deadline) : ""}</span>} />
+            <List
+              rows={late}
+              empty="Nothing late."
+              testId="late-descriptions"
+              show={(r) => (
+                <span className="text-xs text-red-700">
+                  {Date.parse(r.starts_at) <= now ? "event already started" : r.deadline ? formatDue(r.deadline, now) : ""}
+                  {` · ${DESCRIPTION_STATUS[r.status]?.label ?? r.status}`}
+                </span>
+              )}
+            />
           </CardContent>
         </Card>
         <Card>
@@ -83,8 +132,8 @@ export default async function CommsPage() {
               testId="due-descriptions"
               show={(r) => (
                 <span className="text-xs text-gray-500">
-                  {r.status === "missing" ? "not started" : r.status === "changes_requested" ? "changes requested" : "draft"}
-                  {r.deadline ? ` · due ${formatDateTime(r.deadline)}` : " · no deadline set"}
+                  {DESCRIPTION_STATUS[r.status]?.label ?? r.status}
+                  {r.deadline ? ` · ${formatDue(r.deadline, now)}` : " · no deadline set"}
                 </span>
               )}
             />

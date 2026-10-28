@@ -8,6 +8,8 @@ import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { AddEventForm, ClearResponseButton, CycleControls, IdeaCard, ScheduleRow } from "./ScheduleClient";
+import { cyclesWithProgress } from "@/lib/cycleFacts";
+import { Stepper } from "@/components/status";
 import { z } from "zod";
 
 export const metadata: Metadata = { title: "Month schedule" };
@@ -42,6 +44,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const signupCount = new Map<string, number>();
   for (const s of signups ?? []) signupCount.set(s.event_id, (signupCount.get(s.event_id) ?? 0) + 1);
   const people = (responses ?? []).length;
+  const [{ progress }] = await cyclesWithProgress(supabase, [cycle]);
   const planned = (events ?? []).filter((e) => e.status !== "dropped");
   const editableSchedule = canEdit && ["planning", "form_open"].includes(cycle.status);
 
@@ -54,7 +57,13 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
       </PageHeader>
       <div className="space-y-6">
         <Card>
-          <CardContent className="pt-5">
+          <CardContent className="pt-5 space-y-4">
+            <Stepper steps={progress.steps} label="Steps of this cycle" testId="cycle-stepper" />
+            <p className="rounded-md border border-esn/30 bg-esn/5 px-3 py-2 text-sm" data-testid="cycle-next">
+              <span className="font-semibold text-esn-dark">{progress.current ? "Next: " : "✓ "}</span>
+              {progress.action}
+              <span className="text-gray-500"> · {progress.summary}</span>
+            </p>
             <CycleControls
               cycle={{
                 id: cycle.id,

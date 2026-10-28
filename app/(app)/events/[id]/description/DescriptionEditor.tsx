@@ -59,11 +59,14 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">(initial.exists ? "saved" : "dirty");
+  // "new": no description yet – the fields are prefilled from the event and
+  // saved together with the first edit (nothing is unsaved before that).
+  const [saveState, setSaveState] = useState<"new" | "saved" | "saving" | "dirty" | "error">(initial.exists ? "saved" : "new");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [others, setOthers] = useState<string[]>([]);
   const [showTemplates, setShowTemplates] = useState(!initial.exists);
-  const dirty = useRef<Set<keyof DescriptionFields>>(new Set(initial.exists ? [] : (Object.keys(initial.fields) as Array<keyof DescriptionFields>)));
+  const dirty = useRef<Set<keyof DescriptionFields>>(new Set());
+  const prefillPending = useRef(!initial.exists);
   const fieldsRef = useRef(fields);
   const version = useRef(initial.version);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,7 +104,15 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
     });
   }
 
+  /** The first edit of a new description also saves the prefilled fields. */
+  function takePrefill() {
+    if (!prefillPending.current) return;
+    prefillPending.current = false;
+    (Object.keys(fieldsRef.current) as Array<keyof DescriptionFields>).forEach((k) => dirty.current.add(k));
+  }
+
   function change<K extends keyof DescriptionFields>(key: K, value: DescriptionFields[K]) {
+    takePrefill();
     setFields((f) => {
       let next = { ...f, [key]: value };
       if (key === "esnType") {
@@ -173,6 +184,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
     if (!t) return;
     if (!window.confirm("Replace the current text with this event's description? The date stays.")) return;
     const next = fromTemplate(t, fieldsRef.current);
+    prefillPending.current = false;
     setFields(next);
     (Object.keys(next) as Array<keyof DescriptionFields>).forEach((k) => dirty.current.add(k));
     setShowTemplates(false);
@@ -201,7 +213,15 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
             {st.label}
           </Badge>
           <span className="text-xs text-gray-500" data-testid="save-state" aria-live="polite">
-            {saveState === "saved" ? "All changes saved" : saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved" : "Unsaved changes"}
+            {saveState === "new"
+              ? "Not saved yet – prefilled from the event, saves as you type"
+              : saveState === "saved"
+                ? "All changes saved"
+                : saveState === "saving"
+                  ? "Saving…"
+                  : saveState === "error"
+                    ? "Not saved"
+                    : "Unsaved changes"}
           </span>
           {others.length > 0 && (
             <span className="text-xs text-esn" data-testid="presence">
