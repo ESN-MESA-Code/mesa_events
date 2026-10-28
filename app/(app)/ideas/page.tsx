@@ -56,7 +56,7 @@ export default async function IdeasPage() {
                     {i.event_id && (
                       <>
                         {" · "}
-                        <a className="text-esn hover:underline" href={`/events/${i.event_id}`}>
+                        <a className="text-esn hover:underline" href={`/events/${i.event_id}?from=me`}>
                           event page
                         </a>
                       </>

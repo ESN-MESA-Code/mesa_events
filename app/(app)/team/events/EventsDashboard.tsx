@@ -42,7 +42,7 @@ export async function EventsDashboard() {
             {(upcoming ?? []).map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-2 py-2">
                 <span className="w-40 tabular-nums text-gray-600">{formatDateTime(e.starts_at)}</span>
-                <Link href={`/events/${e.id}`} className="font-medium text-gray-900 hover:text-esn">
+                <Link href={`/events/${e.id}?from=events`} className="font-medium text-gray-900 hover:text-esn">
                   {e.title}
                 </Link>
                 <Badge tone={EVENT_STATUS_TONES[e.status]} className="ml-auto">
@@ -66,7 +66,7 @@ export async function EventsDashboard() {
                 const s = short.get(e.id);
                 return (
                   <li key={e.id}>
-                    <Link href={`/events/${e.id}`} className="text-esn hover:underline">
+                    <Link href={`/events/${e.id}?from=events`} className="text-esn hover:underline">
                       {e.title}
                     </Link>{" "}
                     <span className="text-gray-500">

@@ -15,7 +15,7 @@ function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testI
     <ul className="divide-y divide-gray-100 text-sm" data-testid={testId}>
       {rows.map((r) => (
         <li key={r.event_id} className="flex flex-wrap items-center gap-2 py-2">
-          <Link href={`/events/${r.event_id}/description`} className="font-medium text-gray-900 hover:text-esn">
+          <Link href={`/events/${r.event_id}/description?from=comms`} className="font-medium text-gray-900 hover:text-esn">
             {r.title}
           </Link>
           <span className="text-xs text-gray-500">{formatDateTime(r.starts_at)}</span>

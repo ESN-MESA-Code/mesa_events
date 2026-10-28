@@ -59,7 +59,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     const role = myRole.get(e.id);
                     return (
                       <li key={e.id}>
-                        <Link href={`/events/${e.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-gray-50">
+                        <Link href={`/events/${e.id}?from=calendar`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-gray-50">
                           <span className="w-44 shrink-0 text-sm tabular-nums text-gray-600">{formatDateTime(e.starts_at)}</span>
                           <span className="font-medium text-gray-900 min-w-0 break-words">{e.title}</span>
                           <Badge>{EVENT_TYPE_LABELS[e.type]}</Badge>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { loadEventForPage } from "@/lib/events";
-import { formatCents, formatDateTime, isoToBerlinInput, nowMs } from "@/lib/dates";
+import { formatCents, formatDateTime, formatShortDate, isoToBerlinInput, nowMs } from "@/lib/dates";
+import { describeActivity } from "@/lib/activity";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, requestChatSpace } from "@/app/actions/roster";
@@ -16,7 +17,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }] = await Promise.all([
     supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
     supabase.rpc("open_slots"),
-    supabase.from("activity_log").select("id, at, actor_email, entity, action").eq("event_id", id).order("at", { ascending: false }).limit(10),
+    supabase.from("activity_log").select("id, at, actor_email, entity, action, details").eq("event_id", id).order("at", { ascending: false }).limit(20),
     // Drop-out reasons: the OC and the Events team only (RLS).
     canManage ? supabase.from("assignment_drop_reasons").select("assignment_id, reason").eq("event_id", id) : Promise.resolve({ data: [] }),
   ]);
@@ -26,6 +27,13 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const slot = (slots ?? []).find((s) => s.event_id === id);
   const upcoming = Date.parse(event.starts_at) > nowMs();
   const name = (a: (typeof active)[number]) => (a.profiles as { full_name: string } | null)?.full_name ?? "?";
+  const names = new Map((roster ?? []).map((a) => [a.profile_id, name(a)]));
+  // Plain language for everyone; the raw log for Events, executives and admins.
+  const rawLog = isEvents || viewer.roles.includes("executive") || viewer.roles.includes("admin");
+  const activity = (log ?? [])
+    .map((l) => ({ ...l, text: describeActivity({ ...l, details: (l.details ?? {}) as Record<string, unknown> }, (pid) => names.get(pid)) }))
+    .filter((l) => l.text)
+    .slice(0, 8);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -162,19 +170,32 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
         {myAssignment && !upcoming && <p className="text-xs text-gray-500">The event has started; dropping out is no longer possible here.</p>}
-        {(log ?? []).length > 0 && (
+        {(activity.length > 0 || (rawLog && (log ?? []).length > 0)) && (
           <Card>
             <CardHeader>
               <CardTitle>Recent activity</CardTitle>
             </CardHeader>
-            <CardContent>
-              <ul className="text-xs text-gray-600 space-y-1">
-                {(log ?? []).map((l) => (
-                  <li key={l.id}>
-                    {formatDateTime(l.at)} · {l.actor_email ?? "system"} · {l.entity} {l.action}
+            <CardContent className="space-y-2">
+              <ul className="text-sm text-gray-700 space-y-1" data-testid="activity">
+                {activity.map((l) => (
+                  <li key={l.id} className="flex flex-wrap gap-x-2">
+                    <span>{l.text}</span>
+                    <span className="ml-auto text-xs text-gray-500">{formatShortDate(l.at)}</span>
                   </li>
                 ))}
               </ul>
+              {rawLog && (
+                <details className="text-xs text-gray-600">
+                  <summary className="cursor-pointer text-esn">Raw log</summary>
+                  <ul className="mt-1 space-y-1 font-mono" data-testid="raw-log">
+                    {(log ?? []).map((l) => (
+                      <li key={l.id}>
+                        {formatDateTime(l.at)} · {l.actor_email ?? "system"} · {l.entity} {l.action}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </CardContent>
           </Card>
         )}

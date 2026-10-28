@@ -2,6 +2,7 @@
 // allowances, pre-approval, trip budgets and policy versioning.
 import { describe, expect, it } from "vitest";
 import {
+  claimSteps,
   SPEC_RULES,
   findRule,
   isValidIban,
@@ -186,5 +187,19 @@ describe("payouts", () => {
     expect(isValidIban("DE89 3704 0044 0532 0130 01")).toBe(false);
     expect(isValidIban("not an iban")).toBe(false);
     expect(maskIban("DE89370400440532013000")).toBe("DE89 •••• 3000");
+  });
+});
+
+describe("claim progress (review C7)", () => {
+  const states = (s: Parameters<typeof claimSteps>[0]) => claimSteps(s).map((x) => `${x.label}:${x.state}`).join(" ");
+  it("Registered → Beleg received → Checked → Paid", () => {
+    expect(states({ status: "not_submitted" })).toBe("Registered:done Beleg received:current Checked:todo Paid:todo");
+    expect(states({ status: "beleg_received", belegReceivedAt: "x" })).toBe("Registered:done Beleg received:done Checked:current Paid:todo");
+    expect(states({ status: "checked" })).toBe("Registered:done Beleg received:done Checked:done Paid:current");
+    expect(states({ status: "paid" })).toBe("Registered:done Beleg received:done Checked:done Paid:done");
+  });
+  it("a rejected claim fails where it stopped", () => {
+    expect(states({ status: "rejected", belegReceivedAt: "x" })).toBe("Registered:done Beleg received:done Rejected:failed Paid:todo");
+    expect(states({ status: "rejected" })).toBe("Registered:done Rejected:failed Checked:todo Paid:todo");
   });
 });

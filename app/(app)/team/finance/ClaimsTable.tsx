@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { Badge, Button, Input, Select } from "@/components/ui";
+import { Button, Input, Select } from "@/components/ui";
 import { ActionButton, useAction } from "@/components/ActionButton";
+import { ClaimStatusBadge } from "@/components/status";
 import { checkReimbursement, markBelegReceived, payEarly, rejectReimbursement } from "@/app/actions/handin";
 import { CATEGORY_LABELS, EXPENSE_KIND_LABELS, STATUS_LABELS, mayPayEarly, type Category, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
 import { formatCents, parseEuroToCents } from "@/lib/dates";
@@ -28,13 +29,6 @@ export interface ClaimRow {
   beleg: string | null;
 }
 
-const TONE: Record<ClaimStatus, "gray" | "blue" | "green" | "red" | "purple"> = {
-  not_submitted: "gray",
-  beleg_received: "blue",
-  checked: "green",
-  paid: "purple",
-  rejected: "red",
-};
 
 function CheckForm({ row }: { row: ClaimRow }) {
   const { run, pending, error, setError } = useAction();
@@ -105,7 +99,7 @@ export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; read
       col.accessor("event", {
         header: "Event",
         cell: (c) => (
-          <a href={`/events/${c.row.original.eventId}/hand-in`} className="hover:text-esn">
+          <a href={`/events/${c.row.original.eventId}/hand-in?from=finance`} className="hover:text-esn">
             {c.getValue()}
             <span className="block text-xs text-gray-500">{c.row.original.eventDate}</span>
           </a>
@@ -137,7 +131,7 @@ export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; read
         header: "Status",
         cell: (c) => (
           <span>
-            <Badge tone={TONE[c.getValue() as ClaimStatus]}>{STATUS_LABELS[c.getValue() as ClaimStatus]}</Badge>
+            <ClaimStatusBadge status={c.getValue() as ClaimStatus} />
             {c.row.original.beleg && <span className="block text-[11px] text-gray-500">Beleg {c.row.original.beleg}</span>}
           </span>
         ),

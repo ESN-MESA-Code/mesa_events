@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
-import { formatCents, formatDateTime, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
-import { STATUS_LABELS, EXPENSE_KIND_LABELS, kindsFor, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
+import { formatCents, formatDateTime, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
+import { kindsFor, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
+import { ClaimItem } from "@/components/ClaimItem";
+import { ClaimStatusBadge } from "@/components/status";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawReceipt } from "@/app/actions/handin";
@@ -10,13 +12,6 @@ import { PhotoUploader, PreapprovalForm, ReceiptForm } from "./HandInClient";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
-const TONE: Record<ClaimStatus, "gray" | "blue" | "green" | "red" | "purple"> = {
-  not_submitted: "gray",
-  beleg_received: "blue",
-  checked: "green",
-  paid: "purple",
-  rejected: "red",
-};
 
 // After the event: photos (to Drive), the attendance list closed, every
 // receipt registered and the paper Beleg handed to Finance.
@@ -36,7 +31,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     supabase.from("event_photos").select("id, file_name, status, drive_url, uploaded_by, created_at").eq("event_id", id).order("created_at"),
     supabase
       .from("reimbursements")
-      .select("id, status, suggested_cents, approved_cents, flags, payout_method, rejected_reason, receipts(expense_kind, vendor, amount_cents, purchased_on)")
+      .select("id, status, suggested_cents, approved_cents, flags, payout_method, rejected_reason, checked_at, paid_at, receipts(expense_kind, vendor, amount_cents, purchased_on, beleg_received_at)")
       .eq("event_id", id)
       .eq("claimant_id", viewer.id)
       .order("created_at"),
@@ -50,8 +45,38 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
   const kinds = kindsFor((rules ?? []) as Rule[], eventType);
   const s = (summary ?? {}) as { receipts?: number; belege_missing?: number };
   const started = Date.parse(event.starts_at) <= nowMs();
+  // Receipts and photos from the day of the event on (Berlin).
+  const handInOpen = berlinDate(new Date(nowMs()).toISOString()) >= berlinDate(event.starts_at);
 
   return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Hand-in status</CardTitle>
+          {!handInOpen && <Badge>Opens on {formatShortDate(event.starts_at)}</Badge>}
+        </CardHeader>
+        <CardContent className="text-sm grid gap-2 sm:grid-cols-3" data-testid="handin-status">
+          <p>
+            {list?.signed_off_at ? "✅" : "⬜"} Attendance list{" "}
+            {list?.signed_off_at ? (
+              `signed off (${list.headcount} counted)`
+            ) : started ? (
+              <Link href={`/events/${id}/attendance`} className="text-esn hover:underline">
+                not signed off yet
+              </Link>
+            ) : (
+              <span className="text-gray-500">– on the day</span>
+            )}
+          </p>
+          <p>
+            {(photos ?? []).length ? "✅" : "⬜"} Photos: {(photos ?? []).length}
+          </p>
+          <p>
+            {s.receipts ? "✅" : "⬜"} Receipts registered: {s.receipts ?? 0}
+            {s.belege_missing ? ` · ${s.belege_missing} Beleg(e) not handed in yet` : ""}
+          </p>
+        </CardContent>
+      </Card>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="space-y-6">
         <Alert tone="info">
@@ -65,7 +90,11 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
               <CardTitle>Register a receipt</CardTitle>
             </CardHeader>
             <CardContent>
-              {kinds.length ? (
+              {!handInOpen ? (
+                <p className="text-sm text-gray-500" data-testid="receipts-later">
+                  Hand-in opens on the day of the event ({formatShortDate(event.starts_at)}). Keep every paper Beleg until then.
+                </p>
+              ) : kinds.length ? (
                 <ReceiptForm
                   eventId={id}
                   role={myAssignment.role as "oc" | "helper"}
@@ -92,30 +121,40 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             {!claims?.length && <EmptyState>No receipts registered yet.</EmptyState>}
             <ul className="divide-y divide-gray-100 text-sm" data-testid="my-claims">
               {(claims ?? []).map((c) => {
-                const r = c.receipts as { expense_kind: ExpenseKind; vendor: string; amount_cents: number; purchased_on: string } | null;
+                const r = c.receipts as { expense_kind: ExpenseKind; vendor: string; amount_cents: number; purchased_on: string; beleg_received_at: string | null } | null;
                 return (
-                  <li key={c.id} className="py-2.5 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{r?.vendor}</span>
-                      <span className="text-gray-500">{r ? EXPENSE_KIND_LABELS[r.expense_kind].split(" (")[0] : ""}</span>
-                      <Badge tone={TONE[c.status as ClaimStatus]} className="ml-auto">
-                        {STATUS_LABELS[c.status as ClaimStatus]}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Paid {formatCents(r?.amount_cents)} on {r?.purchased_on} · suggested {formatCents(c.suggested_cents)}
-                      {c.approved_cents !== null && ` · approved ${formatCents(c.approved_cents)}`}
-                      {c.flags.length > 0 && ` · ${c.flags.join(", ").replace(/_/g, " ")}`}
-                      {!c.payout_method && " · ⚠️ add bank or PayPal details on “My events”"}
-                    </p>
-                    {c.rejected_reason && <p className="text-xs text-red-700">Rejected: {c.rejected_reason}</p>}
-                    <div className="flex gap-3">
-                      {c.status === "not_submitted" && (
-                        <ActionButton action={withdrawReceipt} input={{ claim_id: c.id }} variant="ghost" confirm="Withdraw this receipt?">
-                          Withdraw
-                        </ActionButton>
-                      )}
-                    </div>
+                  <li key={c.id} className="py-3">
+                    <ClaimItem
+                      claim={{
+                        id: c.id,
+                        status: c.status as ClaimStatus,
+                        kind: r?.expense_kind ?? null,
+                        vendor: r?.vendor ?? "",
+                        purchasedOn: r?.purchased_on ?? null,
+                        receiptCents: r?.amount_cents ?? null,
+                        suggestedCents: c.suggested_cents,
+                        approvedCents: c.approved_cents,
+                        flags: c.flags,
+                        belegReceivedAt: r?.beleg_received_at ?? null,
+                        checkedAt: c.checked_at,
+                        paidAt: c.paid_at,
+                        rejectedReason: c.rejected_reason,
+                      }}
+                    >
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <ClaimStatusBadge status={c.status as ClaimStatus} />
+                        {!c.payout_method && (
+                          <Link href="/me#claims" className="text-amber-800 underline">
+                            ⚠️ Add bank or PayPal details
+                          </Link>
+                        )}
+                        {c.status === "not_submitted" && (
+                          <ActionButton action={withdrawReceipt} input={{ claim_id: c.id }} variant="ghost" confirm="Withdraw this receipt?">
+                            Withdraw
+                          </ActionButton>
+                        )}
+                      </div>
+                    </ClaimItem>
                   </li>
                 );
               })}
@@ -148,29 +187,10 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Hand-in status</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-2" data-testid="handin-status">
-            <p>
-              {list?.signed_off_at ? "✅" : "⬜"} Attendance list{" "}
-              {list?.signed_off_at ? `signed off (${list.headcount} counted)` : <Link href={`/events/${id}/attendance`} className="text-esn hover:underline">not signed off yet</Link>}
-            </p>
-            <p>
-              {(photos ?? []).length ? "✅" : "⬜"} Photos: {(photos ?? []).length}
-            </p>
-            <p>
-              {s.receipts ? "✅" : "⬜"} Receipts registered: {s.receipts ?? 0}
-              {s.belege_missing ? ` · ${s.belege_missing} Beleg(e) not handed in yet` : ""}
-            </p>
-            {!started && <p className="text-xs text-gray-500">The event has not started yet.</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
             <CardTitle>Photos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {isStaff && <PhotoUploader eventId={id} />}
+            {isStaff && (handInOpen ? <PhotoUploader eventId={id} /> : <p className="text-sm text-gray-500">Photos can be handed in from the day of the event.</p>)}
             <ul className="text-sm space-y-1" data-testid="photos">
               {(photos ?? []).map((p) => (
                 <li key={p.id} className="flex items-center gap-2">
@@ -189,6 +209,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           </CardContent>
         </Card>
       </div>
+    </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { Alert, Badge, Card } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
@@ -64,6 +65,7 @@ function Slot({ id, label, children, disabled }: { id: string; label: string; ch
 }
 
 export function RosterBoard({ events, people, editable }: { events: BoardEvent[]; people: BoardPerson[]; editable: boolean }) {
+  const cycleParam = useParams<{ id: string }>().id;
   const { run, pending, error } = useAction();
   const [filter, setFilter] = useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
@@ -167,7 +169,7 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
             return (
               <Card key={ev.id} className="p-3 space-y-2" data-testid={`roster-${ev.title}`}>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <a href={`/events/${ev.id}`} className="font-semibold text-gray-900 hover:text-esn mr-auto">
+                  <a href={`/events/${ev.id}?from=cycle:${cycleParam}`} className="font-semibold text-gray-900 hover:text-esn mr-auto">
                     {ev.title}
                   </a>
                   {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}

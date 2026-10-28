@@ -169,3 +169,26 @@ export function maskIban(iban: string): string {
   const s = iban.replace(/\s+/g, "");
   return s.length <= 8 ? s : `${s.slice(0, 4)} •••• ${s.slice(-4)}`;
 }
+
+export interface ClaimProgressInput {
+  status: ClaimStatus;
+  belegReceivedAt?: string | null;
+  checkedAt?: string | null;
+  paidAt?: string | null;
+}
+
+/**
+ * A claim's progress as steps: Registered → Beleg received → Checked → Paid.
+ * A rejected claim fails at the step it had reached.
+ */
+export function claimSteps(c: ClaimProgressInput): Array<{ label: string; state: "done" | "current" | "todo" | "failed"; at?: string | null }> {
+  const order: ClaimStatus[] = ["not_submitted", "beleg_received", "checked", "paid"];
+  const labels = ["Registered", "Beleg received", "Checked", "Paid"];
+  const at = [null, c.belegReceivedAt ?? null, c.checkedAt ?? null, c.paidAt ?? null];
+  if (c.status === "rejected") {
+    const reached = c.checkedAt ? 2 : c.belegReceivedAt ? 1 : 0;
+    return labels.map((label, i) => ({ label: i === reached + 1 ? "Rejected" : label, state: i <= reached ? "done" : i === reached + 1 ? "failed" : "todo", at: at[i] }));
+  }
+  const reached = order.indexOf(c.status);
+  return labels.map((label, i) => ({ label, state: i <= reached ? "done" : i === reached + 1 ? "current" : "todo", at: at[i] }));
+}

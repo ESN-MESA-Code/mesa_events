@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Alert, Badge, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionButton, useAction } from "@/components/ActionButton";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type CycleStatus, type EventStatus, type EventType } from "@/lib/labels";
@@ -128,6 +129,7 @@ interface RowEvent {
 }
 
 export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: boolean }) {
+  const cycleParam = useParams<{ id: string }>().id;
   const [editing, setEditing] = useState(false);
   const { run, pending, error } = useAction();
   const [v, setV] = useState(event);
@@ -193,7 +195,7 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3" data-testid={`schedule-${event.title}`}>
       <span className="w-40 shrink-0 text-sm tabular-nums text-gray-600">{event.startsLabel}</span>
-      <a href={`/events/${event.id}`} className="font-medium text-gray-900 hover:text-esn">
+      <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="font-medium text-gray-900 hover:text-esn">
         {event.title}
       </a>
       <Badge>{EVENT_TYPE_LABELS[event.type]}</Badge>
