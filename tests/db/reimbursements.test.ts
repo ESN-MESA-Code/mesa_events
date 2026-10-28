@@ -261,6 +261,30 @@ describe("weekend trips: pre-approval and trip budget", () => {
   });
 });
 
+describe("the activity log does not leak claims (review B1)", () => {
+  it("a real claim's log entries: Finance only, not the event's OC and helpers or other teams", async () => {
+    // The OC claims on an event the helper is staff of too; Finance moves it on.
+    const id = claimId(await register(USERS.oc, standard, { vendor: "Log leak test" }));
+    expect((await H.markBelegReceived(await actionContext(USERS.finance), { claim_id: id })).ok).toBe(true);
+    expect((await H.rejectReimbursement(await actionContext(USERS.finance), { claim_id: id, reason: "Duplicate of another receipt" })).ok).toBe(true);
+    const { data: all } = await admin.from("activity_log").select("id, details").eq("entity", "reimbursements").eq("entity_id", id);
+    expect(all!.length).toBeGreaterThanOrEqual(3);
+    expect(JSON.stringify(all)).toContain("Duplicate of another receipt");
+
+    const seen = async (u: SeedUser) => (await (await as(u)).from("activity_log").select("id, details").eq("entity_id", id)).data ?? [];
+    // The helper of the same event: staff of it, yet none of the claim's entries.
+    expect(await seen(USERS.helper)).toEqual([]);
+    for (const u of [USERS.oc, USERS.events, USERS.executive, USERS.admin, USERS.comms, USERS.member]) expect(await seen(u), u.email).toEqual([]);
+    expect(await seen(USERS.finance)).toHaveLength(all!.length);
+    expect(await seen(USERS.treasurer)).toHaveLength(all!.length);
+    // Nothing of a claim reaches the event's staff through the event filter either.
+    const { data: viaEvent } = await (await as(USERS.helper)).from("activity_log").select("entity, details").eq("event_id", standard);
+    expect(viaEvent!.length).toBeGreaterThan(0); // the event and its roster
+    expect(viaEvent!.filter((l) => l.entity === "reimbursements")).toEqual([]);
+    expect(JSON.stringify(viaEvent)).not.toContain("Log leak test");
+  });
+});
+
 describe("Storage: hand-in photos only", () => {
   const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" });
 

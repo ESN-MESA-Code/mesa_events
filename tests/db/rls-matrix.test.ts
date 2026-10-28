@@ -153,6 +153,9 @@ const FOUNDATION: Spec[] = [
         allowed: ["events", "executive", "admin", "oc", "helper"],
       },
       { name: "entry of event B", make: async (w) => ins("activity_log", { event_id: w.eventB.id, entity: "events", action: "test" }), allowed: ["events", "executive", "admin"] },
+      // Claims: Finance only, even for the claim's own event (review B1).
+      { name: "claim entry of event A", make: async (w) => ins("activity_log", { event_id: w.eventA.id, entity: "reimbursements", action: "test" }), allowed: ["finance", "treasurer"] },
+      { name: "idea entry of event A", make: async (w) => ins("activity_log", { event_id: w.eventA.id, entity: "event_ideas", action: "test" }), allowed: ["events", "executive", "admin"] },
     ],
     insert: [{ payload: (w) => ({ event_id: w.eventA.id, entity: "x", action: "forged" }), allowed: NOBODY, match: () => ({ action: "forged" }) }],
     update: [{ name: "entry", make: async (w) => ins("activity_log", { event_id: w.eventA.id, entity: "e", action: "t" }), patch: () => ({ action: "changed" }), allowed: NOBODY }],
