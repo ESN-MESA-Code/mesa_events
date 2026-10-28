@@ -1,0 +1,91 @@
+import type { Metadata } from "next";
+import { loadEventForPage } from "@/lib/events";
+import { coerceFields, renderDescription } from "@/lib/description/template";
+import { prefillFromEvent } from "@/lib/description/prefill";
+import { searchEntry, type SearchEntry } from "@/lib/description/search";
+import { formatDateTime, nowMs } from "@/lib/dates";
+import { hasRole } from "@/lib/roles";
+import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { DescriptionEditor } from "./DescriptionEditor";
+
+export const metadata: Metadata = { title: "Description" };
+
+export default async function DescriptionPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { event, supabase, viewer, isOc, isStaff, isTeam, cycle } = await loadEventForPage(id);
+  const isComms = hasRole(viewer.roles, "comms");
+  const isEvents = hasRole(viewer.roles, "events");
+  const canEdit = isOc || isEvents || isComms;
+
+  const { data: description } = await supabase.from("descriptions").select("*").eq("event_id", id).maybeSingle();
+
+  // Helpers and other members: read only.
+  if (!canEdit) {
+    const text = description?.published_text ?? null;
+    const fields = description ? coerceFields(description.fields) : null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Description</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isStaff || isTeam ? (
+            fields ? (
+              <div className="rounded-lg bg-gray-50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderDescription(fields).html }} />
+            ) : (
+              <EmptyState>The OC has not started the description yet.</EmptyState>
+            )
+          ) : text ? (
+            <pre className="whitespace-pre-wrap font-sans text-sm">{text}</pre>
+          ) : (
+            <EmptyState>The description is not published yet.</EmptyState>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const [{ data: reviews }, { data: published }] = await Promise.all([
+    supabase.from("reviews").select("id, reviewer, decision, comment, created_at").eq("event_id", id).order("created_at", { ascending: false }),
+    supabase
+      .from("descriptions")
+      .select("event_id, approved_fields, events(title)")
+      .not("published_at", "is", null)
+      .neq("event_id", id)
+      .limit(500),
+  ]);
+  const pool: SearchEntry[] = (published ?? []).map((p) => {
+    const f = coerceFields(p.approved_fields);
+    return searchEntry(p.event_id, (p.events as { title: string } | null)?.title ?? f.title, f);
+  });
+  const templates = Object.fromEntries((published ?? []).map((p) => [p.event_id, coerceFields(p.approved_fields)]));
+  const deadline = cycle?.description_deadline ?? null;
+  const late = deadline !== null && Date.parse(deadline) < nowMs() && (!description || ["draft", "changes_requested"].includes(description.status));
+
+  return (
+    <div className="space-y-4">
+      {deadline && (
+        <Alert tone={late ? "error" : "info"}>
+          Descriptions for this month are due {formatDateTime(deadline)}.
+        </Alert>
+      )}
+      <DescriptionEditor
+        eventId={id}
+        viewer={{ name: viewer.name, email: viewer.email }}
+        initial={{
+          fields: description ? coerceFields(description.fields) : prefillFromEvent(event),
+          exists: !!description,
+          version: description?.version ?? 0,
+          status: description?.status ?? "draft",
+          publishedAt: description?.published_at ? formatDateTime(description.published_at) : null,
+          publishRequested: !!description?.publish_requested_at && (!description.published_at || description.publish_requested_at > description.published_at),
+          approvedBy: description?.approved_by ?? null,
+        }}
+        can={{ submit: isOc || isEvents, review: isComms, hasSpace: !!event.chat_space_requested_at }}
+        pool={pool}
+        templates={templates}
+        reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
+      />
+    </div>
+  );
+}

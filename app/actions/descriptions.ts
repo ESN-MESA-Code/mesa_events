@@ -10,3 +10,27 @@ export async function setDescriptionDeadline(input: unknown) {
   if (r.ok) revalidatePath("/", "layout");
   return r;
 }
+
+export async function saveDescription(input: unknown) {
+  const r = await run(A.saveDescription, input);
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
+export async function submitDescription(input: unknown) {
+  const r = await run(A.submitDescription, input);
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
+export async function reviewDescription(input: unknown) {
+  const r = await run(A.reviewDescription, input);
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
+export async function publishDescription(input: unknown) {
+  const r = await run(A.publishDescription, input);
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}

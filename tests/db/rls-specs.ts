@@ -76,6 +76,50 @@ SPECS_EXTRA.push({
   delete: [{ name: "member of A's space", make: async (w) => { await admin.from("event_chat_members").upsert({ event_id: w.eventA.id, email: USERS.helper.email }); return { event_id: w.eventA.id, email: USERS.helper.email }; }, allowed: NOBODY }],
 });
 
+const STAFF_A: Role[] = [...TEAM, "oc", "helper"];
+async function descriptionOf(eventId: string, published = false): Promise<Match> {
+  await admin.from("descriptions").upsert({ event_id: eventId, fields: { title: "RLS" }, ...(published ? { status: "published", published_at: new Date().toISOString() } : { status: "draft", published_at: null }) });
+  return { event_id: eventId };
+}
+const versionOf = (eventId: string) => insertRow("description_versions", { event_id: eventId, version: 1, kind: "submitted", fields: {} });
+const reviewOf = (eventId: string) => insertRow("reviews", { event_id: eventId, reviewer: USERS.comms.email, decision: "approved", version: 1 });
+
+SPECS_EXTRA.push(
+  {
+    table: "descriptions",
+    select: [
+      { name: "draft of event A", make: (w) => descriptionOf(w.eventA.id), allowed: STAFF_A },
+      { name: "published description of event B", make: (w) => descriptionOf(w.eventB.id, true), allowed: MEMBERS },
+    ],
+    insert: [{ payload: (w) => ({ event_id: w.eventD.id, fields: {} }), allowed: NOBODY, match: (p) => ({ event_id: p.event_id as string }) }],
+    update: [
+      { name: "draft of event A", make: (w) => descriptionOf(w.eventA.id), patch: () => ({ status: "approved" }), allowed: NOBODY },
+      { name: "published of event B", make: (w) => descriptionOf(w.eventB.id, true), patch: () => ({ fields: { title: "x" } }), allowed: NOBODY },
+    ],
+    delete: [{ name: "draft of event A", make: (w) => descriptionOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "description_versions",
+    select: [
+      { name: "version of event A", make: (w) => versionOf(w.eventA.id), allowed: STAFF_A },
+      { name: "version of event B", make: (w) => versionOf(w.eventB.id), allowed: TEAM },
+    ],
+    insert: [{ payload: (w) => ({ event_id: w.eventA.id, version: 9, kind: "published", fields: {} }), allowed: NOBODY, match: () => ({ version: 9 }) }],
+    update: [{ name: "version of event A", make: (w) => versionOf(w.eventA.id), patch: () => ({ text: "forged" }), allowed: NOBODY }],
+    delete: [{ name: "version of event A", make: (w) => versionOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "reviews",
+    select: [
+      { name: "review of event A", make: (w) => reviewOf(w.eventA.id), allowed: STAFF_A },
+      { name: "review of event B", make: (w) => reviewOf(w.eventB.id), allowed: TEAM },
+    ],
+    insert: [{ payload: (w) => ({ id: uid(), event_id: w.eventA.id, reviewer: "x@esnmesa.org", decision: "approved", version: 1 }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "review of event A", make: (w) => reviewOf(w.eventA.id), patch: () => ({ decision: "changes_requested" }), allowed: NOBODY }],
+    delete: [{ name: "review of event A", make: (w) => reviewOf(w.eventA.id), allowed: NOBODY }],
+  }
+);
+
 export async function cleanupExtra() {
   await admin.from("event_ideas").delete().like("title", "RLS%");
 }

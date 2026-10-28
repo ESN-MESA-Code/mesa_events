@@ -59,6 +59,46 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"description_versions": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"event_id": string,"fields": NonNullable<Json>,"id": number,"kind": string,"text": string | null,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"event_id": string,"fields": NonNullable<Json>,"id"?: never,"kind": string,"text"?: string | null,"version": number
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"event_id"?: string,"fields"?: NonNullable<Json>,"id"?: never,"kind"?: string,"text"?: string | null,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "description_versions_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"descriptions": {
+                  Row: {
+                    "approved_at": string | null,"approved_by": string | null,"approved_fields": Json | null,"approved_text": string | null,"event_id": string,"fields": NonNullable<Json>,"publish_requested_at": string | null,"published_at": string | null,"published_by": string | null,"published_message_name": string | null,"published_text": string | null,"status": string,"submitted_at": string | null,"submitted_by": string | null,"updated_at": string,"updated_by": string | null,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_at"?: string | null,"approved_by"?: string | null,"approved_fields"?: Json | null,"approved_text"?: string | null,"event_id": string,"fields"?: NonNullable<Json>,"publish_requested_at"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"published_message_name"?: string | null,"published_text"?: string | null,"status"?: string,"submitted_at"?: string | null,"submitted_by"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"version"?: number
+                  }
+                  Update: {
+                    "approved_at"?: string | null,"approved_by"?: string | null,"approved_fields"?: Json | null,"approved_text"?: string | null,"event_id"?: string,"fields"?: NonNullable<Json>,"publish_requested_at"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"published_message_name"?: string | null,"published_text"?: string | null,"status"?: string,"submitted_at"?: string | null,"submitted_by"?: string | null,"updated_at"?: string,"updated_by"?: string | null,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "descriptions_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"event_chat_members": {
                   Row: {
                     "added_at": string,"email": string,"event_id": string
@@ -289,6 +329,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"reviews": {
+                  Row: {
+                    "comment": string,"created_at": string,"decision": string,"event_id": string,"id": string,"reviewer": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "comment"?: string,"created_at"?: string,"decision": string,"event_id": string,"id"?: string,"reviewer": string,"version": number
+                  }
+                  Update: {
+                    "comment"?: string,"created_at"?: string,"decision"?: string,"event_id"?: string,"id"?: string,"reviewer"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reviews_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"role_members": {
                   Row: {
                     "email": string,"role": Database["public"]['Enums']["app_role"],"source": string,"synced_at": string
@@ -370,6 +430,9 @@ isOneToOne: false
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"can_edit_description":
+{ Args: { "event": string }; Returns: boolean
+                           },
 "can_read_event":
 { Args: { "event": string }; Returns: boolean
                            },
@@ -429,6 +492,11 @@ isOneToOne: false
 "delete_expired_activity":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"description_overview":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "deadline": string,"event_id": string,"late": boolean,"published_at": string,"starts_at": string,"status": string,"submitted_at": string,"title": string
+            }[]
+                           },
 "drop_out":
 { Args: { "assignment": string,"reason"?: string }; Returns: undefined
                            },
@@ -462,6 +530,9 @@ isOneToOne: false
 "is_workspace_member":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"mark_description_published":
+{ Args: { "event": string,"message_name": string,"posted_text": string }; Returns: undefined
+                           },
 "my_context":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -476,6 +547,9 @@ isOneToOne: false
 "open_volunteer_form":
 { Args: { "closes_at": string,"cycle": string }; Returns: undefined
                            },
+"publish_description":
+{ Args: { "event": string }; Returns: undefined
+                           },
 "purge_auth_ip_addresses":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -488,14 +562,25 @@ isOneToOne: false
 "retry_job":
 { Args: { "job_id": number }; Returns: undefined
                            },
+"review_description":
+{ Args: { "comment": string,"decision": string,"event": string,"rendered"?: string }; Returns: undefined
+                           },
 "roster_published":
 { Args: { "event": string }; Returns: boolean
                            },
 "save_allocation":
 { Args: { "cycle": string,"rows": Json }; Returns: number
                            },
+"save_description":
+{ Args: { "event": string,"patch": Json }; Returns: {
+              "fields": Json,"status": string,"version": number
+            }[]
+                           },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
+                           },
+"submit_description":
+{ Args: { "event": string,"rendered": string }; Returns: undefined
                            },
 "submit_volunteer_form":
 { Args: { "choices": Json,"cycle": string,"note"?: string }; Returns: string
