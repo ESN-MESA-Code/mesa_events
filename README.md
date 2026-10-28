@@ -35,16 +35,19 @@ npm run seed:demo
 npm run dev:local
 ```
 
-Open http://localhost:3000 and pick a member under **Local test sign-in** – one seeded account
+Open http://localhost:3000 and pick a member under **Local test sign-in**. Everyone lands on
+**Home** ("what's next for me": the open volunteer form, their events with the next step and
+deadline, open slots, claims that need something, and a card per team queue for team members) – one seeded account
 per role (member, OC and helper of the demo events, volunteers, Events, Comms, Finance,
 Treasurer, executive, admin, and a newcomer who has not accepted the confidentiality rules). The
 local sign-in exists only in development against a Supabase on your machine; production builds
 compile it out (tested).
 
-`seed:demo` prints links to a realistic month: a confirmed month with Chat spaces, an
-under-staffed hike, a weekend trip, an event happening now (attendance open, with the public form
-link), a past event with receipts for Finance, next month's open volunteer form and ideas for the
-month after. Run it again to start over.
+`seed:demo` prints links to a realistic month: confirmed events around today with Chat spaces
+(each in the cycle of the month it takes place in), an under-staffed hike, a weekend trip, an
+event happening now (attendance open, with the public form link), a past event with receipts for
+Finance, the following month's open volunteer form and ideas for the month after. Run it again
+to start over (it also removes what was added to its cycles by hand).
 
 Good to know:
 
@@ -63,12 +66,14 @@ Good to know:
 
 | Command | What | Needs |
 |---|---|---|
-| `npm test` | Unit: allocation, reimbursement rules (every SPEC row), description template, 4,096 limit and search, Berlin dates, auth/open redirects, local login, security headers, Google clients, Chat texts, checklist | nothing |
+| `npm test` | Unit: allocation, reimbursement rules (every SPEC row) and claim steps, description template, 4,096 limit and search, Berlin dates, auth/open redirects, local login, security headers, Google clients, Chat texts, checklist and next step, cycle steps, navigation, breadcrumbs, activity texts, generated actions and their revalidation | nothing |
 | `npm run test:db` | RLS matrix (every table × 11 roles × select/insert/update/delete, cross-event, anonymous), planning, Chat jobs, descriptions, attendance (ported MESAttendance tests), reimbursements and hand-in photo Storage, server actions re-checking roles | local Supabase |
 | `npm run build:local` then `npm run test:bundle` | No service-role key, jobs secret, Google key or test password in `.next/static`; local sign-in compiled out; no source maps | a production build |
-| `npm run test:e2e` | Playwright against the **production** build: the whole month across roles (idea → paid reimbursement), dropout and replacement, Comms review, security (CSP nonce, headers, job route secret, local login 404, sign-in and confidentiality gates, open redirects, IDOR on every `[id]` route), public form, kiosk, legal pages | local Supabase, Chromium (`npx playwright install chromium`) |
+| `npm run test:e2e` | Playwright against the **production** build: the whole month across roles (idea → paid reimbursement), dropout and replacement, Comms review, Home per role, locked volunteer form and Events clearing a response, cycle month validation, executive read-only Finance, every role's pages at 375 px, security (CSP nonce, headers, job route secret, local login 404, sign-in and confidentiality gates, No access, open redirects, IDOR on every `[id]` route, no receipt photos), public form, kiosk, legal pages | local Supabase, Chromium (`npx playwright install chromium`) |
 
-`npm run lint` and `npm run typecheck` check the code. Stop `dev:local` before `test:db` and
+`npm run lint` and `npm run typecheck` check the code; `npm run gen:actions -- --check` that the
+generated server actions are up to date. `.github/workflows/ci.yml` runs all of it (plus a
+types-drift check and the Docker build) on GitHub against a local Supabase in the runner. Stop `dev:local` before `test:db` and
 `test:e2e` (its pg_cron job runner would work on the tests' jobs). `test:e2e` builds first; set
 `E2E_SKIP_BUILD=1` to reuse the last `build:local`.
 
@@ -112,12 +117,12 @@ on conflict (key) do update set value = excluded.value;
 ## Project layout
 
 ```
-app/(app)/            member area: calendar, ideas, volunteer, my events, event pages
+app/(app)/            member area: Home (/), calendar, ideas, volunteer, my events, event pages, no-access
   events/[id]/        overview (roster, claims, checklist), description, attendance, hand-in
   team/events|comms|finance/   team dashboards, cycles and roster, payouts, rules
   admin/              roles, settings, jobs
 app/event/[token]     public attendance form    app/kiosk/[id]   form on an organiser's device
-app/api/jobs/run      job runner (secret)
+app/api/jobs/run      job runner (secret)      .github/workflows/ci.yml   CI (not pushed)
 app/actions/          generated "use server" exports of lib/actions
 lib/actions/          server actions: zod input, role checks from the database
 lib/allocation.ts     deterministic OC/helper allocation

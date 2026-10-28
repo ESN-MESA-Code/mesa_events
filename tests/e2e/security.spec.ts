@@ -182,10 +182,16 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
     expect(await status(page, `/kiosk/${eventA}`)).toBe(404);
   });
 
-  test("finance pages are Finance's", async ({ page, context, baseURL }) => {
+  test("finance pages: Finance, executives read-only (no bank details), nobody else", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, USERS.finance);
     expect(await status(page, `/team/finance/batches/${batchId}`)).toBe(200);
     await signInAs(context, baseURL!, USERS.executive);
-    expect(await status(page, `/team/finance/batches/${batchId}`)).toBe(404);
+    expect(await status(page, `/team/finance/batches/${batchId}`)).toBe(200);
+    await page.goto(`/team/finance/batches/${batchId}`);
+    await expect(page.getByRole("button", { name: "Mark batch paid" })).toHaveCount(0);
+    for (const user of [USERS.events, USERS.comms, USERS.admin, USERS.oc]) {
+      await signInAs(context, baseURL!, user);
+      expect(await status(page, `/team/finance/batches/${batchId}`), user.email).toBe(404);
+    }
   });
 });

@@ -213,8 +213,8 @@ Implemented autonomously after the code review and UI walkthrough; the user was 
   any stored objects with `storage.allow_delete_query` (nothing was deployed; on a stack with
   photos, remove the files with the Storage API first). Hand-in photos are unchanged.
 - **B1 – Activity log by entity.** Claim entries (`entity = 'reimbursements'`) are readable by
-  Finance (incl. Treasurer) only – not by executives or admins either, matching who reads claims
-  (milestone 6). Other entries: Events, executives, admins; the event's OC and helpers only for
+  Finance (incl. Treasurer) only – and, since C4, executives (read-only) – never by the event's
+  OC, helpers, the Events team or admins. Other entries: Events, executives, admins; the event's OC and helpers only for
   entities they can read anyway (event, roster, description, reviews, attendance list). Idea
   entries are no longer shown to event staff (pitch and decision note are the proposer's and the
   teams').
@@ -227,3 +227,55 @@ Implemented autonomously after the code review and UI walkthrough; the user was 
   which reimbursement policy applies.
 - **B4 – A stale running job (worker died) with `attempts >= max_attempts` is marked dead** with
   a "gave up" note instead of being claimed again; admins retry it from the Admin page.
+- **B5 – Revalidation is declared per action** (`defineAction(schema, handler, { revalidate })`,
+  named pages in `PAGES`), applied by `run()`; the generated wrappers only call `run()`. Only
+  actions that change the navigation (open/close/submit the volunteer form, manual roles)
+  revalidate every page; description autosave revalidates nothing. The client still refreshes
+  the page it is on after an action (`useAction`).
+- **B6 – CI files only** (`.github/workflows/ci.yml`): checks, DB tests with a types-drift
+  check, build + bundle scan + E2E, Docker build and smoke test, all against a local Supabase in
+  the runner. Nothing pushed; no remote configured.
+- **B7 – `seed:demo` deletes everything in its own cycles** (also events added there by hand,
+  with their claims) before deleting the cycles.
+- **C1 – Home at `/`** (and the logo). Order: volunteer form banner, my events with one next step
+  each (`nextStep()` in `lib/checklist.ts`), open slots, my claims that need payout details or the
+  Beleg, then team queue cards. Executives get all three team cards (read-only views).
+- **C2 – Cycles are named "December 2026 events" (planned in November)**; `planning_cycles.month`
+  is the month the events take place in. The database refuses an event outside its cycle's
+  Berlin calendar month (insert, date change, cycle change) and a month change of a cycle with
+  events – for members and teams; like the other guards it does not apply to the service role
+  (seed, tests, jobs), which keeps the existing test fixtures (random far-future months).
+- **C3 – Navigation:** personal (Home, Calendar, My events, Ideas, Volunteer only while a form is
+  open, with a badge until answered) and a separate "Team" group (Events, Comms, Finance, Admin).
+  Phones get a "Menu" button that opens both groups instead of a sideways-scrolling bar.
+- **C4 – Executives read Finance** (receipts, claims, batches, pre-approvals, trip budgets, claim
+  log entries) **read-only; bank and PayPal details stay Finance's and the claimant's.** Supersedes
+  "not executives" for claims in milestone 6. Team pages send signed-in members without the role
+  to a **No access** page (redirect, 200) – the role pages' existence is no secret; pages of one
+  record (a cycle, a batch, an event) still answer 404 so ids give no hints. `forbidden()` was not
+  used because `authInterrupts` is canary-only in this Next.js version.
+- **C5 – Breadcrumbs via `?from=`** (home, me, calendar, events, comms, finance, `cycle:<id>`),
+  whitelisted so the parameter cannot become an open redirect; tabs keep it. The next-step banner
+  is shown on every tab for the event's OC and helpers. Activity is described in plain language
+  for everyone who may read it; the raw log is a collapsed "Raw log" for Events, executives and
+  admins. The plain text never names who dropped out (only that someone did).
+- **C6 – Receipts and hand-in photos open on the day of the event** (Berlin date) in the UI;
+  before that the tab shows the status and why the forms are not there yet. Pre-approval requests
+  for weekend trips stay available before the trip (they must come before the purchase). The
+  database does not enforce the day (Finance may need to register late or odd cases).
+- **C7 – Claim amounts are labelled** Receipt amount / Suggested / Approved / Paid (Paid is the
+  approved amount once paid, else "–"); progress Registered → Beleg received → Checked → Paid, a
+  rejected claim shows "Rejected" at the step it reached.
+- **C8 – A description is late** when the cycle's deadline passed or the event started (in
+  `description_overview()`, so the Comms page, Home and checklist agree). Progress per cycle
+  counts submitted, approved and published as "in".
+- **C9 – Cycle steps are derived, not stored** (`lib/cycle.ts` from status and counts): Ideas
+  (planning, no events) → Schedule (planning with events) → Volunteer form → Allocation (form
+  closed) → Roster confirmed (allocated, waiting for confirmation) → Descriptions (confirmed, until
+  all are in).
+- **C10 – Cause of "Unsaved changes" after loading:** with no description yet, the editor marked
+  every prefilled field dirty on load but scheduled no save. Now a new description shows "Not
+  saved yet – prefilled from the event" and the prefill is saved with the first edit.
+- **C11 – Shared pieces** (`components/status.tsx`: status chips, `Stepper`; `ClaimItem`;
+  `formatShortDate` / `formatDue`) and a Playwright check that every role's main pages do not
+  scroll sideways at 375 px.

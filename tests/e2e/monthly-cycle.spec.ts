@@ -163,8 +163,9 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
   });
 
   await test.step("on the day: a participant signs in, the OC signs the list off", async () => {
-    // Time travel: the quiz starts in half an hour.
-    await admin.from("events").update({ starts_at: hoursFromNow(0.5) }).eq("id", quizId);
+    // Time travel: the quiz started a quarter of an hour ago (sign-ins open,
+    // and the hand-in is open whatever the time of day the test runs).
+    await admin.from("events").update({ starts_at: hoursFromNow(-0.25) }).eq("id", quizId);
     const { data: list } = await admin.from("attendance_lists").select("public_token").eq("event_id", quizId).single();
     const visitor = await browser.newContext();
     const form = await visitor.newPage();
