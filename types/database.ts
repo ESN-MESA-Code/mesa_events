@@ -816,7 +816,7 @@ isOneToOne: false
                            },
 "description_overview":
 { Args: Record<PropertyKey, never>; Returns: {
-              "deadline": string,"event_id": string,"late": boolean,"published_at": string,"starts_at": string,"status": string,"submitted_at": string,"title": string
+              "cycle_id": string,"cycle_month": string,"deadline": string,"event_id": string,"late": boolean,"published_at": string,"starts_at": string,"status": string,"submitted_at": string,"title": string
             }[]
                            },
 "drop_out":

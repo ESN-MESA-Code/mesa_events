@@ -12,7 +12,7 @@ import { EventsDashboard } from "./EventsDashboard";
 export const metadata: Metadata = { title: "Events team" };
 
 export default async function EventsTeamPage() {
-  const viewer = await requirePageRole(["events"], { executiveMayRead: true });
+  const viewer = await requirePageRole(["events"], { executiveMayRead: true, page: "Events team" });
   const supabase = await createSessionClient();
   const [{ data: cycles }, { data: openIdeas }] = await Promise.all([
     supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").order("month", { ascending: false }),

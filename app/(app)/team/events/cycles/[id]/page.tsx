@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Month schedule" };
 export default async function CyclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const viewer = await requirePageRole(["events"], { executiveMayRead: true });
+  const viewer = await requirePageRole(["events"], { executiveMayRead: true, hide: true });
   const canEdit = hasRole(viewer.roles, "events");
   const supabase = await createSessionClient();
   const { data: cycle } = await supabase.from("planning_cycles").select("*").eq("id", id).maybeSingle();

@@ -55,3 +55,4 @@ next-env.d.ts
 # local test artefacts
 /test-results/
 /playwright-report/
+.claude/

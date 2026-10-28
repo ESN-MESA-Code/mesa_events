@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { APP_ROLES, ROLE_GROUP_ENV, ROLE_LABELS, hasRole, roleGroups } from "@/lib/roles";
+import { createSessionClient } from "@/lib/supabase/session";
+import { requirePageRole } from "@/lib/access";
+import { APP_ROLES, ROLE_GROUP_ENV, ROLE_LABELS, roleGroups } from "@/lib/roles";
 import { googleMode } from "@/lib/google";
 import { formatDateTime } from "@/lib/dates";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/components/ui";
@@ -14,8 +14,7 @@ export const metadata: Metadata = { title: "Admin" };
 // Admin (IT): role mapping (groups from env), manual role members, settings,
 // and the jobs queue (Chat, Drive, role sync) with retries.
 export default async function AdminPage() {
-  const viewer = (await getViewer())!;
-  if (!hasRole(viewer.roles, "admin")) notFound();
+  await requirePageRole(["admin"], { page: "Admin" });
   const supabase = await createSessionClient();
   const [{ data: members }, { data: jobs }, { data: settings }] = await Promise.all([
     supabase.from("role_members").select("*").order("role").order("email"),

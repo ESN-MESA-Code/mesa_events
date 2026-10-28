@@ -140,7 +140,15 @@ describe("descriptions", () => {
     expect(data!.find((r) => r.event_id === eventId)).toMatchObject({ status: "published", late: false });
     // A member who is not staff sees nothing of it.
     expect(((await (await as(USERS.member)).rpc("description_overview")).data ?? []).some((r) => r.event_id === otherId)).toBe(false);
-    await admin.from("events").update({ cycle_id: null }).eq("id", otherId);
+    expect(other).toMatchObject({ cycle_id: cycle!.id, cycle_month: cycle!.month });
+    // Before the deadline, an event that already started is late too (review C8).
+    await admin.from("planning_cycles").update({ description_deadline: new Date(Date.now() + 7 * 86_400_000).toISOString() }).eq("id", cycle!.id);
+    const { data: before } = await admin.from("events").select("starts_at").eq("id", otherId).single();
+    await admin.from("events").update({ starts_at: new Date(Date.now() - 3_600_000).toISOString() }).eq("id", otherId);
+    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: true });
+    await admin.from("events").update({ starts_at: new Date(Date.now() + 2 * 86_400_000).toISOString() }).eq("id", otherId);
+    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: false });
+    await admin.from("events").update({ cycle_id: null, starts_at: before!.starts_at }).eq("id", otherId);
     await admin.from("planning_cycles").delete().eq("id", cycle!.id);
   });
 });

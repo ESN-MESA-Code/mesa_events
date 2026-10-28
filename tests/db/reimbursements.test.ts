@@ -110,7 +110,7 @@ describe("registering receipts", () => {
     expect(await register(USERS.oc, standard, { amount_cents: -5 })).toMatchObject({ ok: false, error: "invalid_input" });
   });
 
-  it("receipts, claims and bank details: Finance and the claimant only", async () => {
+  it("claims: Finance, executives (read-only) and the claimant; bank details: Finance and the claimant only", async () => {
     const id = claimId(await register(USERS.helper, standard, { vendor: "Visible test" }));
     const sees = async (u: SeedUser) => {
       const c = await as(u);
@@ -120,7 +120,8 @@ describe("registering receipts", () => {
     expect(await sees(USERS.helper)).toEqual({ claim: 1, iban: 1 });
     expect(await sees(USERS.finance)).toEqual({ claim: 1, iban: 1 });
     expect(await sees(USERS.treasurer)).toEqual({ claim: 1, iban: 1 });
-    for (const u of [USERS.oc, USERS.events, USERS.executive, USERS.admin, USERS.member, USERS.comms]) expect(await sees(u), u.email).toEqual({ claim: 0, iban: 0 });
+    expect(await sees(USERS.executive)).toEqual({ claim: 1, iban: 0 });
+    for (const u of [USERS.oc, USERS.events, USERS.admin, USERS.member, USERS.comms]) expect(await sees(u), u.email).toEqual({ claim: 0, iban: 0 });
     expect((await anonClient().from("payout_details").select("iban")).data ?? []).toEqual([]);
     // The event's people see counts only.
     const { data: summary } = await (await as(USERS.oc)).rpc("event_claims_summary", { event: standard });
@@ -274,8 +275,10 @@ describe("the activity log does not leak claims (review B1)", () => {
     const seen = async (u: SeedUser) => (await (await as(u)).from("activity_log").select("id, details").eq("entity_id", id)).data ?? [];
     // The helper of the same event: staff of it, yet none of the claim's entries.
     expect(await seen(USERS.helper)).toEqual([]);
-    for (const u of [USERS.oc, USERS.events, USERS.executive, USERS.admin, USERS.comms, USERS.member]) expect(await seen(u), u.email).toEqual([]);
+    for (const u of [USERS.oc, USERS.events, USERS.admin, USERS.comms, USERS.member]) expect(await seen(u), u.email).toEqual([]);
     expect(await seen(USERS.finance)).toHaveLength(all!.length);
+    // Executives oversee Finance read-only (review C4).
+    expect(await seen(USERS.executive)).toHaveLength(all!.length);
     expect(await seen(USERS.treasurer)).toHaveLength(all!.length);
     // Nothing of a claim reaches the event's staff through the event filter either.
     const { data: viaEvent } = await (await as(USERS.helper)).from("activity_log").select("entity, details").eq("event_id", standard);

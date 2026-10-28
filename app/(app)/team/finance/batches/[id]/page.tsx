@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
+import { hasRole } from "@/lib/roles";
 import { createSessionClient } from "@/lib/supabase/session";
 import { formatCents, formatDate, monthLabel } from "@/lib/dates";
 import { Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/components/ui";
@@ -16,7 +17,8 @@ export const metadata: Metadata = { title: "Payout batch" };
 export default async function BatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  await requirePageRole(["finance"]);
+  const viewer = await requirePageRole(["finance"], { executiveMayRead: true, hide: true });
+  const canAct = hasRole(viewer.roles, "finance");
   const supabase = await createSessionClient();
   const { data: batch } = await supabase.from("payout_batches").select("*").eq("id", id).maybeSingle();
   if (!batch) notFound();
@@ -48,7 +50,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
           <Link href="/team/finance" className="text-sm text-esn hover:underline">
             ← Finance
           </Link>
-          {batch.status === "open" && (claims ?? []).length > 0 && (
+          {canAct && batch.status === "open" && (claims ?? []).length > 0 && (
             <ActionButton action={payBatch} input={{ batch_id: id }} variant="success" size="default" confirm="Mark every claim of this batch as paid? Bank details are deleted afterwards.">
               Mark batch paid
             </ActionButton>
@@ -75,7 +77,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
                 <tr key={`${p.name}${p.to}`}>
                   <td className="py-1.5">{p.name}</td>
                   <td>{p.method}</td>
-                  <td className="font-mono text-xs">{batch.status === "paid" ? "deleted after payout" : p.to}</td>
+                  <td className="font-mono text-xs">{batch.status === "paid" ? "deleted after payout" : canAct ? p.to : "Finance only"}</td>
                   <td className="text-right tabular-nums">{p.claims}</td>
                   <td className="text-right tabular-nums">{formatCents(p.total)}</td>
                 </tr>

@@ -15,8 +15,10 @@ export const metadata: Metadata = { title: "Finance" };
 // Finance's overview: open receipts and claims (Beleg, check, payout),
 // monthly payout batches, pre-approvals (Treasurer) and trip budgets.
 export default async function FinancePage() {
-  const viewer = await requirePageRole(["finance"]);
+  // Executives oversee Finance read-only (no bank details, no actions).
+  const viewer = await requirePageRole(["finance"], { executiveMayRead: true, page: "Finance" });
   const isTreasurer = viewer.roles.includes("treasurer");
+  const canAct = hasRole(viewer.roles, "finance");
   const supabase = await createSessionClient();
   const now = new Date(nowMs()).toISOString();
 
@@ -61,6 +63,7 @@ export default async function FinancePage() {
   return (
     <>
       <PageHeader title="Finance" description="Receipts, reimbursements and monthly payouts. The paper Beleg is mandatory.">
+        {!canAct && <Badge className="self-center" data-testid="read-only">Read-only (executive)</Badge>}
         <Link href="/team/finance/policies" className="text-sm text-esn hover:underline self-center">
           Reimbursement rules →
         </Link>
@@ -85,7 +88,7 @@ export default async function FinancePage() {
             <CardTitle>Receipts and claims</CardTitle>
           </CardHeader>
           <CardContent>
-            <ClaimsTable rows={rows} />
+            <ClaimsTable rows={rows} readOnly={!canAct} />
           </CardContent>
         </Card>
 
@@ -110,7 +113,7 @@ export default async function FinancePage() {
                       <Badge tone={b.status === "paid" ? "purple" : "blue"} className="ml-auto">
                         {b.status === "paid" ? `paid ${b.paid_at ? formatDate(b.paid_at) : ""}` : "open"}
                       </Badge>
-                      {b.status === "open" && (b.reimbursements ?? []).length > 0 && (
+                      {canAct && b.status === "open" && (b.reimbursements ?? []).length > 0 && (
                         <ActionButton action={payBatch} input={{ batch_id: b.id }} variant="success" confirm={`Mark all ${(b.reimbursements ?? []).length} claims of ${monthLabel(b.month)} as paid?`}>
                           Mark paid
                         </ActionButton>
@@ -156,7 +159,7 @@ export default async function FinancePage() {
                   <span className="font-medium">{t.title}</span>
                   <span className="text-gray-500">{formatDate(t.starts_at)}</span>
                   <span className="ml-auto">
-                    <TripBudgetForm eventId={t.id} current={(t.trip_budgets as { amount_cents: number } | null)?.amount_cents ?? null} disabled={!hasRole(viewer.roles, "finance")} />
+                    <TripBudgetForm eventId={t.id} current={(t.trip_budgets as { amount_cents: number } | null)?.amount_cents ?? null} disabled={!canAct} />
                   </span>
                 </li>
               ))}

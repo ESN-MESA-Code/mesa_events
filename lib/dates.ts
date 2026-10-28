@@ -113,3 +113,14 @@ export function parseEuroToCents(raw: string): number | null {
 export function nowMs(): number {
   return Date.now();
 }
+
+/** "Sat 31 Oct" – deadlines and dates in lists. */
+export function formatShortDate(iso: string): string {
+  return format(new TZDate(new Date(iso).getTime(), TIME_ZONE), "EEE d MMM");
+}
+
+/** "due Sat 31 Oct, 23:59" or "was due …" once passed. */
+export function formatDue(iso: string, now = Date.now()): string {
+  const when = format(new TZDate(new Date(iso).getTime(), TIME_ZONE), "EEE d MMM, HH:mm");
+  return Date.parse(iso) < now ? `was due ${when}` : `due ${when}`;
+}

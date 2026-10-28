@@ -168,6 +168,8 @@ SPECS_EXTRA.push(
 
 const FINANCE: Role[] = ["finance", "treasurer"];
 const CLAIMANT_A: Role[] = [...FINANCE, "helper"];
+/** Finance's records: executives read them too (review C4) – not the bank details. */
+const OVERSIGHT_A: Role[] = [...CLAIMANT_A, "executive"];
 
 async function policyV1() {
   const { data: pol } = await admin.from("reimbursement_policies").select("id, version").eq("version", 1).single();
@@ -222,8 +224,8 @@ SPECS_EXTRA.push(
   readOnly(
     "receipts",
     [
-      { name: "helper's receipt at event A", make: (w) => receiptOf(w.eventA.id), allowed: CLAIMANT_A },
-      { name: "helper's receipt at event B", make: (w) => receiptOf(w.eventB.id), allowed: CLAIMANT_A },
+      { name: "helper's receipt at event A", make: (w) => receiptOf(w.eventA.id), allowed: OVERSIGHT_A },
+      { name: "helper's receipt at event B", make: (w) => receiptOf(w.eventB.id), allowed: OVERSIGHT_A },
     ],
     (w) => receiptOf(w.eventA.id),
     (w) => ({ event_id: w.eventA.id, claimant_id: USERS.member.id, expense_kind: "ticket", vendor: "x", amount_cents: 1, purchased_on: "2026-11-01" }),
@@ -231,7 +233,7 @@ SPECS_EXTRA.push(
   ),
   readOnly(
     "reimbursements",
-    [{ name: "helper's claim at event A", make: (w) => claimOf(w.eventA.id), allowed: CLAIMANT_A }],
+    [{ name: "helper's claim at event A", make: (w) => claimOf(w.eventA.id), allowed: OVERSIGHT_A }],
     (w) => claimOf(w.eventA.id),
     (w) => ({ event_id: w.eventA.id, claimant_id: USERS.member.id }),
     { status: "paid", approved_cents: 999999 }
@@ -245,7 +247,7 @@ SPECS_EXTRA.push(
   ),
   readOnly(
     "preapprovals",
-    [{ name: "helper's request", make: (w) => preapprovalOf(w.eventA.id), allowed: CLAIMANT_A }],
+    [{ name: "helper's request", make: (w) => preapprovalOf(w.eventA.id), allowed: OVERSIGHT_A }],
     (w) => preapprovalOf(w.eventA.id),
     (w) => ({ event_id: w.eventA.id, requester_id: USERS.member.id, description: "x", estimated_cents: 1 }),
     { status: "approved" }
@@ -253,14 +255,14 @@ SPECS_EXTRA.push(
   readOnly(
     "trip_budgets",
     [
-      { name: "budget of event A", make: (w) => budgetOf(w.eventA.id), allowed: [...FINANCE, "oc", "helper"] },
-      { name: "budget of event B", make: (w) => budgetOf(w.eventB.id), allowed: FINANCE },
+      { name: "budget of event A", make: (w) => budgetOf(w.eventA.id), allowed: [...FINANCE, "executive", "oc", "helper"] },
+      { name: "budget of event B", make: (w) => budgetOf(w.eventB.id), allowed: [...FINANCE, "executive"] },
     ],
     (w) => budgetOf(w.eventA.id),
     (w) => ({ event_id: w.eventD.id, amount_cents: 1 }),
     { amount_cents: 999999 }
   ),
-  readOnly("payout_batches", [{ name: "a batch", make: () => batch(), allowed: FINANCE }], () => batch(), () => ({ month: "2999-01-01" }), { status: "paid" }),
+  readOnly("payout_batches", [{ name: "a batch", make: () => batch(), allowed: [...FINANCE, "executive"] }], () => batch(), () => ({ month: "2999-01-01" }), { status: "paid" }),
   readOnly(
     "event_photos",
     [

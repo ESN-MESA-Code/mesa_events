@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Roster" };
 export default async function RosterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const viewer = await requirePageRole(["events"], { executiveMayRead: true });
+  const viewer = await requirePageRole(["events"], { executiveMayRead: true, hide: true });
   const supabase = await createSessionClient();
   const { data: cycle } = await supabase.from("planning_cycles").select("*").eq("id", id).maybeSingle();
   if (!cycle) notFound();

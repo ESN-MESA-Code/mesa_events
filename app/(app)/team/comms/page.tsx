@@ -29,7 +29,7 @@ function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testI
 // The Comms team's overview: what to review, what is ready to publish, and
 // which descriptions are due or late (one deadline per month).
 export default async function CommsPage() {
-  await requirePageRole(["comms"], { executiveMayRead: true });
+  await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const supabase = await createSessionClient();
   const { data } = await supabase.rpc("description_overview");
   const now = nowMs();

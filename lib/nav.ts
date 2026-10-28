@@ -3,20 +3,43 @@ import { hasRole, type AppRole } from "@/lib/roles";
 export interface NavItem {
   href: string;
   label: string;
+  /** A small count or mark next to the label (e.g. the open volunteer form). */
+  badge?: string;
 }
 
-/** The main navigation for a member with `roles` (pages check access again). */
-export function navItems(roles: readonly AppRole[]): NavItem[] {
-  const items: NavItem[] = [
+export interface Navigation {
+  /** What the member does for themself. */
+  personal: NavItem[];
+  /** Team pages (a separate group). */
+  team: NavItem[];
+}
+
+/** The volunteer form as the navigation sees it. */
+export type VolunteerNav = { open: boolean; submitted: boolean };
+
+/**
+ * The main navigation for a member with `roles` (pages check access again).
+ * Volunteer appears only while a form is open, marked until they answered.
+ * Executives see every team page (read-only where they cannot act).
+ */
+export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { open: false, submitted: false }): Navigation {
+  const personal: NavItem[] = [
+    { href: "/", label: "Home" },
     { href: "/calendar", label: "Calendar" },
-    { href: "/ideas", label: "Ideas" },
-    { href: "/volunteer", label: "Volunteer" },
     { href: "/me", label: "My events" },
+    { href: "/ideas", label: "Ideas" },
   ];
+  if (volunteer.open) personal.push({ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" });
   const exec = roles.includes("executive");
-  if (hasRole(roles, "events") || exec) items.push({ href: "/team/events", label: "Events team" });
-  if (hasRole(roles, "comms") || exec) items.push({ href: "/team/comms", label: "Comms" });
-  if (hasRole(roles, "finance") || exec) items.push({ href: "/team/finance", label: "Finance" });
-  if (hasRole(roles, "admin")) items.push({ href: "/admin", label: "Admin" });
-  return items;
+  const team: NavItem[] = [];
+  if (hasRole(roles, "events") || exec) team.push({ href: "/team/events", label: "Events" });
+  if (hasRole(roles, "comms") || exec) team.push({ href: "/team/comms", label: "Comms" });
+  if (hasRole(roles, "finance") || exec) team.push({ href: "/team/finance", label: "Finance" });
+  if (hasRole(roles, "admin")) team.push({ href: "/admin", label: "Admin" });
+  return { personal, team };
+}
+
+/** Whether `href` is the current section ("/" only on the Home page itself). */
+export function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }

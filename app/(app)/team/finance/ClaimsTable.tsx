@@ -82,7 +82,7 @@ function CheckForm({ row }: { row: ClaimRow }) {
 
 const col = createColumnHelper<ClaimRow>();
 
-export function ClaimsTable({ rows }: { rows: ClaimRow[] }) {
+export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; readOnly?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [status, setStatus] = useState("open");
   const [search, setSearch] = useState("");
@@ -147,6 +147,8 @@ export function ClaimsTable({ rows }: { rows: ClaimRow[] }) {
         header: "",
         cell: ({ row: { original: r } }) => (
           <span className="flex flex-col items-start gap-1">
+            {readOnly ? null : (
+              <>
             {r.status === "not_submitted" && (
               <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline">
                 Beleg received
@@ -158,12 +160,14 @@ export function ClaimsTable({ rows }: { rows: ClaimRow[] }) {
                 Pay early
               </ActionButton>
             )}
+              </>
+            )}
             {!r.payoutMethod && !["paid", "rejected"].includes(r.status) && <span className="text-[11px] text-amber-700">no payout details</span>}
           </span>
         ),
       }),
     ],
-    []
+    [readOnly]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table v8 is not compiler-aware
