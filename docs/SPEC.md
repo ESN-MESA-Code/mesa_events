@@ -45,7 +45,7 @@ Locally, seed users per role.
 
 1. **Propose idea**: any member; title, date, pitch, number of helpers needed. Proposer becomes OC by default.
 2. **Month schedule** (`planning_cycles`, one per month): Events accepts/moves/merges/rejects ideas, adds own events, sets each event's **type** (standard, special, day trip, weekend trip).
-3. **Volunteer form**: lists all events of the cycle; each volunteer picks events they can do and ranks OC and helper preference per event; closes at a deadline. Store submission time.
+3. **Volunteer form**: lists all events of the cycle; each volunteer picks events they can do and ranks OC and helper preference per event; closes at a deadline. Store submission time. **Each volunteer submits once; after that their answers are locked** (Events can clear a response so the person can resubmit).
 4. **Auto-allocation** after the deadline: highest priority first; ties broken first come first served by submission time. One OC per event, `helpers_needed` helpers. **No cap** per person; anyone may OC several events. Events nobody signed up for are **dropped**. If an event has an OC but too few helpers, flag it; the OC decides whether it runs or is cancelled. Must be a pure, deterministic, unit-tested function.
 5. **Adjust roster**: Events edits assignments (drag and drop), then confirms.
 6. **Chat space** per event: create space, invite OC, helpers, Comms and Events; set space description with the date and @-mention OC and helpers. Update membership when the roster changes.
@@ -53,7 +53,7 @@ Locally, seed users per role.
 8. **Description editor**: structured fields in the house template, live preview of the rendered Chat post, 4,096-char counter, TBA time/price, templates from past events, autosave, editor presence. **One description deadline per cycle**, set by Events, for all events.
 9. **Comms hand-off**: submit → Comms approves or requests changes (comments) → publish to the event's Chat space (+ @all), idempotent; editing after publish edits the message.
 10. **Attendance**: all MESAttendance features, attached to `events`.
-11. **Hand-in**: photo upload (to Drive via job), close attendance list, register each receipt (expense kind, amount, vendor, optional reference photo in private Storage). The **paper Beleg is mandatory** (German law) — the platform only tracks it.
+11. **Hand-in**: photo upload (to Drive via job), close attendance list, register each receipt (expense kind, amount, vendor, date, note). **No receipt photos are stored**: the **paper Beleg is mandatory** (German law) — the platform only tracks it.
 12. **Reimbursement**: statuses not submitted → Beleg received (who/when) → checked → paid / rejected. Category: team costs or ancillary costs. Payout by bank transfer or PayPal (store IBAN/PayPal only until paid). Approved claims go into a **monthly payout batch**; claims > €100 can be flagged for early payout.
 
 Dashboards per team: Events (schedule, unstaffed events, form status), Comms (descriptions due/late/awaiting review), Finance (open receipts, reimbursements, batches), plus a per-event checklist.
@@ -78,7 +78,7 @@ min(amount × rate, cap) (per day where applicable); Finance confirms or overrid
 
 ## Data model (first sketch – refine as needed)
 
-`planning_cycles`, `event_ideas`, `events` (type, start/end, location, price, capacity, helpers_needed, status, visibility, chat space, cycle_id, series_id), `event_series`, `volunteer_responses` (+ submitted_at), `assignments` (role OC/helper, source auto/manual/replacement, status active/dropped_out), `descriptions` + `description_versions`, `reviews`, `attendance_lists`, `participants` (from MESAttendance), `receipts`, `reimbursements`, `reimbursement_policies`, `payout_batches`, `activity_log`, `jobs`, `profiles`, `role_members`. RLS on every table.
+`planning_cycles` (month = the month its events take place in), `event_ideas`, `events` (type, start/end, location, price, capacity, helpers_needed, status, visibility, chat space, cycle_id, series_id), `event_series`, `volunteer_responses` (+ submitted_at), `assignments` (role OC/helper, source auto/manual/replacement, status active/dropped_out), `descriptions` + `description_versions`, `reviews`, `attendance_lists`, `participants` (from MESAttendance), `receipts`, `reimbursements`, `reimbursement_policies`, `payout_batches`, `activity_log`, `jobs`, `profiles`, `role_members`. RLS on every table.
 
 ## Architecture constraints
 
