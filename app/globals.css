@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* ── ESN brand colours ─────────────────────────────────────────────────────
+   Primary:  #2E3192  (ESN dark blue / indigo)
+   Hover:    #252780  (slightly darker for interactive hover states)
+   Accent:   #00AEEF  (ESN cyan – focus rings, highlights)
+   Orange:   #F47920  (ESN orange)
+   Green:    #7AC143  (ESN green)
+   Magenta:  #EC008C  (ESN magenta)
+──────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-esn: #2E3192;
+  --color-esn-dark: #252780;
+  --color-esn-accent: #00AEEF;
+  --color-esn-orange: #F47920;
+  --color-esn-green: #7AC143;
+  --color-esn-magenta: #EC008C;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── Legal texts rendered from legal/*.md ──────────────────────────────── */
+.legal-prose {
+  @apply text-sm text-gray-700 leading-relaxed space-y-4;
+}
+.legal-prose h1 {
+  @apply text-2xl font-bold text-gray-900;
+}
+.legal-prose h2 {
+  @apply text-base font-semibold text-gray-900 pt-4;
+}
+.legal-prose h3 {
+  @apply font-semibold text-gray-900 pt-2;
+}
+.legal-prose ul {
+  @apply list-disc pl-5 space-y-1;
+}
+.legal-prose a {
+  @apply text-esn hover:underline break-words;
+}
+.legal-prose em {
+  @apply not-italic text-gray-500;
+}
+
+/* The participation terms and data processing boxes on the attendance form */
+.legal-box {
+  @apply rounded-md border border-gray-300 bg-gray-50 p-4 text-xs text-gray-700 space-y-2;
+}
+.legal-box h3 {
+  @apply font-bold uppercase tracking-wide;
+}
+.legal-box h3 + p {
+  @apply mt-1;
+}
+.legal-box a {
+  @apply text-esn underline;
+}

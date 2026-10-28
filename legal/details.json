@@ -1,0 +1,36 @@
+{
+  "association": {
+    "name": "Münchner Erasmus Studenten Assoziation (MESA) e.V.",
+    "short_name": "MESA e.V.",
+    "byname": "ESN MESA München",
+    "address": "c/o Referat Internationale Angelegenheiten, Geschwister-Scholl-Platz 1, 80539 München",
+    "email": "info@esnmesa.org",
+    "website": "https://mesa.esn-germany.de",
+    "register_court": "Amtsgericht München",
+    "register_number": "VR 200385"
+  },
+  "authority": {
+    "name": "Bayerisches Landesamt für Datenschutzaufsicht (BayLDA)",
+    "address": "Promenade 18, 91522 Ansbach",
+    "website": "https://www.lda.bayern.de"
+  },
+  "processors": {
+    "hosting": "Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA",
+    "database": "Supabase Inc., 970 Toa Payoh North #07-04, Singapore 318992",
+    "login": "Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Ireland"
+  },
+  "retention": {
+    "years": 3,
+    "ordinal_en": "third",
+    "ordinal_de": "dritten",
+    "example_event_year": 2026,
+    "example_deletion_year": 2029
+  },
+  "notice_version": "2026-10-23",
+  "terms_version": "2026-10-23",
+  "confidentiality_version": "2026-10-23",
+  "as_of": {
+    "en": "October 2026",
+    "de": "Oktober 2026"
+  }
+}
