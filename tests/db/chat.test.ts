@@ -1,7 +1,7 @@
 // Chat spaces through the jobs queue (database-backed fake Chat client), and
 // roster changes: dropouts, open slots, claiming.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { USERS, admin, as, createCycle, createEvent, daysFromNow } from "../helpers/local";
+import { USERS, admin, as, createCycle, createEvent, daysFromNow, type SeedUser } from "../helpers/local";
 import { actionContext } from "./actionContext";
 import { runDueJobs, type JobDeps } from "@/lib/jobs/runner";
 import { HANDLERS } from "@/lib/jobs/handlers";
@@ -89,6 +89,20 @@ describe("Chat spaces and roster changes", () => {
     expect(s.messages.at(-1)!.text).toMatch(/^⚠️ Hugo Helper dropped out as helper of \*Karaoke night\*\. .*<users\/oc@esnmesa\.org>$/);
     const { data: dm } = await admin.from("fake_chat_messages").select("text").eq("space", "dm:oc@esnmesa.org");
     expect(dm!.some((m) => m.text.includes("Hugo Helper dropped out"))).toBe(true);
+  });
+
+  it("the drop-out reason: the event's OC and the Events team only, not in the roster or the log", async () => {
+    const { data: a } = await admin.from("assignments").select("id").eq("event_id", eventId).eq("profile_id", USERS.helper.id).single();
+    const reasonFor = async (u: SeedUser) => (await (await as(u)).from("assignment_drop_reasons").select("reason").eq("assignment_id", a!.id)).data ?? [];
+    expect(await reasonFor(USERS.oc)).toEqual([{ reason: "Exam" }]);
+    expect(await reasonFor(USERS.events)).toEqual([{ reason: "Exam" }]);
+    for (const u of [USERS.member, USERS.helper, USERS.volunteer1, USERS.comms, USERS.finance, USERS.executive, USERS.admin]) expect(await reasonFor(u), u.email).toEqual([]);
+    // The roster row has no reason any more, and the log never sees it.
+    const { data: row } = await (await as(USERS.member)).from("assignments").select("*").eq("id", a!.id).single();
+    expect(row).not.toHaveProperty("drop_reason");
+    const { data: log } = await admin.from("activity_log").select("details").eq("entity", "assignments").eq("entity_id", a!.id).eq("action", "update");
+    expect(JSON.stringify(log)).not.toContain("Exam");
+    expect(log!.length).toBeGreaterThan(0);
   });
 
   it("staff cannot claim twice; any other member can claim the slot", async () => {

@@ -115,6 +115,44 @@ const FOUNDATION: Spec[] = [
     delete: [{ name: "assignment", make: async () => freshAssignment(), allowed: ["events"] }],
   },
   {
+    // Drop-out reasons: the event's OC and the Events team only (review B2).
+    table: "assignment_drop_reasons",
+    select: [
+      {
+        name: "reason of a helper of A",
+        make: async (w) => {
+          const a = await ins("assignments", { event_id: w.eventA.id, profile_id: USERS.volunteer2.id, role: "helper", status: "dropped_out", dropped_at: new Date().toISOString() });
+          return ins("assignment_drop_reasons", { assignment_id: a.id, event_id: w.eventA.id, reason: "ill" }, "assignment_id");
+        },
+        allowed: ["events", "oc"],
+      },
+    ],
+    insert: [{ payload: async () => ({ assignment_id: (await freshAssignment()).id, event_id: (await admin.from("events").select("id").eq("title", "RLS assignment").limit(1).single()).data!.id, reason: "x" }), allowed: NOBODY, match: (p) => ({ assignment_id: p.assignment_id as string }) }],
+    update: [
+      {
+        name: "reason",
+        make: async () => {
+          const a = await freshAssignment();
+          const { data } = await admin.from("assignments").select("event_id").eq("id", a.id as string).single();
+          return ins("assignment_drop_reasons", { assignment_id: a.id, event_id: data!.event_id, reason: "x" }, "assignment_id");
+        },
+        patch: () => ({ reason: "changed" }),
+        allowed: NOBODY,
+      },
+    ],
+    delete: [
+      {
+        name: "reason",
+        make: async () => {
+          const a = await freshAssignment();
+          const { data } = await admin.from("assignments").select("event_id").eq("id", a.id as string).single();
+          return ins("assignment_drop_reasons", { assignment_id: a.id, event_id: data!.event_id, reason: "x" }, "assignment_id");
+        },
+        allowed: NOBODY,
+      },
+    ],
+  },
+  {
     table: "profiles",
     select: [{ name: "a profile", make: async () => ({ id: USERS.oc.id }), allowed: MEMBERS }],
     insert: [{ payload: () => ({ id: uid(), email: `rlstest-x${uid().slice(0, 6)}@esnmesa.org` }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],

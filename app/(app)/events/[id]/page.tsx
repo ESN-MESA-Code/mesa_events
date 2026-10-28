@@ -13,11 +13,14 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam } = await loadEventForPage(id);
 
-  const [{ data: roster }, { data: slots }, { data: log }] = await Promise.all([
-    supabase.from("assignments").select("id, role, status, source, drop_reason, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
+  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }] = await Promise.all([
+    supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
     supabase.rpc("open_slots"),
     supabase.from("activity_log").select("id, at, actor_email, entity, action").eq("event_id", id).order("at", { ascending: false }).limit(10),
+    // Drop-out reasons: the OC and the Events team only (RLS).
+    canManage ? supabase.from("assignment_drop_reasons").select("assignment_id, reason").eq("event_id", id) : Promise.resolve({ data: [] }),
   ]);
+  const reasonOf = new Map((reasons ?? []).map((r) => [r.assignment_id, r.reason]));
   const active = (roster ?? []).filter((a) => a.status === "active");
   const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
   const slot = (slots ?? []).find((s) => s.event_id === id);
@@ -127,8 +130,8 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               </div>
             )}
             {dropped.length > 0 && (isTeam || isOc) && (
-              <p className="text-xs text-gray-500">
-                Dropped out: {dropped.map((a) => `${name(a)} (${a.role}${a.drop_reason ? `: ${a.drop_reason}` : ""})`).join("; ")}
+              <p className="text-xs text-gray-500" data-testid="dropped-out">
+                Dropped out: {dropped.map((a) => `${name(a)} (${a.role}${reasonOf.get(a.id) ? `: ${reasonOf.get(a.id)}` : ""})`).join("; ")}
               </p>
             )}
           </CardContent>

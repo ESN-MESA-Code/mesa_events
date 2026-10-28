@@ -33,16 +33,42 @@ export type Database = {
                   Relationships: [
                     
                   ]
-                },"assignments": {
+                },"assignment_drop_reasons": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"drop_reason": string | null,"dropped_at": string | null,"event_id": string,"id": string,"profile_id": string,"role": string,"source": string,"status": string
+                    "assignment_id": string,"created_at": string,"event_id": string,"reason": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"drop_reason"?: string | null,"dropped_at"?: string | null,"event_id": string,"id"?: string,"profile_id": string,"role": string,"source"?: string,"status"?: string
+                    "assignment_id": string,"created_at"?: string,"event_id": string,"reason": string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"drop_reason"?: string | null,"dropped_at"?: string | null,"event_id"?: string,"id"?: string,"profile_id"?: string,"role"?: string,"source"?: string,"status"?: string
+                    "assignment_id"?: string,"created_at"?: string,"event_id"?: string,"reason"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "assignment_drop_reasons_assignment_id_fkey"
+      columns: ["assignment_id"]
+isOneToOne: true
+      referencedRelation: "assignments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "assignment_drop_reasons_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"assignments": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"dropped_at": string | null,"event_id": string,"id": string,"profile_id": string,"role": string,"source": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"dropped_at"?: string | null,"event_id": string,"id"?: string,"profile_id": string,"role": string,"source"?: string,"status"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"dropped_at"?: string | null,"event_id"?: string,"id"?: string,"profile_id"?: string,"role"?: string,"source"?: string,"status"?: string
                   }
                   Relationships: [
                     {

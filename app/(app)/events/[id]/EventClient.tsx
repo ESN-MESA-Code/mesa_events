@@ -26,13 +26,14 @@ export function DropOutButton({ assignmentId, role }: { assignmentId: string; ro
         run(dropOut, { assignment_id: assignmentId, reason: reason || undefined }, () => setOpen(false));
       }}
     >
-      <Input aria-label="Reason (optional)" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 w-48" />
+      <Input aria-label="Reason (optional)" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 w-48" maxLength={500} />
       <Button size="sm" variant="destructive" disabled={pending}>
         Drop out as {role === "oc" ? "OC" : "helper"}
       </Button>
       <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>
         Cancel
       </Button>
+      <p className="w-full text-xs text-gray-500">Only the OC and the Events team see the reason. Please no health details – “can’t make it” is enough.</p>
       {error && <span className="text-xs text-red-600">{error}</span>}
     </form>
   );
