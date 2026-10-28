@@ -33,21 +33,23 @@ const monthStart = (offset) => {
 };
 
 async function wipe() {
-  const events = check(await db.from("events").select("id").eq("created_by", DEMO), "events");
-  const ids = events.map((e) => e.id);
+  // Everything in the demo's cycles goes, including events added there by
+  // hand while clicking through (they would block deleting the cycles), and
+  // demo events outside them.
+  const cycles = check(await db.from("planning_cycles").select("id").eq("created_by", DEMO), "cycles").map((c) => c.id);
+  const own = check(await db.from("events").select("id").eq("created_by", DEMO), "events").map((e) => e.id);
+  const inCycles = cycles.length ? check(await db.from("events").select("id").in("cycle_id", cycles), "cycle events").map((e) => e.id) : [];
+  const ids = [...new Set([...own, ...inCycles])];
   if (ids.length) {
-    // Finance records keep events from being deleted: remove the demo's first.
+    // Finance records keep events from being deleted: remove those first.
     const claims = check(await db.from("reimbursements").select("id, receipt_id").in("event_id", ids), "claims");
-    if (claims.length) {
-      check(await db.from("reimbursements").delete().in("id", claims.map((c) => c.id)), "delete claims");
-      check(await db.from("receipts").delete().in("id", claims.map((c) => c.receipt_id)), "delete receipts");
-    }
+    if (claims.length) check(await db.from("reimbursements").delete().in("id", claims.map((c) => c.id)), "delete claims");
+    check(await db.from("receipts").delete().in("event_id", ids), "delete receipts");
     check(await db.from("events").delete().in("id", ids), "delete events");
   }
   check(await db.from("event_ideas").delete().like("title", "[demo]%"), "delete ideas");
-  const cycles = check(await db.from("planning_cycles").select("id").eq("created_by", DEMO), "cycles");
-  if (cycles.length) check(await db.from("planning_cycles").delete().in("id", cycles.map((c) => c.id)), "delete cycles");
-  return events.length;
+  if (cycles.length) check(await db.from("planning_cycles").delete().in("id", cycles), "delete cycles");
+  return ids.length;
 }
 
 async function cycle(month, status, extra = {}) {
