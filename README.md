@@ -64,7 +64,7 @@ Good to know:
 | Command | What | Needs |
 |---|---|---|
 | `npm test` | Unit: allocation, reimbursement rules (every SPEC row), description template, 4,096 limit and search, Berlin dates, auth/open redirects, local login, security headers, Google clients, Chat texts, checklist | nothing |
-| `npm run test:db` | RLS matrix (every table × 11 roles × select/insert/update/delete, cross-event, anonymous), planning, Chat jobs, descriptions, attendance (ported MESAttendance tests), reimbursements and Storage, server actions re-checking roles | local Supabase |
+| `npm run test:db` | RLS matrix (every table × 11 roles × select/insert/update/delete, cross-event, anonymous), planning, Chat jobs, descriptions, attendance (ported MESAttendance tests), reimbursements and hand-in photo Storage, server actions re-checking roles | local Supabase |
 | `npm run build:local` then `npm run test:bundle` | No service-role key, jobs secret, Google key or test password in `.next/static`; local sign-in compiled out; no source maps | a production build |
 | `npm run test:e2e` | Playwright against the **production** build: the whole month across roles (idea → paid reimbursement), dropout and replacement, Comms review, security (CSP nonce, headers, job route secret, local login 404, sign-in and confidentiality gates, open redirects, IDOR on every `[id]` route), public form, kiosk, legal pages | local Supabase, Chromium (`npx playwright install chromium`) |
 
@@ -117,7 +117,7 @@ app/(app)/            member area: calendar, ideas, volunteer, my events, event 
   team/events|comms|finance/   team dashboards, cycles and roster, payouts, rules
   admin/              roles, settings, jobs
 app/event/[token]     public attendance form    app/kiosk/[id]   form on an organiser's device
-app/api/jobs/run      job runner (secret)        app/api/receipts/[id]/file   receipt photos
+app/api/jobs/run      job runner (secret)
 app/actions/          generated "use server" exports of lib/actions
 lib/actions/          server actions: zod input, role checks from the database
 lib/allocation.ts     deterministic OC/helper allocation

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { dbError, defineAction, forbidden, requireEventStaff, requireRole, uuid, cents } from "@/lib/actions/core";
 import { isValidIban } from "@/lib/reimbursement";
-import { PHOTO_PATH, RECEIPT_PATH, UPLOADS } from "@/lib/uploads";
+import { PHOTO_PATH, UPLOADS } from "@/lib/uploads";
 
 const kind = z.enum(["ticket", "food_allowance", "ancillary", "travel_accommodation", "further_expenses", "social_ancillary"]);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date");
@@ -17,20 +17,17 @@ const payout = z.discriminatedUnion("payout_method", [
 ]);
 
 export const registerReceipt = defineAction(
-  z
-    .object({
-      event_id: uuid,
-      kind,
-      vendor: z.string().trim().min(1, "Who did you pay?").max(200),
-      amount_cents: cents.min(1, "Enter the amount"),
-      purchased_on: date,
-      description: z.string().trim().max(500).default(""),
-      days: z.number().int().min(1).max(31).nullable().optional(),
-      reference_path: z.string().regex(RECEIPT_PATH).nullable().optional(),
-      preapproval_id: uuid.nullable().optional(),
-      payout: payout.nullable().optional(),
-    })
-    .refine((i) => !i.reference_path || i.reference_path.startsWith(`${i.event_id}/`), { message: "The photo belongs to another event", path: ["reference_path"] }),
+  z.object({
+    event_id: uuid,
+    kind,
+    vendor: z.string().trim().min(1, "Who did you pay?").max(200),
+    amount_cents: cents.min(1, "Enter the amount"),
+    purchased_on: date,
+    description: z.string().trim().max(500).default(""),
+    days: z.number().int().min(1).max(31).nullable().optional(),
+    preapproval_id: uuid.nullable().optional(),
+    payout: payout.nullable().optional(),
+  }),
   async (ctx, i) => {
     await requireEventStaff(ctx, i.event_id, null);
     const { data, error } = await ctx.supabase.rpc("register_receipt", {
@@ -41,7 +38,6 @@ export const registerReceipt = defineAction(
       purchased_on: i.purchased_on,
       description: i.description,
       days: i.days ?? undefined,
-      reference_path: i.reference_path ?? undefined,
       preapproval: i.preapproval_id ?? undefined,
       payout_method: i.payout?.payout_method,
       account_holder: i.payout?.account_holder,

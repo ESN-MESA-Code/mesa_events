@@ -25,7 +25,6 @@ export interface ClaimRow {
   category: string;
   policyVersion: number;
   payoutMethod: string | null;
-  hasPhoto: boolean;
   beleg: string | null;
 }
 
@@ -148,11 +147,6 @@ export function ClaimsTable({ rows }: { rows: ClaimRow[] }) {
         header: "",
         cell: ({ row: { original: r } }) => (
           <span className="flex flex-col items-start gap-1">
-            {r.hasPhoto && (
-              <a href={`/api/receipts/${r.id}/file`} target="_blank" rel="noopener" className="text-xs text-esn hover:underline">
-                Photo
-              </a>
-            )}
             {r.status === "not_submitted" && (
               <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline">
                 Beleg received

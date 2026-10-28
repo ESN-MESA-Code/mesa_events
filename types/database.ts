@@ -471,14 +471,14 @@ isOneToOne: false
                   ]
                 },"receipts": {
                   Row: {
-                    "amount_cents": number,"beleg_received_at": string | null,"beleg_received_by": string | null,"claimant_id": string,"created_at": string,"days": number | null,"description": string,"event_id": string,"expense_kind": string,"id": string,"purchased_on": string,"reference_path": string | null,"vendor": string
+                    "amount_cents": number,"beleg_received_at": string | null,"beleg_received_by": string | null,"claimant_id": string,"created_at": string,"days": number | null,"description": string,"event_id": string,"expense_kind": string,"id": string,"purchased_on": string,"vendor": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents": number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id": string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id": string,"expense_kind": string,"id"?: string,"purchased_on": string,"reference_path"?: string | null,"vendor": string
+                    "amount_cents": number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id": string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id": string,"expense_kind": string,"id"?: string,"purchased_on": string,"vendor": string
                   }
                   Update: {
-                    "amount_cents"?: number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id"?: string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id"?: string,"expense_kind"?: string,"id"?: string,"purchased_on"?: string,"reference_path"?: string | null,"vendor"?: string
+                    "amount_cents"?: number,"beleg_received_at"?: string | null,"beleg_received_by"?: string | null,"claimant_id"?: string,"created_at"?: string,"days"?: number | null,"description"?: string,"event_id"?: string,"expense_kind"?: string,"id"?: string,"purchased_on"?: string,"vendor"?: string
                   }
                   Relationships: [
                     {
@@ -890,7 +890,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "register_receipt":
-{ Args: { "account_holder"?: string,"amount_cents": number,"days"?: number,"description"?: string,"event": string,"iban"?: string,"kind": string,"payout_method"?: string,"paypal_email"?: string,"preapproval"?: string,"purchased_on": string,"reference_path"?: string,"vendor": string }; Returns: string
+{ Args: { "account_holder"?: string,"amount_cents": number,"days"?: number,"description"?: string,"event": string,"iban"?: string,"kind": string,"payout_method"?: string,"paypal_email"?: string,"preapproval"?: string,"purchased_on": string,"vendor": string }; Returns: string
                            },
 "reject_reimbursement":
 { Args: { "claim": string,"reason": string }; Returns: undefined

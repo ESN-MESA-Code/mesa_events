@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Receipt photos are uploaded straight to Storage; actions only carry form data.
+      // Hand-in photos are uploaded straight to Storage; actions only carry form data.
       bodySizeLimit: "1mb",
     },
   },

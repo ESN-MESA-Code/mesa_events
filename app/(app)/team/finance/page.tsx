@@ -24,7 +24,7 @@ export default async function FinancePage() {
     supabase
       .from("reimbursements")
       .select(
-        "id, status, suggested_cents, approved_cents, flags, claimant_role, category, policy_version, payout_method, early_payout, batch_id, created_at, profiles:claimant_id(full_name), events(id, title, type, starts_at), receipts(expense_kind, vendor, amount_cents, purchased_on, reference_path, beleg_received_at, beleg_received_by)"
+        "id, status, suggested_cents, approved_cents, flags, claimant_role, category, policy_version, payout_method, early_payout, batch_id, created_at, profiles:claimant_id(full_name), events(id, title, type, starts_at), receipts(expense_kind, vendor, amount_cents, purchased_on, beleg_received_at, beleg_received_by)"
       )
       .order("created_at", { ascending: false })
       .limit(500),
@@ -34,7 +34,7 @@ export default async function FinancePage() {
   ]);
 
   const rows: ClaimRow[] = (claims ?? []).map((c) => {
-    const r = c.receipts as unknown as { expense_kind: string; vendor: string; amount_cents: number; purchased_on: string; reference_path: string | null; beleg_received_at: string | null; beleg_received_by: string | null };
+    const r = c.receipts as unknown as { expense_kind: string; vendor: string; amount_cents: number; purchased_on: string; beleg_received_at: string | null; beleg_received_by: string | null };
     const e = c.events as unknown as { id: string; title: string; type: string; starts_at: string };
     return {
       id: c.id,
@@ -53,7 +53,6 @@ export default async function FinancePage() {
       category: c.category,
       policyVersion: c.policy_version,
       payoutMethod: c.payout_method,
-      hasPhoto: !!r?.reference_path,
       beleg: r?.beleg_received_at ? `${formatDateTime(r.beleg_received_at)} · ${r.beleg_received_by}` : null,
     };
   });

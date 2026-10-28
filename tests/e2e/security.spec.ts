@@ -58,7 +58,7 @@ test.describe("sign-in gates", () => {
   test("signed-out visitors go to the login page; APIs answer 401", async ({ page, request }) => {
     await page.goto("/calendar");
     await expect(page).toHaveURL(/\/login\?next=%2Fcalendar$/);
-    expect((await request.get(`/api/receipts/${crypto.randomUUID()}/file`, { maxRedirects: 0 })).status()).toBe(401);
+    expect((await request.get(`/api/anything/${crypto.randomUUID()}`, { maxRedirects: 0 })).status()).toBe(401);
     for (const p of ["/admin", "/team/finance", "/me", `/kiosk/${crypto.randomUUID()}`]) {
       const res = await request.get(p, { maxRedirects: 0 });
       expect(res.status(), p).toBe(307);
@@ -98,14 +98,12 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
     cycleId = (await createCycle()).id;
     draftId = (await createEvent({ title: "IDOR draft", status: "draft" })).id;
     eventA = (await createEvent({ title: "IDOR event A", oc: USERS.oc, helpers: [USERS.helper], starts_at: daysFromNow(-1) })).id;
-    // A claim with a photo, owned by the helper.
-    const path = `${eventA}/${USERS.helper.id}/${crypto.randomUUID()}.png`;
-    await admin.storage.from("receipts").upload(path, new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }), { contentType: "image/png" });
+    // A claim owned by the helper.
     const { data: pol } = await admin.from("reimbursement_policies").select("id, version").eq("version", 1).single();
     const { data: rule } = await admin.from("reimbursement_rules").select("id").eq("policy_id", pol!.id).eq("expense_kind", "ticket").eq("event_type", "standard").single();
     const { data: receipt } = await admin
       .from("receipts")
-      .insert({ event_id: eventA, claimant_id: USERS.helper.id, expense_kind: "ticket", vendor: "IDOR", amount_cents: 100, purchased_on: "2026-10-01", reference_path: path })
+      .insert({ event_id: eventA, claimant_id: USERS.helper.id, expense_kind: "ticket", vendor: "IDOR", amount_cents: 100, purchased_on: "2026-10-01" })
       .select("id")
       .single();
     const { data: claim } = await admin
@@ -143,24 +141,22 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
       "/team/finance",
       "/team/comms",
       "/team/events",
-      `/api/receipts/${claimId}/file`,
     ]) {
       expect(await status(page, p), p).toBe(404);
     }
   });
 
-  test("the receipt photo: claimant and Finance only", async ({ page, context, baseURL }) => {
-    for (const [user, code] of [
-      [USERS.oc, 404],
-      [USERS.events, 404],
-      [USERS.executive, 404],
-      [USERS.helper, 302],
-      [USERS.finance, 302],
-    ] as const) {
+  test("no receipt photos: the old photo route is gone for everyone, the hand-in form has no upload", async ({ page, context, baseURL }) => {
+    for (const user of [USERS.helper, USERS.finance]) {
       await signInAs(context, baseURL!, user);
-      expect(await status(page, `/api/receipts/${claimId}/file`), user.email).toBe(code);
+      expect(await status(page, `/api/receipts/${claimId}/file`), user.email).toBe(404);
     }
-    expect(await status(page, `/api/receipts/${crypto.randomUUID()}/file`)).toBe(404);
+    await signInAs(context, baseURL!, USERS.helper);
+    await page.goto(`/events/${eventA}/hand-in`);
+    await expect(page.getByTestId("receipt-form")).toBeVisible();
+    await expect(page.getByTestId("receipt-form").locator('input[type="file"]')).toHaveCount(0);
+    await expect(page.getByTestId("my-claims")).toContainText("IDOR");
+    await expect(page.getByText("View photo")).toHaveCount(0);
   });
 
   test("another event's helper sees neither names nor receipts there", async ({ page, context, baseURL }) => {

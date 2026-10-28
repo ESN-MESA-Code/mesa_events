@@ -36,7 +36,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     supabase.from("event_photos").select("id, file_name, status, drive_url, uploaded_by, created_at").eq("event_id", id).order("created_at"),
     supabase
       .from("reimbursements")
-      .select("id, status, suggested_cents, approved_cents, flags, payout_method, rejected_reason, receipts(expense_kind, vendor, amount_cents, purchased_on, reference_path)")
+      .select("id, status, suggested_cents, approved_cents, flags, payout_method, rejected_reason, receipts(expense_kind, vendor, amount_cents, purchased_on)")
       .eq("event_id", id)
       .eq("claimant_id", viewer.id)
       .order("created_at"),
@@ -68,7 +68,6 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
               {kinds.length ? (
                 <ReceiptForm
                   eventId={id}
-                  claimantId={viewer.id}
                   role={myAssignment.role as "oc" | "helper"}
                   eventType={eventType}
                   rules={(rules ?? []) as Rule[]}
@@ -93,7 +92,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             {!claims?.length && <EmptyState>No receipts registered yet.</EmptyState>}
             <ul className="divide-y divide-gray-100 text-sm" data-testid="my-claims">
               {(claims ?? []).map((c) => {
-                const r = c.receipts as { expense_kind: ExpenseKind; vendor: string; amount_cents: number; purchased_on: string; reference_path: string | null } | null;
+                const r = c.receipts as { expense_kind: ExpenseKind; vendor: string; amount_cents: number; purchased_on: string } | null;
                 return (
                   <li key={c.id} className="py-2.5 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -111,11 +110,6 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                     </p>
                     {c.rejected_reason && <p className="text-xs text-red-700">Rejected: {c.rejected_reason}</p>}
                     <div className="flex gap-3">
-                      {r?.reference_path && (
-                        <a className="text-xs text-esn hover:underline" href={`/api/receipts/${c.id}/file`} target="_blank" rel="noopener">
-                          View photo
-                        </a>
-                      )}
                       {c.status === "not_submitted" && (
                         <ActionButton action={withdrawReceipt} input={{ claim_id: c.id }} variant="ghost" confirm="Withdraw this receipt?">
                           Withdraw

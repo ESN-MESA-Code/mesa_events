@@ -1,7 +1,7 @@
 // Hand-in and reimbursements: the formula in the database equals the
 // TypeScript one, policies are versioned and Treasurer-only, receipts and
 // bank details are Finance's and the claimant's only, statuses, batches,
-// early payout, pre-approval, trip budgets, private Storage, Drive photos.
+// early payout, pre-approval, trip budgets, no receipt photos, Drive photos.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin, anonClient, as, createEvent, daysFromNow, type SeedUser } from "../helpers/local";
 import { actionContext } from "./actionContext";
@@ -10,7 +10,7 @@ import { SPEC_RULES, suggestAmount, type Rule } from "@/lib/reimbursement";
 import { runDueJobs } from "@/lib/jobs/runner";
 import { HANDLERS } from "@/lib/jobs/handlers";
 import { googleClients } from "@/lib/google";
-import { photoPath, receiptPath } from "@/lib/uploads";
+import { photoPath } from "@/lib/uploads";
 import type { Json } from "@/types/database";
 
 const IBAN = "DE89370400440532013000";
@@ -108,7 +108,6 @@ describe("registering receipts", () => {
     expect(await register(USERS.oc, standard, { kind: "travel_accommodation" })).toMatchObject({ ok: false });
     expect(await register(USERS.oc, standard, { payout: { ...bank, iban: "DE00 1234" } })).toMatchObject({ ok: false, error: "invalid_input" });
     expect(await register(USERS.oc, standard, { amount_cents: -5 })).toMatchObject({ ok: false, error: "invalid_input" });
-    expect(await register(USERS.oc, standard, { reference_path: "../../etc/passwd" })).toMatchObject({ ok: false, error: "invalid_input" });
   });
 
   it("receipts, claims and bank details: Finance and the claimant only", async () => {
@@ -262,33 +261,30 @@ describe("weekend trips: pre-approval and trip budget", () => {
   });
 });
 
-describe("private Storage", () => {
+describe("Storage: hand-in photos only", () => {
   const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" });
 
-  it("the claimant uploads a receipt photo into their own folder; Finance reads it, others do not", async () => {
-    const path = receiptPath(standard, USERS.helper.id, "image/png");
-    expect((await (await as(USERS.helper)).storage.from("receipts").upload(path, png, { contentType: "image/png" })).error).toBeNull();
-    // Someone else's folder, or an event they are not staff of.
-    expect((await (await as(USERS.oc)).storage.from("receipts").upload(receiptPath(standard, USERS.helper.id, "image/png"), png, { contentType: "image/png" })).error).not.toBeNull();
-    expect((await (await as(USERS.helper)).storage.from("receipts").upload(receiptPath(other, USERS.helper.id, "image/png"), png, { contentType: "image/png" })).error).not.toBeNull();
-
-    const id = claimId(await register(USERS.helper, standard, { reference_path: path, vendor: "With photo" }));
-    expect((await (await as(USERS.finance)).storage.from("receipts").download(path)).error).toBeNull();
-    expect((await (await as(USERS.helper)).storage.from("receipts").download(path)).error).toBeNull();
-    for (const u of [USERS.oc, USERS.events, USERS.executive]) expect((await (await as(u)).storage.from("receipts").download(path)).error, u.email).not.toBeNull();
-    expect((await anonClient().storage.from("receipts").download(path)).error).not.toBeNull();
-    expect(id).toBeTruthy();
-
-    // Somebody else's upload cannot be attached to a claim.
-    expect(await register(USERS.oc, standard, { reference_path: path })).toMatchObject({ ok: false });
+  it("receipts are data only: no receipt photo bucket, column or parameter", async () => {
+    // The paper Beleg is mandatory; nothing about a receipt is stored as a file.
+    const helper = await as(USERS.helper);
+    expect((await helper.storage.from("receipts").upload(`${standard}/${USERS.helper.id}/${crypto.randomUUID()}.png`, png, { contentType: "image/png" })).error).not.toBeNull();
+    expect((await admin.storage.getBucket("receipts")).error).not.toBeNull();
+    expect((await admin.from("receipts").select("reference_path" as "id").limit(1)).error).not.toBeNull();
+    const old = await helper.rpc("register_receipt" as never, { event: standard, kind: "ticket", vendor: "x", amount_cents: 100, purchased_on: "2026-11-01", reference_path: "a/b/c.png" } as never);
+    expect(old.error).not.toBeNull();
+    // Unknown fields are not passed on by the action either.
+    const r = await register(USERS.helper, standard, { vendor: "No photo", reference_path: "../../etc/passwd" });
+    expect(r.ok).toBe(true);
+    const { data } = await admin.from("receipts").select("expense_kind, vendor, amount_cents, purchased_on, description").eq("vendor", "No photo").single();
+    expect(data).toEqual({ expense_kind: "ticket", vendor: "No photo", amount_cents: 2500, purchased_on: "2026-11-01", description: "" });
   });
 
-  it("the buckets refuse wrong types and oversized files", async () => {
-    const helper = await as(USERS.helper);
+  it("the photo bucket refuses wrong types and oversized files", async () => {
+    const oc = await as(USERS.oc);
     const html = new Blob(["<script>alert(1)</script>"], { type: "text/html" });
-    expect((await helper.storage.from("receipts").upload(`${standard}/${USERS.helper.id}/${crypto.randomUUID()}.pdf`, html, { contentType: "text/html" })).error).not.toBeNull();
-    const big = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: "image/png" });
-    expect((await helper.storage.from("receipts").upload(receiptPath(standard, USERS.helper.id, "image/png"), big, { contentType: "image/png" })).error).not.toBeNull();
+    expect((await oc.storage.from("event-photos").upload(`${standard}/${crypto.randomUUID()}.png`, html, { contentType: "text/html" })).error).not.toBeNull();
+    const big = new Blob([new Uint8Array(15 * 1024 * 1024 + 1)], { type: "image/png" });
+    expect((await oc.storage.from("event-photos").upload(photoPath(standard, "image/png"), big, { contentType: "image/png" })).error).not.toBeNull();
   });
 
   it("hand-in photos go to Drive by a job and leave Storage", async () => {

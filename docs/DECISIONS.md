@@ -166,10 +166,8 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
   €100) Finance can pay a checked claim at once ("Pay early").
 - **Trip budgets** are set by Finance (incl. Treasurer) before the weekend trip starts; the
   Treasurer alone decides pre-approvals.
-- **Receipt photos** go straight from the browser to the private `receipts` bucket
-  (`<event>/<claimant>/<uuid>.<ext>`, 5 MB, JPG/PNG/WebP/PDF enforced by the bucket); the claim
-  checks the object belongs to the claimant. Downloads go through `/api/receipts/[id]/file`, a
-  one-minute signed URL after RLS checks.
+- ~~**Receipt photos** in a private `receipts` bucket~~ – removed in the 2026-10-28 review (A2):
+  the paper Beleg is mandatory, so receipts are tracked as data only.
 - **Event photos** are uploaded to the private `event-photos` bucket (15 MB), then a job copies
   them to the event's Drive folder and deletes them from Storage. Real Drive upload cannot be
   exercised locally (fake Drive client records the files).

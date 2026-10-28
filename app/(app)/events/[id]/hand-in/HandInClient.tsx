@@ -8,11 +8,10 @@ import { describeError, useAction } from "@/components/ActionButton";
 import { addEventPhoto, registerReceipt, requestPreapproval } from "@/app/actions/handin";
 import { EXPENSE_KIND_LABELS, findRule, isValidIban, suggestAmount, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { formatCents, parseEuroToCents } from "@/lib/dates";
-import { photoPath, receiptPath, validateUpload } from "@/lib/uploads";
+import { photoPath, validateUpload } from "@/lib/uploads";
 
 export function ReceiptForm({
   eventId,
-  claimantId,
   role,
   eventType,
   rules,
@@ -23,7 +22,6 @@ export function ReceiptForm({
   defaultDate,
 }: {
   eventId: string;
-  claimantId: string;
   role: "oc" | "helper";
   eventType: Exclude<Rule["event_type"], "any">;
   rules: Rule[];
@@ -40,13 +38,11 @@ export function ReceiptForm({
   const [date, setDate] = useState(defaultDate);
   const [description, setDescription] = useState("");
   const [days, setDays] = useState(String(tripDays));
-  const [file, setFile] = useState<File | null>(null);
   const [method, setMethod] = useState<"bank" | "paypal" | "">("");
   const [holder, setHolder] = useState("");
   const [iban, setIban] = useState("");
   const [paypal, setPaypal] = useState("");
   const [preapproval, setPreapproval] = useState("");
-  const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
 
   const rule = findRule(rules, eventType, kind);
@@ -56,21 +52,11 @@ export function ReceiptForm({
     return suggestAmount({ rule, role, amountCents: cents, days: Number(days) || 1, preapproved: !!preapproval, budgetRemainingCents: hasTripBudget ? Number.MAX_SAFE_INTEGER : null });
   }, [rule, cents, role, days, preapproval, hasTripBudget]);
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setDone(false);
     if (cents === null || cents <= 0) return setError("Enter the amount you paid, e.g. 12.50.");
     if (method === "bank" && !isValidIban(iban)) return setError("This IBAN is not valid.");
-    let reference_path: string | null = null;
-    if (file) {
-      const problem = validateUpload("receipt", file);
-      if (problem) return setError(problem);
-      setUploading(true);
-      reference_path = receiptPath(eventId, claimantId, file.type);
-      const { error: upErr } = await supabase.storage.from("receipts").upload(reference_path, file, { contentType: file.type });
-      setUploading(false);
-      if (upErr) return setError(`Upload failed: ${upErr.message}`);
-    }
     const payout =
       method === "bank" ? { payout_method: "bank", account_holder: holder, iban } : method === "paypal" ? { payout_method: "paypal", paypal_email: paypal } : null;
     run(
@@ -83,7 +69,6 @@ export function ReceiptForm({
         purchased_on: date,
         description,
         days: rule?.per_day ? Number(days) : null,
-        reference_path,
         preapproval_id: preapproval || null,
         payout,
       },
@@ -91,7 +76,6 @@ export function ReceiptForm({
         setAmount("");
         setVendor("");
         setDescription("");
-        setFile(null);
         setDone(true);
       }
     );
@@ -136,9 +120,6 @@ export function ReceiptForm({
       )}
       <Field label="Note (optional)" htmlFor="r-desc">
         <Input id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </Field>
-      <Field label="Photo of the receipt (optional)" htmlFor="r-file" hint="JPG, PNG, WebP or PDF, at most 5 MB. Only you and Finance see it.">
-        <Input id="r-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </Field>
       <Field label="Pay me by" htmlFor="r-method">
         <Select id="r-method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
@@ -192,7 +173,7 @@ export function ReceiptForm({
         </Alert>
       )}
       <div className="sm:col-span-2">
-        <Button disabled={pending || uploading}>{uploading ? "Uploading…" : pending ? "Saving…" : "Register receipt"}</Button>
+        <Button disabled={pending}>{pending ? "Saving…" : "Register receipt"}</Button>
       </div>
     </form>
   );
