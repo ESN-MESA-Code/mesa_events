@@ -1,6 +1,6 @@
 // Attendance lists: sign-off with a headcount, the risk notice.
 import { z } from "zod";
-import { dbError, defineAction, notFound, requireEventOc, requireEventStaff, uuid } from "@/lib/actions/core";
+import { dbError, defineAction, PAGES, notFound, requireEventOc, requireEventStaff, uuid } from "@/lib/actions/core";
 
 /** The OC closes the list with the number of people counted (final). */
 export const signOffList = defineAction(z.object({ event_id: uuid, headcount: z.number().int().min(0).max(10_000) }), async (ctx, i) => {
@@ -12,7 +12,7 @@ export const signOffList = defineAction(z.object({ event_id: uuid, headcount: z.
     .eq("event_id", i.event_id);
   dbError(error);
   if (!count) throw notFound();
-});
+}, { revalidate: [PAGES.event, PAGES.me, PAGES.home] });
 
 /** Optional risk notice (e.g. hikes), shown above the terms; fixed once people signed in. */
 export const setRiskNotice = defineAction(z.object({ event_id: uuid, risk_notice: z.string().trim().max(2000) }), async (ctx, i) => {
@@ -23,4 +23,4 @@ export const setRiskNotice = defineAction(z.object({ event_id: uuid, risk_notice
     .eq("event_id", i.event_id);
   dbError(error);
   if (!count) throw notFound();
-});
+}, { revalidate: [PAGES.event] });

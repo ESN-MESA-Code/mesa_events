@@ -19,6 +19,7 @@
     "supabase:stop": "npx -y supabase@2.121.0 stop",
     "supabase:reset": "npx -y supabase@2.121.0 db reset",
     "gen:types": "node scripts/gen-types.mjs",
+    "gen:actions": "node scripts/gen-actions.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "jobs:run": "node scripts/run-jobs.mjs"
   },

@@ -57,7 +57,7 @@ Good to know:
   admins see and retry them under **Admin**.
 - `npm run supabase:reset` rebuilds the database from the migrations and `supabase/seed.sql`.
 - After a schema change: `npm run gen:types` (types/database.ts); after adding a server action in
-  `lib/actions/*`: `node scripts/gen-actions.mjs` (writes `app/actions/*`).
+  `lib/actions/*`: `npm run gen:actions` (writes `app/actions/*`; each action declares the pages it revalidates).
 
 ## Tests
 

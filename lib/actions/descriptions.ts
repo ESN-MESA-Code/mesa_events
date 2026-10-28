@@ -1,7 +1,7 @@
 // Event descriptions: the month's deadline, editing (autosave), Comms
 // review, publishing.
 import { z } from "zod";
-import { ActionError, dbError, defineAction, notFound, requireRole, uuid } from "@/lib/actions/core";
+import { ActionError, dbError, defineAction, PAGES, notFound, requireRole, uuid } from "@/lib/actions/core";
 import { localDateTime } from "@/lib/actions/planning";
 import { coerceFields, renderDescription, validateAll, TEXT_FIELDS } from "@/lib/description/template";
 import { berlinDate, nowMs } from "@/lib/dates";
@@ -12,7 +12,7 @@ export const setDescriptionDeadline = defineAction(z.object({ cycle_id: uuid, de
   const { error, count } = await ctx.supabase.from("planning_cycles").update({ description_deadline: i.deadline }, { count: "exact" }).eq("id", i.cycle_id);
   dbError(error);
   if (!count) throw notFound();
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.comms, PAGES.event, PAGES.home] });
 
 const patchSchema = z
   .object(Object.fromEntries(TEXT_FIELDS.map((k) => [k, z.string().max(6000).optional()])) as Record<(typeof TEXT_FIELDS)[number], z.ZodOptional<z.ZodString>>)
@@ -25,7 +25,7 @@ export const saveDescription = defineAction(z.object({ event_id: uuid, patch: pa
   dbError(error);
   const row = data?.[0];
   return { version: row?.version ?? 0, status: row?.status ?? "draft" };
-});
+}, { revalidate: [] });
 
 async function currentFields(ctx: Parameters<typeof saveDescription>[0], eventId: string) {
   const { data } = await ctx.supabase.from("descriptions").select("fields, status").eq("event_id", eventId).maybeSingle();
@@ -40,7 +40,7 @@ export const submitDescription = defineAction(z.object({ event_id: uuid }), asyn
   if (!v.ok) throw new ActionError("failed", `Not complete yet: ${Object.values(v.errors).flat().join(" ")}`);
   const { error } = await ctx.supabase.rpc("submit_description", { event: i.event_id, rendered: renderDescription(fields).chat });
   dbError(error);
-});
+}, { revalidate: [PAGES.event, PAGES.comms, PAGES.home] });
 
 export const reviewDescription = defineAction(
   z.object({ event_id: uuid, decision: z.enum(["approved", "changes_requested"]), comment: z.string().trim().max(4000).default("") }),
@@ -58,10 +58,11 @@ export const reviewDescription = defineAction(
       rendered: renderDescription(fields).chat,
     });
     dbError(error);
-  }
+  },
+  { revalidate: [PAGES.event, PAGES.comms, PAGES.home] }
 );
 
 export const publishDescription = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "comms");
   dbError((await ctx.supabase.rpc("publish_description", { event: i.event_id })).error);
-});
+}, { revalidate: [PAGES.event, PAGES.comms, PAGES.home] });

@@ -1,7 +1,7 @@
 // Planning cycle actions: ideas, month schedule, volunteer form, allocation,
 // roster adjustments, confirmation.
 import { z } from "zod";
-import { dbError, defineAction, forbidden, notFound, requireEventOc, requireRole, uuid, ActionError, type ActionContext } from "@/lib/actions/core";
+import { dbError, defineAction, PAGES, forbidden, notFound, requireEventOc, requireRole, uuid, ActionError, type ActionContext } from "@/lib/actions/core";
 import { allocate, type AllocationChoice, type Rank } from "@/lib/allocation";
 import { berlinInputToIso, monthOf } from "@/lib/dates";
 import { EVENT_TYPES } from "@/lib/labels";
@@ -35,14 +35,15 @@ export const proposeIdea = defineAction(
       .single();
     dbError(error);
     return data!;
-  }
+  },
+  { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] }
 );
 
 export const withdrawIdea = defineAction(z.object({ id: uuid }), async (ctx, { id }) => {
   const { error, count } = await ctx.supabase.from("event_ideas").delete({ count: "exact" }).eq("id", id).eq("proposer_id", ctx.viewer.id);
   dbError(error);
   if (!count) throw notFound("This idea cannot be withdrawn any more.");
-});
+}, { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] });
 
 export const acceptIdea = defineAction(
   z.object({ idea_id: uuid, cycle_id: uuid, type: eventType, starts_at: localDateTime, helpers_needed: helpers.optional() }),
@@ -57,7 +58,8 @@ export const acceptIdea = defineAction(
     });
     dbError(error);
     return { event_id: data as string };
-  }
+  },
+  { revalidate: [PAGES.eventsTeam, PAGES.ideas, PAGES.home] }
 );
 
 export const mergeIdea = defineAction(z.object({ idea_id: uuid, event_id: uuid, note: z.string().trim().max(1000).optional() }), async (ctx, i) => {
@@ -69,7 +71,7 @@ export const mergeIdea = defineAction(z.object({ idea_id: uuid, event_id: uuid, 
     .eq("status", "proposed");
   dbError(error);
   if (!count) throw notFound("This idea is not open any more.");
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.ideas, PAGES.home] });
 
 export const rejectIdea = defineAction(z.object({ idea_id: uuid, note: z.string().trim().max(1000).optional() }), async (ctx, i) => {
   requireRole(ctx, "events");
@@ -80,7 +82,7 @@ export const rejectIdea = defineAction(z.object({ idea_id: uuid, note: z.string(
     .eq("status", "proposed");
   dbError(error);
   if (!count) throw notFound("This idea is not open any more.");
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.ideas, PAGES.home] });
 
 /** Moves an idea to another date (and so possibly another month). */
 export const moveIdea = defineAction(z.object({ idea_id: uuid, proposed_date: isoDate }), async (ctx, i) => {
@@ -92,7 +94,7 @@ export const moveIdea = defineAction(z.object({ idea_id: uuid, proposed_date: is
     .eq("status", "proposed");
   dbError(error);
   if (!count) throw notFound("This idea is not open any more.");
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.ideas, PAGES.home] });
 
 // ── Cycles and the schedule ─────────────────────────────────────────────────
 
@@ -102,7 +104,7 @@ export const createCycle = defineAction(z.object({ month: z.string().regex(/^\d{
   if (error?.code === "23505") throw new ActionError("failed", "There is already a cycle for this month.");
   dbError(error);
   return data!;
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.home] });
 
 const eventFields = {
   title,
@@ -128,7 +130,7 @@ export const createEvent = defineAction(z.object({ cycle_id: uuid, ...eventField
     .single();
   dbError(error);
   return { id: data!.id, outsideMonth: monthOf(i.starts_at) !== cycle.month };
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.calendar, PAGES.home] });
 
 /** Event details: Events changes everything, the OC location, price and capacity. */
 export const updateEvent = defineAction(
@@ -156,7 +158,8 @@ export const updateEvent = defineAction(
     const { error, count } = await ctx.supabase.from("events").update(patch, { count: "exact" }).eq("id", id);
     dbError(error);
     if (!count) throw notFound();
-  }
+  },
+  { revalidate: [PAGES.event, PAGES.eventsTeam, PAGES.calendar, PAGES.me, PAGES.home] }
 );
 
 /** Removes a draft event from the month plan (it is dropped, not deleted). */
@@ -165,17 +168,17 @@ export const dropEvent = defineAction(z.object({ id: uuid }), async (ctx, { id }
   const { error, count } = await ctx.supabase.from("events").update({ status: "dropped" }, { count: "exact" }).eq("id", id).in("status", ["draft", "scheduled"]);
   dbError(error);
   if (!count) throw notFound("Only planned events can be removed here.");
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.calendar, PAGES.home] });
 
 export const openForm = defineAction(z.object({ cycle_id: uuid, closes_at: localDateTime }), async (ctx, i) => {
   requireRole(ctx, "events");
   dbError((await ctx.supabase.rpc("open_volunteer_form", { cycle: i.cycle_id, closes_at: i.closes_at })).error);
-});
+}, { revalidate: [PAGES.all] });
 
 export const closeForm = defineAction(z.object({ cycle_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "events");
   dbError((await ctx.supabase.rpc("close_volunteer_form", { cycle: i.cycle_id })).error);
-});
+}, { revalidate: [PAGES.all] });
 
 // ── Volunteer form ──────────────────────────────────────────────────────────
 
@@ -193,7 +196,8 @@ export const submitVolunteerForm = defineAction(
     const { error } = await ctx.supabase.rpc("submit_volunteer_form", { cycle: i.cycle_id, choices: i.choices, note: i.note });
     dbError(error);
     return { events: i.choices.length };
-  }
+  },
+  { revalidate: [PAGES.all] }
 );
 
 /** Events clears one person's (locked) answers so they can submit again; logged with the reason. */
@@ -202,7 +206,8 @@ export const clearVolunteerResponse = defineAction(
   async (ctx, i) => {
     requireRole(ctx, "events");
     dbError((await ctx.supabase.rpc("clear_volunteer_response", { cycle: i.cycle_id, profile: i.profile_id, reason: i.reason })).error);
-  }
+  },
+  { revalidate: [PAGES.eventsTeam] }
 );
 
 // ── Allocation and roster ───────────────────────────────────────────────────
@@ -229,7 +234,7 @@ export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (c
   const rows = result.assignments.map((a) => ({ event_id: a.eventId, profile_id: a.profileId, role: a.role, source: a.source }));
   dbError((await ctx.supabase.rpc("save_allocation", { cycle: cycle_id, rows })).error);
   return { assignments: rows.length, events: result.events, conflicts: result.conflicts };
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 async function requireAdjustable(ctx: ActionContext, eventId: string) {
   const { data } = await ctx.supabase.from("events").select("cycle_id, planning_cycles(status)").eq("id", eventId).single();
@@ -254,7 +259,7 @@ export const assign = defineAction(z.object({ event_id: uuid, profile_id: uuid, 
     return;
   }
   dbError((await ctx.supabase.from("assignments").insert({ ...i, source: "manual" })).error);
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 /** Drag and drop on the roster board: moves a person to another event and/or role. */
 export const moveAssignment = defineAction(z.object({ assignment_id: uuid, event_id: uuid, role: z.enum(["oc", "helper"]) }), async (ctx, i) => {
@@ -274,16 +279,16 @@ export const moveAssignment = defineAction(z.object({ assignment_id: uuid, event
   if (dup) throw new ActionError("failed", "This person is already on that event.");
   dbError((await ctx.supabase.from("assignments").delete().eq("id", a.id)).error);
   dbError((await ctx.supabase.from("assignments").insert({ event_id: i.event_id, profile_id: a.profile_id, role: i.role, source: "manual" })).error);
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 export const unassign = defineAction(z.object({ assignment_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "events");
   const { error, count } = await ctx.supabase.from("assignments").delete({ count: "exact" }).eq("id", i.assignment_id);
   dbError(error);
   if (!count) throw notFound();
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 export const confirmAllocation = defineAction(z.object({ cycle_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "events");
   dbError((await ctx.supabase.rpc("confirm_allocation", { cycle: i.cycle_id })).error);
-});
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.calendar, PAGES.me, PAGES.home] });

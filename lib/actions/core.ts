@@ -5,6 +5,8 @@
 // An action is defined once as `(ctx, input) => result` (testable with any
 // context, see tests/db/actions.test.ts) and exported from a "use server"
 // file through run(), which builds the context from the request's cookies.
+// Each action declares which pages it changes (`revalidate`); run()
+// revalidates only those after a success (description autosave: none).
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasRole, isTeam, type AppRole } from "@/lib/roles";
@@ -63,11 +65,36 @@ export function dbError(error: { code?: string; message: string } | null): never
   throw new ActionError("failed", error.message);
 }
 
+/** A page path ("/calendar") or a route pattern with its type (["/events/[id]", "layout"]). */
+export type RevalidateTarget = string | readonly [string, "page" | "layout"];
+
+/** Pages actions change. The client refreshes the page it is on itself (useAction). */
+export const PAGES = {
+  /** Every page (the navigation shows the open volunteer form and the roles). */
+  all: ["/", "layout"],
+  home: "/",
+  calendar: "/calendar",
+  ideas: "/ideas",
+  volunteer: "/volunteer",
+  me: "/me",
+  event: ["/events/[id]", "layout"],
+  eventsTeam: ["/team/events", "layout"],
+  comms: "/team/comms",
+  finance: ["/team/finance", "layout"],
+  admin: "/admin",
+} as const satisfies Record<string, RevalidateTarget>;
+
+export type Action<R> = ((ctx: ActionContext, raw: unknown) => Promise<ActionResult<R>>) & {
+  /** What run() revalidates after a success. */
+  revalidate: readonly RevalidateTarget[];
+};
+
 export function defineAction<S extends z.ZodType, R>(
   schema: S,
-  handler: (ctx: ActionContext & { viewer: Member }, input: z.infer<S>) => Promise<R>
-) {
-  return async (ctx: ActionContext, raw: unknown): Promise<ActionResult<R>> => {
+  handler: (ctx: ActionContext & { viewer: Member }, input: z.infer<S>) => Promise<R>,
+  opts: { revalidate: readonly RevalidateTarget[] }
+): Action<R> {
+  const action = async (ctx: ActionContext, raw: unknown): Promise<ActionResult<R>> => {
     if (!ctx.viewer || !ctx.viewer.accepted) {
       return { ok: false, error: "unauthenticated", message: "Please sign in." };
     }
@@ -88,6 +115,7 @@ export function defineAction<S extends z.ZodType, R>(
       return { ok: false, error: "failed", message: err instanceof Error ? err.message : "Something went wrong." };
     }
   };
+  return Object.assign(action, { revalidate: opts.revalidate });
 }
 
 // ── Shared input schemas ──────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // Admin (IT): manual role members, job retries, settings, role sync.
 import { z } from "zod";
-import { dbError, defineAction, requireRole } from "@/lib/actions/core";
+import { dbError, defineAction, PAGES, requireRole } from "@/lib/actions/core";
 import { APP_ROLES } from "@/lib/roles";
 import { WORKSPACE_DOMAIN } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -18,7 +18,8 @@ export const addManualRole = defineAction(
       .from("role_members")
       .insert({ email, role: role as (typeof APP_ROLES)[number], source: "manual" });
     dbError(error);
-  }
+  },
+  { revalidate: [PAGES.admin, PAGES.all] }
 );
 
 export const removeManualRole = defineAction(
@@ -32,13 +33,14 @@ export const removeManualRole = defineAction(
       .eq("role", role as (typeof APP_ROLES)[number])
       .eq("source", "manual");
     dbError(error);
-  }
+  },
+  { revalidate: [PAGES.admin, PAGES.all] }
 );
 
 export const retryJob = defineAction(z.object({ id: z.number().int().positive() }), async (ctx, { id }) => {
   requireRole(ctx, "admin");
   dbError((await ctx.supabase.rpc("retry_job", { job_id: id })).error);
-});
+}, { revalidate: [PAGES.admin] });
 
 export const syncRolesNow = defineAction(z.object({}), async (ctx) => {
   requireRole(ctx, "admin");
@@ -50,7 +52,7 @@ export const syncRolesNow = defineAction(z.object({}), async (ctx) => {
     coalescing: true,
   });
   dbError(error);
-});
+}, { revalidate: [PAGES.admin] });
 
 export const SETTINGS = {
   default_helpers_needed: z.number().int().min(0).max(50),
@@ -68,5 +70,6 @@ export const updateSetting = defineAction(
     requireRole(ctx, "admin");
     const { error } = await ctx.supabase.from("app_settings").update({ value }).eq("key", key);
     dbError(error);
-  }
+  },
+  { revalidate: [PAGES.admin] }
 );

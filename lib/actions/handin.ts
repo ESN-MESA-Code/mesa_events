@@ -1,7 +1,7 @@
 // Hand-in (receipts, photos, pre-approvals) and Finance (Beleg, checks,
 // payouts, budgets) and the Treasurer (rules, pre-approvals).
 import { z } from "zod";
-import { dbError, defineAction, forbidden, requireEventStaff, requireRole, uuid, cents } from "@/lib/actions/core";
+import { dbError, defineAction, PAGES, forbidden, requireEventStaff, requireRole, uuid, cents } from "@/lib/actions/core";
 import { isValidIban } from "@/lib/reimbursement";
 import { PHOTO_PATH, UPLOADS } from "@/lib/uploads";
 
@@ -46,7 +46,8 @@ export const registerReceipt = defineAction(
     });
     dbError(error);
     return { claim_id: data as string };
-  }
+  },
+  { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] }
 );
 
 export const setPayoutDetails = defineAction(z.object({ claim_id: uuid }).and(payout), async (ctx, i) => {
@@ -58,11 +59,11 @@ export const setPayoutDetails = defineAction(z.object({ claim_id: uuid }).and(pa
     paypal_email: i.payout_method === "paypal" ? i.paypal_email : undefined,
   });
   dbError(error);
-});
+}, { revalidate: [PAGES.me, PAGES.event, PAGES.finance, PAGES.home] });
 
 export const withdrawReceipt = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   dbError((await ctx.supabase.rpc("withdraw_receipt", { claim: i.claim_id })).error);
-});
+}, { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] });
 
 export const addEventPhoto = defineAction(
   z.object({
@@ -77,7 +78,8 @@ export const addEventPhoto = defineAction(
     await requireEventStaff(ctx, i.event_id, null);
     const { error } = await ctx.supabase.rpc("add_event_photo", { event: i.event_id, path: i.path, file_name: i.file_name, mime_type: i.mime_type, size_bytes: i.size_bytes });
     dbError(error);
-  }
+  },
+  { revalidate: [PAGES.event, PAGES.home] }
 );
 
 export const requestPreapproval = defineAction(
@@ -87,7 +89,8 @@ export const requestPreapproval = defineAction(
     const { data, error } = await ctx.supabase.rpc("request_preapproval", { event: i.event_id, description: i.description, estimated: i.estimated_cents });
     dbError(error);
     return { id: data as string };
-  }
+  },
+  { revalidate: [PAGES.event, PAGES.finance] }
 );
 
 // ── Finance ─────────────────────────────────────────────────────────────────
@@ -95,41 +98,41 @@ export const requestPreapproval = defineAction(
 export const markBelegReceived = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("mark_beleg_received", { claim: i.claim_id })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
 
 export const checkReimbursement = defineAction(z.object({ claim_id: uuid, approved_cents: cents, note: z.string().trim().max(1000).default("") }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("check_reimbursement", { claim: i.claim_id, approved: i.approved_cents, note: i.note })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
 
 export const rejectReimbursement = defineAction(z.object({ claim_id: uuid, reason: z.string().trim().min(1, "Give a reason").max(1000) }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("reject_reimbursement", { claim: i.claim_id, reason: i.reason })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
 
 export const payEarly = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("pay_early", { claim: i.claim_id })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
 
 export const payBatch = defineAction(z.object({ batch_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   const { data, error } = await ctx.supabase.rpc("pay_batch", { batch: i.batch_id });
   dbError(error);
   return { paid: data as number };
-});
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
 
 export const setTripBudget = defineAction(z.object({ event_id: uuid, amount_cents: cents, note: z.string().trim().max(500).default("") }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("set_trip_budget", { event: i.event_id, amount: i.amount_cents, note: i.note })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.event] });
 
 // ── Treasurer ───────────────────────────────────────────────────────────────
 
 export const decidePreapproval = defineAction(z.object({ id: uuid, approve: z.boolean(), note: z.string().trim().max(1000).default("") }), async (ctx, i) => {
   requireRole(ctx, "treasurer");
   dbError((await ctx.supabase.rpc("decide_preapproval", { preapproval: i.id, approve: i.approve, decision_note: i.note })).error);
-});
+}, { revalidate: [PAGES.finance, PAGES.event] });
 
 const ruleSchema = z.object({
   event_type: z.enum(["standard", "special", "day_trip", "weekend_trip", "any"]),
@@ -161,5 +164,6 @@ export const publishPolicy = defineAction(
     const { data, error } = await ctx.supabase.rpc("publish_policy", { rules: i.rules, effective_from: i.effective_from, notes: i.notes });
     dbError(error);
     return { version: data as number };
-  }
+  },
+  { revalidate: [PAGES.finance] }
 );
