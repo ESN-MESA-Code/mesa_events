@@ -4,9 +4,10 @@
 //
 // * One OC per event, `helpersNeeded` helpers.
 // * Highest priority first: rank 1 ("top choice") before 2 and 3.
-// * Ties are first come, first served: the time the volunteer added that
-//   event to their form; then their id, so the result never depends on
-//   input order.
+// * Ties are first come, first served: the volunteer's single submission
+//   time (the form locks after submitting, so it is the same for all of a
+//   person's choices); then their id, so the result never depends on input
+//   order.
 // * No cap per person: anyone may OC or help several events. Events are
 //   therefore independent of each other.
 // * The proposer of an idea who wants to OC it is its OC by default.
@@ -32,8 +33,8 @@ export interface AllocationChoice {
   eventId: string;
   ocRank: Rank | null;
   helperRank: Rank | null;
-  /** When the volunteer added this event to their form (ISO). */
-  chosenAt: string;
+  /** When the volunteer submitted the form (ISO), the same for all their choices. */
+  submittedAt: string;
 }
 
 export type StaffingStatus = "staffed" | "understaffed" | "no_oc" | "dropped";
@@ -54,10 +55,10 @@ export interface AllocationResult {
 /** Events without an end are assumed to last three hours (conflict check only). */
 const DEFAULT_DURATION_MS = 3 * 3_600_000;
 
-type Candidate = { profileId: string; rank: Rank; chosenAt: number };
+type Candidate = { profileId: string; rank: Rank; submittedAt: number };
 
 function byPriority(a: Candidate, b: Candidate) {
-  return a.rank - b.rank || a.chosenAt - b.chosenAt || (a.profileId < b.profileId ? -1 : a.profileId > b.profileId ? 1 : 0);
+  return a.rank - b.rank || a.submittedAt - b.submittedAt || (a.profileId < b.profileId ? -1 : a.profileId > b.profileId ? 1 : 0);
 }
 
 export function staffingStatus(hasOc: boolean, helpers: number, helpersNeeded: number): StaffingStatus {
@@ -74,7 +75,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[])
     const mine = choices.filter((c) => c.eventId === event.id);
     const ocCandidates: Candidate[] = mine
       .filter((c) => c.ocRank !== null)
-      .map((c) => ({ profileId: c.profileId, rank: c.ocRank!, chosenAt: Date.parse(c.chosenAt) }))
+      .map((c) => ({ profileId: c.profileId, rank: c.ocRank!, submittedAt: Date.parse(c.submittedAt) }))
       .sort(byPriority);
 
     let ocId: string | null = null;
@@ -88,7 +89,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[])
 
     const helperIds = mine
       .filter((c) => c.helperRank !== null && c.profileId !== ocId)
-      .map((c) => ({ profileId: c.profileId, rank: c.helperRank!, chosenAt: Date.parse(c.chosenAt) }))
+      .map((c) => ({ profileId: c.profileId, rank: c.helperRank!, submittedAt: Date.parse(c.submittedAt) }))
       .sort(byPriority)
       .slice(0, Math.max(0, event.helpersNeeded))
       .map((c) => c.profileId);

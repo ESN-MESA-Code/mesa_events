@@ -64,7 +64,9 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
       const form = page.getByRole("region", { name: `Volunteer form ${monthLabel(`${month}-01`)}` });
       for (const [label, choice] of picks) await form.getByLabel(label).selectOption({ label: choice });
       await form.getByRole("button", { name: "Submit my answers" }).click();
-      await expect(form.getByText(`you signed up for ${count} event`)).toBeVisible();
+      const summary = form.getByTestId("volunteer-summary");
+      await expect(summary).toContainText("Submitted ✓");
+      await expect(summary.getByRole("listitem")).toHaveCount(count);
     };
     await answer(USERS.volunteer1, [[`OC for ${hike}`, "Top choice"], [`Helper for ${quiz}`, "Top choice"]], 2);
     await answer(USERS.volunteer2, [[`Helper for ${quiz}`, "Happy to"], [`Helper for ${hike}`, "Top choice"]], 2);

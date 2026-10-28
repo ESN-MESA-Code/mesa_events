@@ -641,14 +641,14 @@ isOneToOne: true
                   ]
                 },"volunteer_choices": {
                   Row: {
-                    "chosen_at": string,"event_id": string,"helper_rank": number | null,"oc_rank": number | null,"response_id": string
+                    "event_id": string,"helper_rank": number | null,"oc_rank": number | null,"response_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "chosen_at"?: string,"event_id": string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id": string
+                    "event_id": string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id": string
                   }
                   Update: {
-                    "chosen_at"?: string,"event_id"?: string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id"?: string
+                    "event_id"?: string,"helper_rank"?: number | null,"oc_rank"?: number | null,"response_id"?: string
                   }
                   Relationships: [
                     {
@@ -751,6 +751,9 @@ isOneToOne: false
 "claim_slot":
 { Args: { "event": string,"slot_role": string }; Returns: string
                            },
+"clear_volunteer_response":
+{ Args: { "cycle": string,"profile": string,"reason": string }; Returns: undefined
+                           },
 "close_volunteer_form":
 { Args: { "cycle": string }; Returns: undefined
                            },
@@ -763,9 +766,14 @@ isOneToOne: false
 "confirm_allocation":
 { Args: { "cycle": string }; Returns: undefined
                            },
+"cycle_responses":
+{ Args: { "cycle": string }; Returns: {
+              "email": string,"events": number,"full_name": string,"note": string,"profile_id": string,"submitted_at": string
+            }[]
+                           },
 "cycle_signups":
 { Args: { "cycle": string }; Returns: {
-              "chosen_at": string,"email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
+              "email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
             }[]
                            },
 "decide_preapproval":

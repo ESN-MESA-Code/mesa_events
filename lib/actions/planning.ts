@@ -193,6 +193,15 @@ export const submitVolunteerForm = defineAction(
   }
 );
 
+/** Events clears one person's (locked) answers so they can submit again; logged with the reason. */
+export const clearVolunteerResponse = defineAction(
+  z.object({ cycle_id: uuid, profile_id: uuid, reason: z.string().trim().min(1, "Give a reason").max(500) }),
+  async (ctx, i) => {
+    requireRole(ctx, "events");
+    dbError((await ctx.supabase.rpc("clear_volunteer_response", { cycle: i.cycle_id, profile: i.profile_id, reason: i.reason })).error);
+  }
+);
+
 // ── Allocation and roster ───────────────────────────────────────────────────
 
 /** Runs the automatic allocation on the form's answers and saves it (replacing any earlier run). */
@@ -208,7 +217,7 @@ export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (c
     eventId: s.event_id,
     ocRank: s.oc_rank as Rank | null,
     helperRank: s.helper_rank as Rank | null,
-    chosenAt: s.chosen_at,
+    submittedAt: s.submitted_at,
   }));
   const result = allocate(
     (events ?? []).map((e) => ({ id: e.id, startsAt: e.starts_at, endsAt: e.ends_at, helpersNeeded: e.helpers_needed, defaultOcId: e.proposed_by })),

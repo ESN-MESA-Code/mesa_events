@@ -6,6 +6,7 @@ import { ActionButton, useAction } from "@/components/ActionButton";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type CycleStatus, type EventStatus, type EventType } from "@/lib/labels";
 import {
   acceptIdea,
+  clearVolunteerResponse,
   closeForm,
   confirmAllocation,
   createEvent,
@@ -413,5 +414,37 @@ export function IdeaCard({
       )}
       {error && <Alert tone="error">{error}</Alert>}
     </div>
+  );
+}
+
+/** Events clears one volunteer's locked answers (with a reason) so they can submit again. */
+export function ClearResponseButton({ cycleId, profileId, name }: { cycleId: string; profileId: string; name: string }) {
+  const { run, pending, error } = useAction();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (!open) {
+    return (
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        Clear
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2 w-full"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(clearVolunteerResponse, { cycle_id: cycleId, profile_id: profileId, reason }, () => setOpen(false));
+      }}
+    >
+      <Input aria-label={`Reason for clearing ${name}'s answers`} placeholder="Reason (logged)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 grow w-48" required />
+      <Button size="sm" variant="destructive" disabled={pending || !reason.trim()}>
+        Clear answers
+      </Button>
+      <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </form>
   );
 }

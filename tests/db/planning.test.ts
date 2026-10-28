@@ -81,30 +81,57 @@ describe("planning cycle end to end", () => {
   const submit = async (u: SeedUser, choices: Array<{ event_id: string; oc_rank: 1 | 2 | 3 | null; helper_rank: 1 | 2 | 3 | null }>) =>
     P.submitVolunteerForm(await ctx(u), { cycle_id: cycleId, choices });
 
-  it("volunteers answer; changing an answer keeps the time of choices already made", async () => {
+  it("volunteers answer once; the form locks after submitting", async () => {
     expect((await submit(USERS.oc, [{ event_id: hikeId, oc_rank: 1, helper_rank: null }])).ok).toBe(true);
     const first = await admin.rpc("cycle_signups", { cycle: cycleId });
     // The service role is not Events: nothing.
     expect(first.data).toEqual([]);
     const events = await as(USERS.events);
-    const t1 = (await events.rpc("cycle_signups", { cycle: cycleId })).data!.find((s) => s.event_id === hikeId)!.chosen_at;
+    const t1 = (await events.rpc("cycle_signups", { cycle: cycleId })).data!.find((s) => s.event_id === hikeId)!.submitted_at;
+
+    // A second submission is refused, through the action and straight to the database.
+    const again = await submit(USERS.oc, [{ event_id: hikeId, oc_rank: 2, helper_rank: 1 }]);
+    expect(again).toMatchObject({ ok: false, error: "failed" });
+    expect((again as { message: string }).message).toMatch(/already submitted/);
+    const direct = await (await as(USERS.oc)).rpc("submit_volunteer_form", { cycle: cycleId, choices: [], note: "" });
+    expect(direct.error?.code).toBe("23505");
+    const rows = (await events.rpc("cycle_signups", { cycle: cycleId })).data!;
+    expect(rows.filter((s) => s.profile_id === USERS.oc.id)).toEqual([expect.objectContaining({ event_id: hikeId, oc_rank: 1, helper_rank: null, submitted_at: t1 })]);
+  });
+
+  it("Events clears one person's answers (logged); they submit again with a new time", async () => {
+    expect(await P.clearVolunteerResponse(await ctx(USERS.oc), { cycle_id: cycleId, profile_id: USERS.oc.id, reason: "x" })).toMatchObject({ ok: false, error: "forbidden" });
+    for (const u of [USERS.oc, USERS.comms, USERS.executive, USERS.admin]) {
+      expect((await (await as(u)).rpc("clear_volunteer_response", { cycle: cycleId, profile: USERS.oc.id, reason: "x" })).error?.code, u.email).toBe("42501");
+    }
+    expect(await P.clearVolunteerResponse(await ctx(USERS.events), { cycle_id: cycleId, profile_id: USERS.oc.id, reason: " " })).toMatchObject({ ok: false, error: "invalid_input" });
+    const before = (await (await as(USERS.events)).rpc("cycle_responses", { cycle: cycleId })).data!.find((r) => r.profile_id === USERS.oc.id)!;
+    expect(before.events).toBe(1);
+    expect((await P.clearVolunteerResponse(await ctx(USERS.events), { cycle_id: cycleId, profile_id: USERS.oc.id, reason: "Picked the wrong role" })).ok).toBe(true);
+    const { data: log } = await admin.from("activity_log").select("actor_email, action, event_id, details").eq("cycle_id", cycleId).eq("entity", "volunteer_responses");
+    expect(log).toEqual([
+      expect.objectContaining({ actor_email: USERS.events.email, action: "clear", event_id: null, details: expect.objectContaining({ email: USERS.oc.email, events: 1, reason: "Picked the wrong role" }) }),
+    ]);
+    // Clearing twice: nothing to clear.
+    expect((await P.clearVolunteerResponse(await ctx(USERS.events), { cycle_id: cycleId, profile_id: USERS.oc.id, reason: "again" })).ok).toBe(false);
 
     await new Promise((r) => setTimeout(r, 20));
     expect((await submit(USERS.oc, [
       { event_id: hikeId, oc_rank: 2, helper_rank: 1 },
       { event_id: quizId, oc_rank: null, helper_rank: 1 },
     ])).ok).toBe(true);
-    const rows = (await events.rpc("cycle_signups", { cycle: cycleId })).data!;
-    const hike = rows.find((s) => s.event_id === hikeId && s.profile_id === USERS.oc.id)!;
-    expect(hike).toMatchObject({ oc_rank: 2, helper_rank: 1, chosen_at: t1 });
+    const after = (await (await as(USERS.events)).rpc("cycle_responses", { cycle: cycleId })).data!.find((r) => r.profile_id === USERS.oc.id)!;
+    expect(after.events).toBe(2);
+    expect(Date.parse(after.submitted_at)).toBeGreaterThan(Date.parse(before.submitted_at));
 
     await submit(USERS.helper, [
       { event_id: hikeId, oc_rank: null, helper_rank: 1 },
       { event_id: quizId, oc_rank: null, helper_rank: 2 },
     ]);
     await submit(USERS.volunteer1, [{ event_id: quizId, oc_rank: null, helper_rank: 1 }]);
-    // Volunteers see only their own answers.
+    // Volunteers see only their own answers; members cannot list responses.
     expect((await (await as(USERS.helper)).from("volunteer_responses").select("profile_id").eq("cycle_id", cycleId)).data).toEqual([{ profile_id: USERS.helper.id }]);
+    expect((await (await as(USERS.helper)).rpc("cycle_responses", { cycle: cycleId })).data).toEqual([]);
   });
 
   it("refuses events of other cycles and garbage", async () => {

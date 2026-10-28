@@ -9,14 +9,15 @@ const ev = (id: string, helpersNeeded = 2, startsAt = "2026-11-05T18:00:00Z", ex
 });
 
 let clock = Date.parse("2026-10-20T10:00:00Z");
-/** A choice; each call is one minute later than the previous one (submission order). */
-const pick = (profileId: string, eventId: string, ocRank: Rank | null, helperRank: Rank | null, chosenAt?: string): AllocationChoice => ({
-  profileId,
-  eventId,
-  ocRank,
-  helperRank,
-  chosenAt: chosenAt ?? new Date((clock += 60_000)).toISOString(),
-});
+const submitted = new Map<string, string>();
+/**
+ * A choice. Each person submits once (the form locks): their first pick
+ * fixes their submission time, one minute after the previous person's.
+ */
+const pick = (profileId: string, eventId: string, ocRank: Rank | null, helperRank: Rank | null, submittedAt?: string): AllocationChoice => {
+  if (!submittedAt && !submitted.has(profileId)) submitted.set(profileId, new Date((clock += 60_000)).toISOString());
+  return { profileId, eventId, ocRank, helperRank, submittedAt: submittedAt ?? submitted.get(profileId)! };
+};
 
 const rolesOf = (r: ReturnType<typeof allocate>, eventId: string) => ({
   oc: r.events[eventId].ocId,
@@ -55,7 +56,7 @@ describe("allocate: priorities", () => {
 });
 
 describe("allocate: first come, first served on ties", () => {
-  it("breaks equal ranks by the time the event was chosen", () => {
+  it("breaks equal ranks by the submission time", () => {
     const r = allocate([ev("e1", 1)], [
       pick("late", "e1", 1, 1, "2026-10-21T12:00:00Z"),
       pick("early", "e1", 1, 1, "2026-10-21T09:00:00Z"),
@@ -67,6 +68,19 @@ describe("allocate: first come, first served on ties", () => {
   it("a better rank beats an earlier submission", () => {
     const r = allocate([ev("e1", 1)], [pick("early", "e1", null, 2, "2026-10-21T09:00:00Z"), pick("late", "e1", null, 1, "2026-10-22T09:00:00Z")]);
     expect(rolesOf(r, "e1").helpers).toEqual(["late"]);
+  });
+
+  it("one submission time counts for all of a person's choices", () => {
+    const early = "2026-10-21T09:00:00Z";
+    const late = "2026-10-21T18:00:00Z";
+    const r = allocate([ev("e1", 1, "2026-11-01T18:00:00Z"), ev("e2", 1, "2026-11-08T18:00:00Z")], [
+      pick("bea", "e1", null, 1, late),
+      pick("bea", "e2", null, 1, late),
+      pick("al", "e2", null, 1, early),
+      pick("al", "e1", null, 1, early),
+    ]);
+    expect(rolesOf(r, "e1").helpers).toEqual(["al"]);
+    expect(rolesOf(r, "e2").helpers).toEqual(["al"]);
   });
 
   it("identical rank and time fall back to the id (never the input order)", () => {

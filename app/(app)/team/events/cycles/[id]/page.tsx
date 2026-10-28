@@ -7,7 +7,7 @@ import { formatDateTime, isoToBerlinInput, monthLabel } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
-import { AddEventForm, CycleControls, IdeaCard, ScheduleRow } from "./ScheduleClient";
+import { AddEventForm, ClearResponseButton, CycleControls, IdeaCard, ScheduleRow } from "./ScheduleClient";
 import { z } from "zod";
 
 export const metadata: Metadata = { title: "Month schedule" };
@@ -22,7 +22,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   if (!cycle) notFound();
 
   const monthEnd = new Date(Date.UTC(Number(cycle.month.slice(0, 4)), Number(cycle.month.slice(5, 7)), 0)).toISOString().slice(0, 10);
-  const [{ data: events }, { data: ideas }, { data: signups }] = await Promise.all([
+  const [{ data: events }, { data: ideas }, { data: signups }, { data: responses }] = await Promise.all([
     supabase
       .from("events")
       .select("id, title, type, starts_at, ends_at, location, helpers_needed, price_cents, status, proposed_by, profiles:proposed_by(full_name)")
@@ -36,11 +36,12 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
       .lte("proposed_date", monthEnd)
       .order("proposed_date"),
     supabase.rpc("cycle_signups", { cycle: id }),
+    supabase.rpc("cycle_responses", { cycle: id }),
   ]);
 
   const signupCount = new Map<string, number>();
   for (const s of signups ?? []) signupCount.set(s.event_id, (signupCount.get(s.event_id) ?? 0) + 1);
-  const people = new Set((signups ?? []).map((s) => s.profile_id)).size;
+  const people = (responses ?? []).length;
   const planned = (events ?? []).filter((e) => e.status !== "dropped");
   const editableSchedule = canEdit && ["planning", "form_open"].includes(cycle.status);
 
@@ -74,6 +75,37 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
             )}
           </CardContent>
         </Card>
+
+        {cycle.status !== "planning" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Volunteer answers</CardTitle>
+              <Badge>{people}</Badge>
+            </CardHeader>
+            <CardContent>
+              {!people && <EmptyState>Nobody has answered yet.</EmptyState>}
+              <ul className="divide-y divide-gray-100 text-sm" data-testid="volunteer-responses">
+                {(responses ?? []).map((r) => (
+                  <li key={r.profile_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid={`response-${r.email}`}>
+                    <span className="font-medium text-gray-900">{r.full_name}</span>
+                    <span className="text-xs text-gray-500">
+                      submitted {formatDateTime(r.submitted_at)} · {r.events} event{r.events === 1 ? "" : "s"}
+                      {r.note && ` · “${r.note}”`}
+                    </span>
+                    {canEdit && cycle.status === "form_open" && (
+                      <span className="ml-auto">
+                        <ClearResponseButton cycleId={cycle.id} profileId={r.profile_id} name={r.full_name} />
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {canEdit && cycle.status === "form_open" && (
+                <p className="mt-2 text-xs text-gray-500">Answers are locked after submitting. Clear someone&apos;s answers (logged) when they made a mistake; they can then submit again.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Card>

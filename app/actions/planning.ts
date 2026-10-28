@@ -83,6 +83,12 @@ export async function submitVolunteerForm(input: unknown) {
   return r;
 }
 
+export async function clearVolunteerResponse(input: unknown) {
+  const r = await run(A.clearVolunteerResponse, input);
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
 export async function runAllocation(input: unknown) {
   const r = await run(A.runAllocation, input);
   if (r.ok) revalidatePath("/", "layout");
