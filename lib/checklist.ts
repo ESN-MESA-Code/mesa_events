@@ -56,9 +56,9 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
       key: "description",
       label: "Description published",
       state: descriptionDone ? "done" : deadlinePassed || started ? "late" : "todo",
-      detail: descriptionDone ? undefined : i.description === "missing" ? "not started" : i.description.replace(/_/g, " "),
+      detail: descriptionDone ? undefined : `${i.description === "missing" ? "not started" : i.description.replace(/_/g, " ")}${started ? " · the event already started" : ""}`,
       tab: "description",
-      due: descriptionDone || !i.descriptionDeadline ? undefined : i.descriptionDeadline,
+      due: descriptionDone || started || !i.descriptionDeadline ? undefined : i.descriptionDeadline,
     },
     {
       key: "attendance",

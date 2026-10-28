@@ -105,7 +105,11 @@ export default async function HomePage() {
               </Link>
             </CardHeader>
             <CardContent>
-              {!myEvents.length && <EmptyState>Nothing planned. Volunteer when the next form opens, or claim an open slot.</EmptyState>}
+              {!myEvents.length && (
+                <EmptyState>
+                  {forms.some((f) => !f.submittedAt) ? "Nothing planned yet – fill in the volunteer form above, or claim an open slot." : "Nothing planned. Volunteer when the next form opens, or claim an open slot."}
+                </EmptyState>
+              )}
               <ul className="space-y-3" data-testid="home-my-events">
                 {myEvents.map(({ event, role, step }) => (
                   <li key={event.id} className="rounded-lg border border-gray-200 p-3 space-y-2">

@@ -54,7 +54,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
     await page.locator("#form-deadline").fill(`${month}-01T12:00`);
     await page.getByRole("button", { name: "Open volunteer form" }).click();
-    await expect(page.getByText("Volunteer form open")).toBeVisible();
+    await expect(page.getByText("Volunteer form open", { exact: true })).toBeVisible();
   });
 
   await test.step("volunteers fill in the form", async () => {
@@ -92,7 +92,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await expect(quizCard).toContainText("Short of helpers");
 
     await page.getByRole("button", { name: "Confirm roster" }).click();
-    await expect(page.getByText("Roster confirmed")).toBeVisible();
+    await expect(page.getByText("Roster confirmed", { exact: true })).toBeVisible();
   });
 
   const quizId = await eventId(quiz);

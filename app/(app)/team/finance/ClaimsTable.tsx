@@ -116,7 +116,7 @@ export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; read
           </span>
         ),
       }),
-      col.accessor("amount", { header: "Paid", cell: (c) => <span className="tabular-nums whitespace-nowrap">{formatCents(c.getValue())}</span> }),
+      col.accessor("amount", { header: "Receipt", cell: (c) => <span className="tabular-nums whitespace-nowrap">{formatCents(c.getValue())}</span> }),
       col.accessor("suggested", {
         header: "Suggested",
         cell: (c) => (

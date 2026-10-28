@@ -29,7 +29,7 @@ export function EventTabs({ id, notes }: { id: string; notes: Partial<Record<str
   ];
   return (
     <nav aria-label="Event" className="border-b border-gray-200">
-      <ul className="flex gap-1 overflow-x-auto">
+      <ul className="flex overflow-x-auto sm:gap-1">
         {tabs.map((t) => {
           const active = pathname === t.href;
           const note = notes[t.label];
@@ -38,7 +38,7 @@ export function EventTabs({ id, notes }: { id: string; notes: Partial<Record<str
               <Link
                 href={withFrom(t.href, from)}
                 aria-current={active ? "page" : undefined}
-                className={cn("flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap", active ? "border-esn text-esn" : "border-transparent text-gray-600 hover:text-gray-900")}
+                className={cn("flex items-center gap-1 px-2 sm:px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap", active ? "border-esn text-esn" : "border-transparent text-gray-600 hover:text-gray-900")}
               >
                 {t.label}
                 {note && <span className="h-2 w-2 rounded-full bg-esn-orange" title={note} aria-label={note} />}

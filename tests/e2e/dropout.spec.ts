@@ -26,6 +26,8 @@ test("dropout and replacement", async ({ page, context, baseURL }) => {
   await expect(page.getByTestId("roster")).toContainText("Mia Member");
   await expect(page.getByTestId("event-status")).toHaveText("Confirmed");
   await expect(page.getByTestId("open-slots")).toHaveCount(0);
+  // Only the OC and the Events team see why someone dropped out (review B2).
+  await expect(page.getByText("Exam that day")).toHaveCount(0);
 
   await runJobs(baseURL!);
   const { data: e } = await admin.from("events").select("chat_space_name").eq("id", ev.id).single();

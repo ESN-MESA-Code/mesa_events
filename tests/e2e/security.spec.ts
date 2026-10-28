@@ -126,8 +126,23 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
 
   const status = async (page: import("@playwright/test").Page, path: string) => (await page.request.get(path, { maxRedirects: 0 })).status();
 
-  test("a plain member gets 404 for team pages, drafts, unknown ids and kiosks", async ({ page, context, baseURL }) => {
+  test("a plain member gets 404 for records they may not see; team pages say No access", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, USERS.member);
+    for (const [p, name] of [
+      ["/admin", "Admin"],
+      ["/team/finance", "Finance"],
+      ["/team/comms", "Comms"],
+      ["/team/events", "Events team"],
+    ] as const) {
+      const res = await page.request.get(p, { maxRedirects: 0 });
+      expect(res.status(), p).toBe(307);
+      expect(res.headers()["location"], p).toContain(`/no-access?page=${encodeURIComponent(name)}`);
+    }
+    await page.goto("/team/finance");
+    await expect(page.getByTestId("no-access")).toContainText("Finance is for a team you are not in");
+    // The page name is not taken from anywhere else.
+    await page.goto("/no-access?page=%3Cscript%3E");
+    await expect(page.getByTestId("no-access")).toContainText("This page is for a team you are not in");
     for (const p of [
       `/team/events/cycles/${cycleId}`,
       `/team/events/cycles/${cycleId}/roster`,
@@ -137,13 +152,12 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
       `/events/${crypto.randomUUID()}`,
       "/events/not-a-uuid",
       `/kiosk/${eventA}`,
-      "/admin",
-      "/team/finance",
-      "/team/comms",
-      "/team/events",
     ]) {
       expect(await status(page, p), p).toBe(404);
     }
+    // Unknown pages render the styled page with a way back.
+    await page.goto(`/events/${crypto.randomUUID()}`);
+    await expect(page.getByTestId("not-found")).toContainText("Back to Home");
   });
 
   test("no receipt photos: the old photo route is gone for everyone, the hand-in form has no upload", async ({ page, context, baseURL }) => {
