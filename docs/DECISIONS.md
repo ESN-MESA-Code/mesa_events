@@ -192,3 +192,38 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
 - **`dev:local` removes `.next/standalone` before starting.** A production standalone build left
   in `.next` by `build:local` / the E2E run made the dev server reload every page in an endless
   loop; the E2E run rebuilds it anyway.
+
+## 2026-10-28 – Review round (docs/REVIEW-2026-10-28.md)
+
+Implemented autonomously after the code review and UI walkthrough; the user was not available.
+
+- **A1 – Locked volunteer form.** `submit_volunteer_form()` inserts the response once and refuses
+  a second submission (`23505`, "You already submitted this form"). FCFS ties use
+  `volunteer_responses.submitted_at` for all of a person's choices; `volunteer_choices.chosen_at`
+  was **dropped** rather than kept in sync (one source of truth). The earlier "time per choice"
+  decision (milestone 2) is superseded: with one submission per person it cannot be gamed.
+- **A1 – Escape hatch:** the Events team clears one person's response on the cycle page
+  (`clear_volunteer_response(cycle, profile, reason)`), **only while the form is open** (after
+  the deadline the person could not resubmit anyway, and clearing would only lose data). A reason
+  is required; the activity log records who cleared whose answers, when the original was
+  submitted, how many events and why (cycle entry, no event id, so only Events, executives and
+  admins read it). The person then submits again and gets a new submission time.
+- **A2 – No receipt photos.** The `receipts` bucket, its policies, `receipts.reference_path`, the
+  photo parameter of `register_receipt()` and the download route are gone. The migration deletes
+  any stored objects with `storage.allow_delete_query` (nothing was deployed; on a stack with
+  photos, remove the files with the Storage API first). Hand-in photos are unchanged.
+- **B1 – Activity log by entity.** Claim entries (`entity = 'reimbursements'`) are readable by
+  Finance (incl. Treasurer) only – not by executives or admins either, matching who reads claims
+  (milestone 6). Other entries: Events, executives, admins; the event's OC and helpers only for
+  entities they can read anyway (event, roster, description, reviews, attendance list). Idea
+  entries are no longer shown to event staff (pitch and decision note are the proposer's and the
+  teams').
+- **B2 – Drop-out reasons in their own table** (`assignment_drop_reasons`, OC of the event and
+  Events only), written by `drop_out()`. Chosen over column privileges on `assignments`, which
+  would break `select *` and embedded selects everywhere. The log only notes that a reason was
+  given; existing log entries were scrubbed.
+- **B3 – Dates are Events-only;** location, price and capacity stay OC-editable: the OC books the
+  venue and knows the ticket price and capacity, and none of them affects planning, the form or
+  which reimbursement policy applies.
+- **B4 – A stale running job (worker died) with `attempts >= max_attempts` is marked dead** with
+  a "gave up" note instead of being claimed again; admins retry it from the Admin page.

@@ -72,8 +72,7 @@ export function EventDetailsForm({
           updateEvent,
           {
             id: event.id,
-            starts_at: v.startsAt,
-            ends_at: v.endsAt || null,
+            ...(eventsTeam ? { starts_at: v.startsAt, ends_at: v.endsAt || null } : {}),
             location: v.location || null,
             price_cents: price,
             capacity: v.capacity ? Number(v.capacity) : null,
@@ -85,12 +84,16 @@ export function EventDetailsForm({
         );
       }}
     >
-      <Field label="Starts" htmlFor="d-start">
-        <Input id="d-start" type="datetime-local" value={v.startsAt} onChange={(e) => setV({ ...v, startsAt: e.target.value })} />
-      </Field>
-      <Field label="Ends" htmlFor="d-end">
-        <Input id="d-end" type="datetime-local" value={v.endsAt} onChange={(e) => setV({ ...v, endsAt: e.target.value })} />
-      </Field>
+      {eventsTeam && (
+        <>
+          <Field label="Starts" htmlFor="d-start">
+            <Input id="d-start" type="datetime-local" value={v.startsAt} onChange={(e) => setV({ ...v, startsAt: e.target.value })} />
+          </Field>
+          <Field label="Ends" htmlFor="d-end">
+            <Input id="d-end" type="datetime-local" value={v.endsAt} onChange={(e) => setV({ ...v, endsAt: e.target.value })} />
+          </Field>
+        </>
+      )}
       <Field label="Location" htmlFor="d-location">
         <Input id="d-location" value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
       </Field>
@@ -106,7 +109,7 @@ export function EventDetailsForm({
           Cancel
         </Button>
       </div>
-      {!eventsTeam && <p className="sm:col-span-2 text-xs text-gray-500">Title, type and number of helpers are changed by the Events team.</p>}
+      {!eventsTeam && <p className="sm:col-span-2 text-xs text-gray-500">The date, title, type and number of helpers are changed by the Events team.</p>}
       {error && <Alert tone="error" className="sm:col-span-2">{error}</Alert>}
       {saved && <Alert tone="success" className="sm:col-span-2">Saved.</Alert>}
     </form>

@@ -130,7 +130,7 @@ export const createEvent = defineAction(z.object({ cycle_id: uuid, ...eventField
   return { id: data!.id, outsideMonth: monthOf(i.starts_at) !== cycle.month };
 });
 
-/** Event details: Events changes everything, the OC the practical details. */
+/** Event details: Events changes everything, the OC location, price and capacity. */
 export const updateEvent = defineAction(
   z.object({
     id: uuid,
@@ -148,6 +148,9 @@ export const updateEvent = defineAction(
       await requireEventOc(ctx, id);
       if (patch.title !== undefined || patch.type !== undefined || patch.helpers_needed !== undefined) {
         throw forbidden("Only the Events team changes the title, type and number of helpers.");
+      }
+      if (patch.starts_at !== undefined || patch.ends_at !== undefined) {
+        throw forbidden("Only the Events team changes the date – ask them in the Chat space.");
       }
     }
     const { error, count } = await ctx.supabase.from("events").update(patch, { count: "exact" }).eq("id", id);

@@ -212,6 +212,22 @@ describe("planning cycle end to end", () => {
     expect(title.error?.code).toBe("42501");
   });
 
+  it("the OC changes location, price and capacity, but not the date (review B3)", async () => {
+    const oc = await ctx(USERS.oc);
+    expect((await P.updateEvent(oc, { id: hikeId, location: "Kampenwand car park", price_cents: 1200, capacity: 20 })).ok).toBe(true);
+    expect(await P.updateEvent(oc, { id: hikeId, starts_at: "2026-12-13T08:00" })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.updateEvent(oc, { id: hikeId, ends_at: "2026-12-12T20:00" })).toMatchObject({ ok: false, error: "forbidden" });
+    // Straight to the database too.
+    for (const patch of [{ starts_at: "2026-12-13T07:00:00Z" }, { ends_at: "2026-12-12T19:00:00Z" }]) {
+      const { error } = await (await as(USERS.oc)).from("events").update(patch).eq("id", hikeId);
+      expect(error?.code, JSON.stringify(patch)).toBe("42501");
+    }
+    const { data } = await admin.from("events").select("starts_at, location, price_cents, capacity").eq("id", hikeId).single();
+    expect(data).toEqual({ starts_at: "2026-12-12T07:00:00+00:00", location: "Kampenwand car park", price_cents: 1200, capacity: 20 });
+    // Events moves it.
+    expect((await P.updateEvent(await ctx(USERS.events), { id: hikeId, starts_at: "2026-12-12T09:00" })).ok).toBe(true);
+  });
+
   it("every step is in the activity log", async () => {
     const { data } = await admin.from("activity_log").select("entity, action").eq("cycle_id", cycleId);
     expect(data!.length).toBeGreaterThan(0);
