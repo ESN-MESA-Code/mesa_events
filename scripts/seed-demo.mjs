@@ -69,6 +69,13 @@ async function main() {
     check(await db.from("events").update({ chat_space_requested_at: new Date().toISOString() }).eq("id", id), "space");
     check(await db.rpc("enqueue_job", { job_kind: "chat.create_space", job_payload: { event_id: id }, key: `chat.create_space:${id}` }), "job");
   }
+  // Happening right now: the attendance list is open (QR code, kiosk, live names).
+  const cafe = await event({ cycle_id: now, title: "Language Café", type: "standard", status: "confirmed", starts_at: new Date(Date.now() + 30 * 60_000).toISOString(), helpers_needed: 1 }, [[U.oc, "oc"], [U.helper, "helper"]]);
+  for (const [first_name, last_name, nationality] of [["Giulia", "Rossi", "IT"], ["Lucas", "Martin", "FR"], ["Ana", "García", "ES"]]) {
+    check(await db.rpc("sign_in", { event: cafe, first_name, last_name, notice_version: "2026-10-23", terms_version: "2026-10-23", nationality, university: "LMU", exchange_program: "Erasmus+", esn_card: true }), "sign-in");
+  }
+  const { public_token: cafeToken } = check(await db.from("attendance_lists").select("public_token").eq("event_id", cafe).single(), "token");
+
   // A published description to start templates from.
   check(
     await db.from("descriptions").upsert({
@@ -106,6 +113,7 @@ async function main() {
   console.log(`  Quiz:   http://localhost:3000/events/${quiz}`);
   console.log(`  Hike:   http://localhost:3000/events/${hike} (under-staffed)`);
   console.log(`  Alps:   http://localhost:3000/events/${alps}`);
+  console.log(`  Café:   http://localhost:3000/events/${cafe}/attendance (list open)  form: http://localhost:3000/event/${cafeToken}`);
 }
 
 main().catch((err) => {

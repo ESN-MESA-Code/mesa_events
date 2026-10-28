@@ -59,6 +59,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"attendance_lists": {
+                  Row: {
+                    "created_at": string,"event_id": string,"headcount": number | null,"public_token": string,"risk_notice": string | null,"signed_off_at": string | null,"signed_off_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"event_id": string,"headcount"?: number | null,"public_token"?: string,"risk_notice"?: string | null,"signed_off_at"?: string | null,"signed_off_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"event_id"?: string,"headcount"?: number | null,"public_token"?: string,"risk_notice"?: string | null,"signed_off_at"?: string | null,"signed_off_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_lists_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"description_versions": {
                   Row: {
                     "created_at": string,"created_by": string | null,"event_id": string,"fields": NonNullable<Json>,"id": number,"kind": string,"text": string | null,"version": number
@@ -158,6 +178,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"event_stats": {
+                  Row: {
+                    "answer": string,"event_id": string,"question": string,"total": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "answer": string,"event_id": string,"question": string,"total"?: number
+                  }
+                  Update: {
+                    "answer"?: string,"event_id"?: string,"question"?: string,"total"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_stats_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "attendance_lists"
+      referencedColumns: ["event_id"]
+    }
                   ]
                 },"events": {
                   Row: {
@@ -300,6 +340,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"participants": {
+                  Row: {
+                    "created_at": string,"entry_method": string,"event_id": string,"first_name": string,"id": string,"last_name": string,"notice_version": string,"recorded_by": string | null,"terms_version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"entry_method"?: string,"event_id": string,"first_name": string,"id"?: string,"last_name": string,"notice_version": string,"recorded_by"?: string | null,"terms_version": string
+                  }
+                  Update: {
+                    "created_at"?: string,"entry_method"?: string,"event_id"?: string,"first_name"?: string,"id"?: string,"last_name"?: string,"notice_version"?: string,"recorded_by"?: string | null,"terms_version"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "participants_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "attendance_lists"
+      referencedColumns: ["event_id"]
+    }
                   ]
                 },"planning_cycles": {
                   Row: {
@@ -492,6 +552,9 @@ isOneToOne: false
 "delete_expired_activity":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"delete_expired_lists":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "description_overview":
 { Args: Record<PropertyKey, never>; Returns: {
               "deadline": string,"event_id": string,"late": boolean,"published_at": string,"starts_at": string,"status": string,"submitted_at": string,"title": string
@@ -503,11 +566,30 @@ isOneToOne: false
 "enqueue_job":
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
                            },
+"event_accepts_signins":
+{ Args: { "event": string }; Returns: boolean
+                           },
+"event_list_open":
+{ Args: { "event": string }; Returns: boolean
+                           },
 "event_on_calendar":
 { Args: { "event": string }; Returns: boolean
                            },
+"event_signin_counts":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "event_id": string,"signins": number
+            }[]
+                           },
+"event_summary":
+{ Args: { "event": string }; Returns: Json
+                           },
 "fail_job":
 { Args: { "error": string,"job_id": number }; Returns: undefined
+                           },
+"get_public_event":
+{ Args: { "token": string }; Returns: {
+              "closed": boolean,"closes_at": string,"event_date": string,"id": string,"opens_at": string,"risk_notice": string,"title": string
+            }[]
                            },
 "has_role":
 { Args: { "wanted": Database["public"]['Enums']["app_role"] }; Returns: boolean
@@ -520,6 +602,9 @@ isOneToOne: false
                            },
 "is_executive":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"is_list_organiser":
+{ Args: { "event": string }; Returns: boolean
                            },
 "is_team":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -578,6 +663,15 @@ isOneToOne: false
                            },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
+                           },
+"sign_in":
+{ Args: { "esn_card"?: boolean,"event": string,"exchange_program"?: string,"first_name": string,"kiosk"?: boolean,"last_name": string,"nationality"?: string,"notice_version": string,"terms_version": string,"university"?: string }; Returns: undefined
+                           },
+"signins_close_at":
+{ Args: { "event_date": string }; Returns: string
+                           },
+"signins_open_at":
+{ Args: { "event_date": string }; Returns: string
                            },
 "submit_description":
 { Args: { "event": string,"rendered": string }; Returns: undefined

@@ -61,3 +61,83 @@ date, decision, why. `docs/SPEC.md` stays authoritative; these fill its gaps.
   any member's context; RLS checks again underneath.
 - **Times:** all input and display in Europe/Berlin via `@date-fns/tz` (`lib/dates.ts`), whatever
   the browser/server zone (unit tests run with `TZ=America/New_York` to prove it).
+
+## 2026-10-28 – Milestone 2 (planning cycle)
+
+- **Volunteer ranks:** per event, an OC rank and a helper rank of 1 = "top choice", 2 = "happy
+  to", 3 = "if needed" (or no). Allocation takes rank 1 first.
+- **First come, first served per choice:** each event on the form keeps the time it was first
+  added (`volunteer_choices.chosen_at`); changing a rank keeps it, adding an event later gets a
+  later time. Fairer than one time per response (which could be gamed by an early, empty
+  submission). The first submission time is stored too (`submitted_at`).
+- **Allocation details** (`lib/allocation.ts`): events are independent (no caps); the idea's
+  proposer is OC by default when they ticked "I want to be OC"; someone who only ranked OC is not
+  made a helper; the final tie-break is the profile id, so the result never depends on input
+  order; helpers but no OC → `no_oc` (Events assigns one); overlapping assignments of one person
+  are reported, not prevented.
+- **Allocation runs in the app, is saved by a definer function** (`save_allocation`) which
+  replaces the cycle's assignments, so re-running before confirmation is safe. Confirmation sets
+  each event's status from its actual staffing (dropped / under-staffed / confirmed).
+- **Cycle status changes only through functions** (`open_volunteer_form`, `close_volunteer_form`,
+  `save_allocation`, `confirm_allocation`); a trigger refuses direct status updates. pg_cron
+  closes forms whose deadline passed (every minute).
+- **Roster board:** dnd-kit drag and drop plus a "Move to…" select on every card (keyboard and
+  screen-reader friendly, and what the E2E test uses). Moving someone to OC makes the previous OC
+  a helper.
+- **Ideas are moved between months by changing their date**; the month's cycle page lists ideas
+  dated in that month.
+- **Activity log has no foreign keys** (entries outlive deleted events) and is kept until the end
+  of the third calendar year (cron).
+
+## 2026-10-28 – Milestone 3 (Chat spaces)
+
+- **Space description vs. mentions:** Chat space descriptions are plain text with at most 150
+  characters, so the description holds the date and the OC's name; the @-mentions of OC and
+  helpers are in a welcome message, and the full roster in the space guidelines.
+- **Who is invited:** active OC and helpers plus everyone with the Events or Comms role
+  (individually, from `role_members`). The platform records whom it added
+  (`event_chat_members`) and removes only those people, never members added by hand in Chat.
+- **Membership sync is one coalescing job per event**, re-run on every roster or team change.
+- **Staffing follows dropouts and claims:** a dropout makes a confirmed event under-staffed, a
+  claim that fills the last slot makes it confirmed again. The OC's explicit decision
+  (run/cancel) is still possible on an under-staffed event.
+- **Notifications:** dropouts and claims are posted to the space (@-mentioning the OC) and sent
+  to the OC as a direct message, unless the admin setting `chat_notifications` is off.
+- **Trusted definer functions mark their own event updates** with a transaction-local setting
+  (`mesa.system_update`, `mesa.cycle_transition`); PostgREST cannot set these, so clients still
+  hit the guards.
+
+## 2026-10-28 – Milestone 4 (descriptions)
+
+- **Port of the bot is literal** (template, emojis, headings, TBA, normalisers, messages); the
+  only change is that impossible dates (30 February) are refused. The ESN Activities type and
+  objectives are kept (they were required fields in the bot).
+- **Who edits:** the OC, the Events team and the Comms team (Comms may fix typos during review
+  without sending it back). Helpers read. Submitting: OC or Events. Reviewing and publishing:
+  Comms only.
+- **Autosave merges per field** (`save_description(event, patch)`), so two editors working on
+  different fields never overwrite each other; others' changes arrive through Realtime and
+  presence shows who else is editing. No CRDT/Yjs (per spec).
+- **Every change after approval or publication needs a new review**; publishing then edits the
+  same Chat message (fixed client message id), never posts a second one.
+- **@all:** the description is posted with `<users/all>` appended; if that would exceed 4,096
+  characters, @all is posted as a separate short message. The editor's counter counts the Chat
+  text as in the bot.
+- **Members can read published descriptions** (for templates from past events); drafts only the
+  event's staff and the teams.
+
+## 2026-10-28 – Milestone 5 (attendance)
+
+- **One attendance list per event** (`attendance_lists`, created by trigger), instead of
+  MESAttendance's columns on `events`.
+- **Who runs a list:** the event's OC and helpers and the Events team (MESAttendance: every
+  organiser). Names while open: those people; closed lists: executives only (unchanged). Numbers:
+  staff and all teams (Finance checks counts).
+- **Sign-off:** by the event's OC (MESAttendance: the creator); the Events team only when the
+  event has no OC.
+- **Retention deletes the list, not the event** (the event carries receipts that must be kept
+  longer).
+- **Visitors have no SELECT privilege on participants at all** (RLS alone in MESAttendance), so
+  Realtime refuses their subscription instead of sending nothing.
+- **Digital lists for every event type**, with a warning on trips that LMU-funded trips still need
+  the paper list (MESAttendance's rule).

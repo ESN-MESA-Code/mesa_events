@@ -1,7 +1,9 @@
+import { formatLongDateTime } from "@/lib/dates";
+
 // When people can sign in to an event: from 2 hours before it starts until
 // 24 hours after (or until the sign-off, if earlier). The database enforces
 // the same window – public.signins_open_at() / signins_close_at() in
-// supabase/migrations/20261023000000_regular_events.sql; a test compares them.
+// supabase/migrations/20261028000400_attendance.sql; a test compares them.
 
 export const OPENS_BEFORE_MS = 2 * 60 * 60 * 1000;
 export const CLOSES_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -23,14 +25,7 @@ export function listState(
   return now < signinsOpenAt(event.event_date).getTime() ? "upcoming" : "open";
 }
 
-/** "Thursday, 05 November 2026 at 17:00" in the viewer's time zone. */
+/** "Thursday, 05 November 2026 at 17:00" in Berlin. */
 export function formatDateTime(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatLongDateTime(new Date(date).toISOString());
 }

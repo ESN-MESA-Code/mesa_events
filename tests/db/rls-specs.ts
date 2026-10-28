@@ -120,6 +120,52 @@ SPECS_EXTRA.push(
   }
 );
 
+const participantOf = (eventId: string) =>
+  insertRow("participants", { event_id: eventId, first_name: "RLS", last_name: "Test", notice_version: "2026-10-23", terms_version: "2026-10-23" });
+async function statOf(eventId: string): Promise<Match> {
+  await admin.from("event_stats").upsert({ event_id: eventId, question: "esn_card", answer: "yes", total: 1 });
+  return { event_id: eventId, question: "esn_card", answer: "yes" };
+}
+
+SPECS_EXTRA.push(
+  {
+    table: "attendance_lists",
+    select: [
+      { name: "list of event A", make: async (w) => ({ event_id: w.eventA.id }), allowed: STAFF_A },
+      { name: "list of event B", make: async (w) => ({ event_id: w.eventB.id }), allowed: TEAM },
+    ],
+    insert: [{ payload: (w) => ({ event_id: w.eventD.id }), allowed: NOBODY, match: (p) => ({ event_id: p.event_id as string }) }],
+    update: [
+      { name: "risk notice of event A", make: async (w) => ({ event_id: w.eventA.id }), patch: () => ({ risk_notice: "Careful" }), allowed: ["oc", "helper", "events"] },
+      { name: "risk notice of event B", make: async (w) => ({ event_id: w.eventB.id }), patch: () => ({ risk_notice: "Careful" }), allowed: ["events"] },
+    ],
+    delete: [{ name: "list of event A", make: async (w) => ({ event_id: w.eventA.id }), allowed: NOBODY }],
+  },
+  {
+    table: "participants",
+    select: [
+      { name: "sign-in at event A (open list)", make: (w) => participantOf(w.eventA.id), allowed: ["oc", "helper", "events", "executive"] },
+      { name: "sign-in at event B (open list)", make: (w) => participantOf(w.eventB.id), allowed: ["events", "executive"] },
+    ],
+    insert: [
+      {
+        payload: (w) => ({ id: uid(), event_id: w.eventA.id, first_name: "X", last_name: "Y", notice_version: "2026-10-23", terms_version: "2026-10-23" }),
+        allowed: NOBODY,
+        match: (p) => ({ id: p.id as string }),
+      },
+    ],
+    update: [{ name: "sign-in at event A", make: (w) => participantOf(w.eventA.id), patch: () => ({ first_name: "Changed" }), allowed: NOBODY }],
+    delete: [{ name: "sign-in at event A", make: (w) => participantOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "event_stats",
+    select: [{ name: "counts of event A", make: (w) => statOf(w.eventA.id), allowed: NOBODY }],
+    insert: [{ payload: (w) => ({ event_id: w.eventA.id, question: "nationality", answer: "XX", total: 9 }), allowed: NOBODY, match: () => ({ answer: "XX" }) }],
+    update: [{ name: "counts of event A", make: (w) => statOf(w.eventA.id), patch: () => ({ total: 999 }), allowed: NOBODY }],
+    delete: [{ name: "counts of event A", make: (w) => statOf(w.eventA.id), allowed: NOBODY }],
+  }
+);
+
 export async function cleanupExtra() {
   await admin.from("event_ideas").delete().like("title", "RLS%");
 }
