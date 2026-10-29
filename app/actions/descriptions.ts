@@ -23,3 +23,7 @@ export async function reviewDescription(input: unknown) {
 export async function publishDescription(input: unknown) {
   return run(A.publishDescription, input);
 }
+
+export async function noteCancellation(input: unknown) {
+  return run(A.noteCancellation, input);
+}

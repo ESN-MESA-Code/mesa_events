@@ -61,3 +61,17 @@ export function rosterMessage(kind: "dropout" | "claim", person: string, role: "
 export function publishedPost(chatText: string): string {
   return `${chatText}\n\n${MENTION_ALL}`;
 }
+
+/** The space (or, without one, each of OC and helpers) is told an event was cancelled or reopened. */
+export function eventStatusMessage(kind: "cancelled" | "reopened", e: SpaceEvent, people: SpacePerson[], eventUrl: string, reason: string | null): string {
+  const staff = people.filter((p) => p.kind !== "team").map((p) => mention(p.email));
+  const tell = staff.length ? `\n${staff.join(" ")}` : "";
+  if (kind === "cancelled") {
+    return [
+      `🚫 *${e.title}* on ${formatDateTime(e.starts_at)} is cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      "Receipts you already registered stay valid – hand the paper Belege to Finance as usual.",
+      `Event page: ${eventUrl}${tell}`,
+    ].join("\n");
+  }
+  return [`✅ *${e.title}* on ${formatDateTime(e.starts_at)} is back on – the Events team reopened it.`, `Event page: ${eventUrl}${tell}`].join("\n");
+}

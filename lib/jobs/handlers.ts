@@ -2,7 +2,7 @@
 // failure or a crash halfway through.
 import { roleGroups, type AppRole } from "@/lib/roles";
 import type { JobHandler } from "@/lib/jobs/runner";
-import { createSpace, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
+import { createSpace, eventStatusChange, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
 import { publishDescription } from "@/lib/jobs/descriptions";
 import { uploadPhoto } from "@/lib/jobs/drive";
 
@@ -29,6 +29,7 @@ export const HANDLERS: Record<string, JobHandler> = {
   "chat.create_space": createSpace,
   "chat.sync_members": syncSpaceMembers,
   "chat.roster_message": rosterChange,
+  "chat.event_status": eventStatusChange,
   "chat.publish_description": publishDescription,
   "drive.upload_photo": uploadPhoto,
 };

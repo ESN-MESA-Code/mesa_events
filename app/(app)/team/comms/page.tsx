@@ -4,7 +4,10 @@ import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
 import { cycleLabel, formatDateTime, formatDue, nowMs } from "@/lib/dates";
 import { DESCRIPTION_STATUS } from "@/components/status";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { ActionButton } from "@/components/ActionButton";
+import { noteCancellation } from "@/app/actions/descriptions";
+import { hasRole } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -42,9 +45,19 @@ function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testI
 // ready to publish, and which descriptions are due or late (late: the
 // month's deadline passed or the event already started).
 export default async function CommsPage() {
-  await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
+  const viewer = await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const supabase = await createSessionClient();
-  const { data } = await supabase.rpc("description_overview");
+  const [{ data }, { data: cancelled }] = await Promise.all([
+    supabase.rpc("description_overview"),
+    // Cancelled after the description went out: Comms decides about a correction (review 2026-10-29 A2).
+    supabase
+      .from("events")
+      .select("id, title, starts_at, cancelled_at, cancel_reason, descriptions!inner(published_at)")
+      .eq("status", "cancelled")
+      .is("cancellation_noted_at", null)
+      .not("descriptions.published_at", "is", null)
+      .order("starts_at"),
+  ]);
   const now = nowMs();
   const rows = ((data ?? []) as Row[]).filter((r) => Date.parse(r.starts_at) > now - 7 * 86_400_000).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const awaiting = rows.filter((r) => r.status === "submitted");
@@ -81,6 +94,32 @@ export default async function CommsPage() {
             </Card>
           ))}
         </div>
+      )}
+      {(cancelled ?? []).length > 0 && (
+        <Alert tone="warning" className="mb-6 space-y-2" data-testid="cancelled-published">
+          <p className="font-medium">Cancelled after the description was published</p>
+          <p>The Chat space was told. Decide whether to post a correction where the description went out.</p>
+          <ul className="divide-y divide-amber-200">
+            {(cancelled ?? []).map((e) => (
+              <li key={e.id} className="flex flex-wrap items-center gap-2 py-2">
+                <Link href={`/events/${e.id}?from=comms`} className="font-medium underline">
+                  {e.title}
+                </Link>
+                <span className="text-xs">
+                  {formatDateTime(e.starts_at)} · cancelled {e.cancelled_at ? formatDateTime(e.cancelled_at) : ""}
+                  {e.cancel_reason ? ` – ${e.cancel_reason}` : ""}
+                </span>
+                {hasRole(viewer.roles, "comms") && (
+                  <span className="ml-auto">
+                    <ActionButton action={noteCancellation} input={{ event_id: e.id }} variant="outline">
+                      Handled
+                    </ActionButton>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Alert>
       )}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

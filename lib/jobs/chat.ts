@@ -1,8 +1,9 @@
 // Chat jobs: spaces per event, their members, roster messages. Every step is
 // idempotent (request ids, message ids, recorded members), so a retry after
 // a failure halfway through finishes the work without duplicates.
+import { createHash } from "node:crypto";
 import type { Job, JobDeps, JobHandler } from "@/lib/jobs/runner";
-import { rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
+import { eventStatusMessage, rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
 
 const eventIdOf = (job: Job) => {
   const id = (job.payload as { event_id?: string }).event_id;
@@ -103,4 +104,29 @@ export const rosterChange: JobHandler = async (job, deps) => {
     out.notified = true;
   }
   return out;
+};
+
+/**
+ * An event was cancelled or reopened: a message to its space, @-mentioning
+ * OC and helpers; without a space, a direct message to each of them (the
+ * only way they hear of it, so not switched off by chat_notifications).
+ */
+export const eventStatusChange: JobHandler = async (job, deps) => {
+  const p = job.payload as { event_id: string; kind: "cancelled" | "reopened"; at: string };
+  const { data: event, error } = await deps.admin.from("events").select("id, title, starts_at, status, chat_space_name, cancel_reason").eq("id", p.event_id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!event) return { skipped: "event gone" };
+  // Reopened (or cancelled again) since: the newer job tells the newer news.
+  if ((p.kind === "cancelled") !== (event.status === "cancelled")) return { skipped: "status changed since" };
+  const people = await roster(deps, event.id);
+  const text = eventStatusMessage(p.kind, event, people, eventUrl(deps, event.id), p.kind === "cancelled" ? event.cancel_reason : null);
+  // Chat message ids are at most 63 characters: one per event and cancellation/reopening.
+  const id = `status-${p.kind}-${createHash("sha256").update(`${event.id}:${p.at}`).digest("hex").slice(0, 32)}`;
+  if (event.chat_space_name) {
+    await deps.google.chat.postMessage(event.chat_space_name, text, id);
+    return { posted: true };
+  }
+  const staff = people.filter((x) => x.kind !== "team");
+  for (const person of staff) await deps.google.chat.notify(person.email, text, `${id}-${person.email}`);
+  return { posted: false, notified: staff.length };
 };

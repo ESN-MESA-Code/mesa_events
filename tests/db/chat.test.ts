@@ -9,6 +9,7 @@ import { googleClients } from "@/lib/google";
 import { MemoryChatClient, MemoryDirectoryClient, MemoryDriveClient } from "@/lib/google/fakes";
 import * as R from "@/lib/actions/roster";
 import * as P from "@/lib/actions/planning";
+import * as D from "@/lib/actions/descriptions";
 
 const deps: JobDeps = { admin, google: googleClients(admin, { GOOGLE_MODE: "fake" }), env: {}, baseUrl: "https://events.example" };
 const runJobs = () => runDueJobs(deps, HANDLERS, { worker: "chat-test" });
@@ -234,5 +235,99 @@ describe("the OC's decision on an under-staffed event (review 2026-10-29 A1)", (
     expect(await status()).toMatchObject({ understaffed_decision: null });
     // Vera is a helper now: 2 of 3, still short.
     expect((await status()).status).toBe("understaffed");
+  });
+});
+
+describe("cancelling and reopening (review 2026-10-29 A2)", () => {
+  let eventId: string;
+  const jobs = async () => (await admin.from("jobs").select("idempotency_key, payload").eq("event_id", eventId).eq("kind", "chat.event_status").order("id")).data!;
+  const ev = async () => (await admin.from("events").select("status, cancelled_by, cancel_reason, chat_space_name").eq("id", eventId).single()).data!;
+
+  beforeAll(async () => {
+    const e = await createEvent({ title: "Rooftop cinema", oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 1, starts_at: daysFromNow(15) });
+    eventId = e.id;
+    await (await as(USERS.events)).rpc("request_chat_space", { event: eventId });
+    await runJobs();
+  });
+  afterAll(async () => {
+    await admin.from("events").delete().eq("id", eventId);
+  });
+
+  it("only the Events team cancels a running event, not by writing the status", async () => {
+    for (const u of [USERS.oc, USERS.helper, USERS.member, USERS.comms]) {
+      expect((await (await as(u)).rpc("cancel_event", { event: eventId })).error?.code, u.email).toBe("42501");
+    }
+    expect(await R.cancelEvent(await actionContext(USERS.oc), { event_id: eventId })).toMatchObject({ ok: false, error: "forbidden" });
+    await (await as(USERS.events)).from("events").update({ status: "cancelled" }).eq("id", eventId);
+    expect((await ev()).status).toBe("confirmed");
+    expect(await jobs()).toEqual([]);
+  });
+
+  it("cancelling enqueues one Chat message, which mentions OC and helpers in the space", async () => {
+    expect((await R.cancelEvent(await actionContext(USERS.events), { event_id: eventId, reason: "Storm warning" })).ok).toBe(true);
+    expect(await ev()).toMatchObject({ status: "cancelled", cancelled_by: USERS.events.email, cancel_reason: "Storm warning" });
+    // A second cancel is refused and enqueues nothing.
+    expect(await R.cancelEvent(await actionContext(USERS.events), { event_id: eventId })).toMatchObject({ ok: false });
+    expect(await jobs()).toHaveLength(1);
+    expect((await jobs())[0].idempotency_key.startsWith(`chat.event_status:cancelled:${eventId}:`)).toBe(true);
+
+    await runJobs();
+    await runJobs();
+    const { data: messages } = await admin.from("fake_chat_messages").select("text").eq("space", (await ev()).chat_space_name!).like("text", "🚫%");
+    expect(messages).toHaveLength(1);
+    expect(messages![0].text).toContain("*Rooftop cinema*");
+    expect(messages![0].text).toContain("is cancelled. Reason: Storm warning");
+    expect(messages![0].text).toContain("stay valid");
+    expect(messages![0].text).toContain("<users/oc@esnmesa.org>");
+    expect(messages![0].text).toContain("<users/helper@esnmesa.org>");
+    // The log shows who cancelled.
+    const { data: log } = await admin.from("activity_log").select("actor_email, details").eq("entity", "events").eq("entity_id", eventId).order("id", { ascending: false }).limit(1).single();
+    expect(log).toMatchObject({ actor_email: USERS.events.email, details: { status: "cancelled" } });
+  });
+
+  it("Comms sees it when the description was published, and marks it handled", async () => {
+    await admin.from("descriptions").upsert({ event_id: eventId, status: "published", published_at: new Date().toISOString() });
+    const list = async () =>
+      (await (await as(USERS.comms)).from("events").select("id, descriptions!inner(published_at)").eq("status", "cancelled").is("cancellation_noted_at", null).not("descriptions.published_at", "is", null)).data!.map((e) => e.id);
+    expect(await list()).toContain(eventId);
+    expect((await (await as(USERS.events)).rpc("note_cancellation", { event: eventId })).error?.code).toBe("42501");
+    expect((await D.noteCancellation(await actionContext(USERS.comms), { event_id: eventId })).ok).toBe(true);
+    expect(await list()).not.toContain(eventId);
+  });
+
+  it("only the Events team reopens; the event goes back to its staffing status and the space is told", async () => {
+    for (const u of [USERS.oc, USERS.comms, USERS.member]) {
+      expect((await (await as(u)).rpc("reopen_event", { event: eventId })).error?.code, u.email).toBe("42501");
+    }
+    expect(await R.reopenEvent(await actionContext(USERS.oc), { event_id: eventId })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await R.reopenEvent(await actionContext(USERS.events), { event_id: eventId })).toEqual({ ok: true, data: { status: "confirmed" } });
+    expect(await ev()).toMatchObject({ status: "confirmed", cancelled_by: null, cancel_reason: null });
+    expect(await R.reopenEvent(await actionContext(USERS.events), { event_id: eventId })).toMatchObject({ ok: false });
+    await runJobs();
+    const { data: messages } = await admin.from("fake_chat_messages").select("text").eq("space", (await ev()).chat_space_name!).like("text", "✅%back on%");
+    expect(messages).toHaveLength(1);
+    // A second cancellation is a new message.
+    expect((await R.cancelEvent(await actionContext(USERS.events), { event_id: eventId })).ok).toBe(true);
+    expect(await jobs()).toHaveLength(3);
+    await runJobs();
+    const { count } = await admin.from("fake_chat_messages").select("name", { count: "exact", head: true }).eq("space", (await ev()).chat_space_name!).like("text", "🚫%");
+    expect(count).toBe(2);
+  });
+
+  it("the OC cancels an under-staffed event; without a space, OC and helpers get direct messages", async () => {
+    const e = await createEvent({ title: `No space ${Math.random().toString(36).slice(2, 7)}`, oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 3, starts_at: daysFromNow(16) });
+    try {
+      expect((await admin.from("events").select("status").eq("id", e.id).single()).data!.status).toBe("understaffed");
+      expect((await (await as(USERS.oc)).rpc("cancel_event", { event: e.id })).error?.code).toBe("42501");
+      expect((await R.decideUnderstaffed(await actionContext(USERS.oc), { event_id: e.id, decision: "cancel" })).ok).toBe(true);
+      expect((await admin.from("events").select("status, cancel_reason").eq("id", e.id).single()).data).toEqual({ status: "cancelled", cancel_reason: "Not enough people" });
+      await runJobs();
+      for (const email of ["oc@esnmesa.org", "helper@esnmesa.org"]) {
+        const { data } = await admin.from("fake_chat_messages").select("text").eq("space", `dm:${email}`).like("text", `%${e.title}%is cancelled%`);
+        expect(data, email).toHaveLength(1);
+      }
+    } finally {
+      await admin.from("events").delete().eq("id", e.id);
+    }
   });
 });

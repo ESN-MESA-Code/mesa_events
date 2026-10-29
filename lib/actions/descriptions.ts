@@ -66,3 +66,9 @@ export const publishDescription = defineAction(z.object({ event_id: uuid }), asy
   requireRole(ctx, "comms");
   dbError((await ctx.supabase.rpc("publish_description", { event: i.event_id })).error);
 }, { revalidate: [PAGES.event, PAGES.comms, PAGES.home] });
+
+/** Comms has seen that a published event was cancelled (and posted a correction, or decided not to). */
+export const noteCancellation = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
+  requireRole(ctx, "comms");
+  dbError((await ctx.supabase.rpc("note_cancellation", { event: i.event_id })).error);
+}, { revalidate: [PAGES.comms, PAGES.home] });

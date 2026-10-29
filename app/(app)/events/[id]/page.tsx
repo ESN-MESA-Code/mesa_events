@@ -4,8 +4,8 @@ import { formatCents, formatDateTime, formatShortDate, isoToBerlinInput, nowMs }
 import { describeActivity } from "@/lib/activity";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
-import { claimSlot, decideUnderstaffed, requestChatSpace } from "@/app/actions/roster";
-import { DropOutButton, EventDetailsForm } from "./EventClient";
+import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
+import { CANCEL_CONSEQUENCES, CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient";
 import { EventChecklist } from "./EventChecklist";
 
 export const metadata: Metadata = { title: "Event" };
@@ -51,8 +51,25 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                 <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success">
                   Run it anyway
                 </ActionButton>
-                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "cancel" }} variant="destructive" confirm="Cancel this event?">
+                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "cancel" }} variant="destructive" confirm={`Cancel this event? ${CANCEL_CONSEQUENCES}`}>
                   Cancel the event
+                </ActionButton>
+              </div>
+            )}
+          </Alert>
+        )}
+
+        {event.status === "cancelled" && (
+          <Alert tone="error" data-testid="cancelled-banner">
+            <p className="font-medium">This event is cancelled.</p>
+            <p className="mt-1">
+              {event.cancelled_at ? `Cancelled ${formatShortDate(event.cancelled_at)}` : "Cancelled"}
+              {event.cancel_reason ? ` – ${event.cancel_reason}` : ""}. The team and the Chat space were told; receipts already registered stay valid.
+            </p>
+            {isEvents && upcoming && (
+              <div className="mt-2">
+                <ActionButton action={reopenEvent} input={{ event_id: id }} variant="outline" confirm="Reopen this event? It goes back to confirmed or under-staffed, depending on its team, and the Chat space is told.">
+                  Reopen the event
                 </ActionButton>
               </div>
             )}
@@ -90,6 +107,11 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                   capacity: event.capacity ? String(event.capacity) : "",
                 }}
               />
+            )}
+            {isEvents && upcoming && ["confirmed", "understaffed"].includes(event.status) && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <CancelEventForm eventId={id} />
+              </div>
             )}
           </CardContent>
         </Card>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import { dropOut } from "@/app/actions/roster";
+import { cancelEvent, dropOut } from "@/app/actions/roster";
 import { updateEvent } from "@/app/actions/planning";
 import { parseEuroToCents } from "@/lib/dates";
 
@@ -35,6 +35,46 @@ export function DropOutButton({ assignmentId, role }: { assignmentId: string; ro
       </Button>
       <p className="w-full text-xs text-gray-500">Only the OC and the Events team see the reason. Please no health details – “can’t make it” is enough.</p>
       {error && <span className="text-xs text-red-600">{error}</span>}
+    </form>
+  );
+}
+
+/** What cancelling means, said wherever an event is cancelled. */
+export const CANCEL_CONSEQUENCES = "The team and the Chat space are told; registered receipts stay valid.";
+
+/** The Events team cancels a running event, with an optional reason for the Chat message. */
+export function CancelEventForm({ eventId }: { eventId: string }) {
+  const { run, pending, error } = useAction();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        Cancel the event…
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="space-y-2"
+      data-testid="cancel-event-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!window.confirm(`Cancel this event? ${CANCEL_CONSEQUENCES}`)) return;
+        run(cancelEvent, { event_id: eventId, reason: reason.trim() || undefined }, () => setOpen(false));
+      }}
+    >
+      <Input aria-label="Reason for the team (optional)" placeholder="Reason for the team (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+      <p className="text-xs text-gray-500">{CANCEL_CONSEQUENCES} The reason is posted in the Chat space.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="destructive" disabled={pending}>
+          Cancel the event
+        </Button>
+        <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>
+          Keep it
+        </Button>
+      </div>
+      {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
     </form>
   );
 }

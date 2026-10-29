@@ -1,5 +1,6 @@
 // Roster changes after confirmation: dropping out, claiming open slots, the
-// OC's decision on an under-staffed event, Chat spaces on request.
+// OC's decision on an under-staffed event, cancelling and reopening, Chat
+// spaces on request.
 import { z } from "zod";
 import { dbError, defineAction, PAGES, forbidden, notFound, requireEventOc, requireRole, uuid } from "@/lib/actions/core";
 
@@ -25,7 +26,21 @@ export const decideUnderstaffed = defineAction(z.object({ event_id: uuid, decisi
   if (!event) throw notFound();
   if (event.status !== "understaffed") throw forbidden("Only under-staffed events need this decision.");
   dbError((await ctx.supabase.rpc("decide_understaffed", { event: i.event_id, decision: i.decision })).error);
-}, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam] });
+}, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam, PAGES.comms] });
+
+/** The Events team cancels a running event; the team and the Chat space are told (cancel_event()). */
+export const cancelEvent = defineAction(z.object({ event_id: uuid, reason: z.string().trim().max(300).optional() }), async (ctx, i) => {
+  requireRole(ctx, "events");
+  dbError((await ctx.supabase.rpc("cancel_event", { event: i.event_id, reason: i.reason || undefined })).error);
+}, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam, PAGES.comms] });
+
+/** The Events team reopens a cancelled event: back to the status its staffing gives. */
+export const reopenEvent = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
+  requireRole(ctx, "events");
+  const { data, error } = await ctx.supabase.rpc("reopen_event", { event: i.event_id });
+  dbError(error);
+  return { status: data as string };
+}, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam, PAGES.comms] });
 
 export const requestChatSpace = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "events");

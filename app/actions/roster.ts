@@ -16,6 +16,14 @@ export async function decideUnderstaffed(input: unknown) {
   return run(A.decideUnderstaffed, input);
 }
 
+export async function cancelEvent(input: unknown) {
+  return run(A.cancelEvent, input);
+}
+
+export async function reopenEvent(input: unknown) {
+  return run(A.reopenEvent, input);
+}
+
 export async function requestChatSpace(input: unknown) {
   return run(A.requestChatSpace, input);
 }
