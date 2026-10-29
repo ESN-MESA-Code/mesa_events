@@ -41,3 +41,6 @@ export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
   allocated: "Allocated – adjusting roster",
   confirmed: "Roster confirmed",
 };
+
+/** What cancelling means, said wherever an event is cancelled (review 2026-10-29 A2). */
+export const CANCEL_CONSEQUENCES = "The team and the Chat space are told; registered receipts stay valid.";

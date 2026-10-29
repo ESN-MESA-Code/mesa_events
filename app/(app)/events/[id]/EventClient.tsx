@@ -6,6 +6,7 @@ import { useAction } from "@/components/ActionButton";
 import { cancelEvent, dropOut } from "@/app/actions/roster";
 import { updateEvent } from "@/app/actions/planning";
 import { parseEuroToCents } from "@/lib/dates";
+import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 
 export function DropOutButton({ assignmentId, role }: { assignmentId: string; role: "oc" | "helper" }) {
   const { run, pending, error } = useAction();
@@ -38,9 +39,6 @@ export function DropOutButton({ assignmentId, role }: { assignmentId: string; ro
     </form>
   );
 }
-
-/** What cancelling means, said wherever an event is cancelled. */
-export const CANCEL_CONSEQUENCES = "The team and the Chat space are told; registered receipts stay valid.";
 
 /** The Events team cancels a running event, with an optional reason for the Chat message. */
 export function CancelEventForm({ eventId }: { eventId: string }) {

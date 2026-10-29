@@ -14,7 +14,6 @@
 // jobs and fake Chat rows of events the tests deleted themselves, and
 // payout batches left without claims.
 import { createClient } from "@supabase/supabase-js";
-import { fileURLToPath } from "node:url";
 import { LOCAL_ENV } from "./local-supabase.mjs";
 
 export const TEST_TAG = "tests@mesa.invalid";
@@ -127,7 +126,8 @@ async function removeOrphans(db) {
   return orphanJobs.length + orphanSpaces.length + orphanDms.length;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Run directly (no import.meta: Playwright loads this file through its CommonJS transform).
+if (/clean-test-data\.mjs$/.test(process.argv[1] ?? "")) {
   const db = createClient(LOCAL_ENV.NEXT_PUBLIC_SUPABASE_URL, LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   removeTestData(db)
     .then((n) => console.log(`Removed test data: ${n.cycles} cycles, ${n.events} events, ${n.ideas} ideas, ${n.orphans} orphaned jobs and fake Chat rows, ${n.batches} empty payout batches.`))

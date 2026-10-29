@@ -6,7 +6,8 @@ import { understaffedNote } from "@/lib/checklist";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
-import { CANCEL_CONSEQUENCES, CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient";
+import { CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient";
+import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { EventChecklist } from "./EventChecklist";
 import { isAre, plural } from "@/lib/plural";
 

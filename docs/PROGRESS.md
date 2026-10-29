@@ -1,5 +1,51 @@
 # Progress – Phase 1 (local only)
 
+## Review round 2026-10-29 (docs/REVIEW-2026-10-29.md)
+
+Status: **every item of A and B implemented and tested; all checks green.** Committed on local
+`main` (one commit per A item, B1+B2 together, the rest one each); nothing deployed or pushed, no
+external API called. Decisions are in `docs/DECISIONS.md` ("Review round (docs/REVIEW-2026-10-29.md)").
+New migrations `20261029001000`–`20261029001500`; existing ones unchanged, and the whole set
+applies from scratch (`supabase db reset`, types unchanged afterwards).
+
+| Item | What changed | Tests |
+|---|---|---|
+| A1 "Run it anyway" sticks | `events.understaffed_decision` (who/when), written only by `decide_understaffed()`; `refresh_staffing()` keeps a decided event confirmed; cleared when the event loses its OC (drop-out, removal, OC swap); staffing refreshed by a trigger on every roster change; OC can no longer write the status; "Run" needs an OC. | DB: run → claim (still short) → confirmed; drop-out keeps it; OC drops → under-staffed, decision cleared; new OC decides; roster swap clears it |
+| A2 Cancel tells the team, reopen | `cancel_event()` (Events; OC via the under-staffed decision) stores who/when/why and enqueues one `chat.event_status` job per cancellation (space message mentioning OC and helpers, or DMs without a space); `reopen_event()` (Events only) back to the staffing status, space told; Comms "Cancelled after the description was published" with "Handled"; confirm dialog states the consequences. | DB: who may, one job per cancellation, message text, Comms list, reopen only by Events, DMs without a space. E2E `cancel.spec.ts` (Events cancel → Chat → Comms → reopen; OC's cancel dialog) |
+| A3 Completed events | `private.complete_past_events()` on pg_cron every 15 min (end or start + 1 day); every hand-in path accepts completed; My events in Today / Coming up / Past, past labelled "Hand-in open" / "Done". | DB: the job's cases, hand-in on a completed event. Unit: grouping by Berlin day and end, hand-in labels |
+| A4 Cycles finish | Stepper … → Descriptions → **Hand-in** ("3 of 5 events handed in", missing items per event on the cycle page) → **Done**; Descriptions counts only events ahead; done cycles collapsed under "Past cycles", out of the Home queue and Comms progress (`cycle_hand_in()`). | Unit: steps. E2E `cycle-hand-in.spec.ts` (past test month: Hand-in → Done → Past cycles, Home queue) |
+| A5 Deadlines vs. month | DB refuses a description deadline after the first event's start (also an event added/moved before it) and a form deadline after the month's first day (Berlin); latest dates shown next to the inputs (`cycle_deadline_limits()`); seed fixed. | DB: limits, both refusals with their messages, event side |
+| A6 Late vs. Missed | `description_overview()`: late = deadline passed and event ahead; missed = started without a published description; Comms "Missed" collapsed (60 days); Home counts only what can still be done. | DB: late/missed cases |
+| A7 Test data | Tag = test months (< 2020, ≥ 2040) + `created_by = tests@mesa.invalid`; `scripts/clean-test-data.mjs` (`npm run clean:test-data`) before and after the DB and E2E suites; orphaned jobs/fake Chat rows and empty batches too; monthly E2E no longer leaves the quiz outside its cycle's month. The dev database was cleaned once (4 junk cycles, 8 events) and re-seeded. | Run of both suites, then a database check: only the demo's 4 cycles, 9 events, 2 ideas |
+| B1 Payout line | "Payout: PayPal (olga@…)" / "Payout: bank transfer (DE89 •••• 3000)" until paid, "Paid to your … account" after. | Unit |
+| B2 Hand-in receipts | "Yours: 2 receipts, all Belege in · Rest of the team: 1 receipt, 1 Beleg outstanding" (counts only). | Unit |
+| B3 Plurals | `lib/plural.ts` everywhere (also "1 helpers" on the schedule and volunteer form). | Unit incl. a scan that fails on "(s)", "(e)" or inline plurals |
+| B4 Next-step banner | Steps name their section; on its own tab the banner scrolls there ("Go to it ↓"). | Unit (`stepLink`) |
+| B5 Claim card | No status badge next to the steps on the hand-in. | E2E (monthly cycle, hand-in text) |
+| B6 Under-staffed banner | Worded for the OC, the Events team and others; without an OC "the Events team decides", only cancelling offered. | Unit |
+
+### Checks (this round)
+
+| Check | Result |
+|---|---|
+| `npm test` (unit) | **313 passed** (21 files) |
+| `npm run test:db` | **1,760 passed** (8 files), incl. the RLS matrix |
+| `npm run test:e2e` (production build) | **49 passed**, 1 skipped (as before: the organiser part of the live-list test on the phone project) |
+| `npm run build:local` + `npm run test:bundle` | build OK, **10 passed** |
+| `npm run lint`, `npm run typecheck`, `npm run gen:actions -- --check` | clean |
+| `supabase db reset` + `gen:types` | all migrations apply; types unchanged |
+| `docker build` | image `mesa-events:local` (315 MB); container serves `/login` and `/impressum`, job route 401 without secret |
+| Database after the suites | only the demo data (`clean:test-data` finds nothing; `seed:demo` re-run after the reset) |
+
+The first E2E run found two problems, both fixed: Playwright's loader cannot import a module
+using `import.meta` (the cleanup script now detects a direct run from `process.argv`), and a
+constant exported from a client component was used on the server (the cancel dialog showed
+function text; the text now lives in `lib/labels.ts`).
+
+Not done / limits: no browser walkthrough this round – the changed flows are covered by the E2E
+tests above (incl. the cancel flow and the cycle's Hand-in step). The legal texts and the
+never-run CI workflow are unchanged from the last round (see below).
+
 ## Review round 2026-10-28 (docs/REVIEW-2026-10-28.md)
 
 Status: **every item of A, B and C implemented and tested; all checks green.** Committed on local

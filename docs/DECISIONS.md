@@ -279,3 +279,79 @@ Implemented autonomously after the code review and UI walkthrough; the user was 
 - **C11 – Shared pieces** (`components/status.tsx`: status chips, `Stepper`; `ClaimItem`;
   `formatShortDate` / `formatDue`) and a Playwright check that every role's main pages do not
   scroll sideways at 375 px.
+
+## 2026-10-29 – Review round (docs/REVIEW-2026-10-29.md)
+
+Implemented autonomously after the second review; the user was not available.
+
+- **A1 – The decision is stored on the event** (`understaffed_decision = 'run'`, by, at), written
+  only by `decide_understaffed()`; a guard refuses the columns (and any status change by the OC)
+  from clients. `refresh_staffing()` keeps a short event confirmed while it is set. It is cleared
+  whenever the event loses its active OC – drop-out, removal, role change or the Events team
+  swapping the OC on the roster board – so the new OC decides again. **"Run it anyway" needs an
+  OC** (refused otherwise): someone has to own a running event. Staffing is now refreshed by a
+  trigger on every roster change, which also covers the Events team's roster edits after
+  confirmation (before, those did not update the status).
+- **A2 – Who cancels:** the Events team any confirmed or under-staffed event that has not started
+  (with an optional reason, ≤ 300 characters, posted to the space); the OC only an under-staffed
+  one, through the decision (reason "Not enough people"). Status changes to and from
+  `cancelled` go only through `cancel_event()` / `reopen_event()`, also for the Events team, so
+  nobody can skip the message. One `chat.event_status` job per cancellation (idempotency key with
+  the cancellation time), the space message @-mentions OC and helpers and says receipts stay
+  valid. **Without a space, OC and helpers get direct messages – regardless of the
+  `chat_notifications` setting**, because there is no other channel. Reopening (Events only, not
+  after the start) returns to the status the staffing gives, clears the earlier decision (it
+  was cleared on cancelling) and posts "back on"; a later job for an older state skips itself.
+  Comms sees cancelled events whose description was published until someone marks them
+  **Handled** (`note_cancellation()`); Comms decides about a correction outside the platform.
+  Claims are untouched.
+- **A3 – "Completed" by a plain SQL function on a pg_cron schedule** (every 15 minutes, no job
+  needed: nothing goes outside the database). End = `ends_at`, else start + 1 day. Completed is
+  final. Every hand-in path already accepted completed events (checked by grep and a DB test).
+  **My events:** Today = starts on today's Berlin date or is still running (trips); Past events
+  are labelled from the person's next step: "Hand-in open" while it is an action, else "Done"
+  (cancelled: "Cancelled", unless Belege are still missing).
+- **A4 – An event is handed in** when its attendance list is signed off, at least one photo is
+  handed in and no Beleg is outstanding (the same rule as the OC's next step). Cancelled events
+  do not count for the cycle (Finance chases their Belege). The Descriptions step counts only
+  events still ahead, so a past cycle never asks for reminders. **Done** = every running event
+  happened and is handed in (or none ran). Progress is computed for every cycle (confirmed ones
+  skip the ideas/answers queries, so the cost stays flat over the years); done cycles are a
+  collapsed "Past cycles" list and leave the Home queue and the Comms per-month progress. The
+  cycle page lists the events not handed in with what is missing.
+- **A5 – Latest form deadline: the first day of the cycle's month, 23:59 Berlin** ("not after
+  the first day", matching the form's existing default of the 1st, 23:59). **Latest description
+  deadline: the first event's start** (dropped and cancelled events do not count). The reverse is
+  refused too: adding or moving an event (or bringing one back) before an existing deadline.
+  Like the other guards these apply to members and teams, not to the service role; the seed now
+  computes its deadlines (two days before a cycle's first event at the latest).
+- **A6 – Late = deadline passed and the event still ahead; Missed = started without a published
+  description** (also submitted or approved ones – publishing afterwards makes no sense). Missed
+  rows leave the review, publish, late and due lists; the Comms page shows the last 60 days of
+  them collapsed. Supersedes C8's "late once the event started".
+- **A7 – The test tag:** cycles in test months (before 2020 or from 2040 on) and rows the test
+  helpers create with `created_by = tests@mesa.invalid`. `scripts/clean-test-data.mjs` removes
+  them with their dependants (claims and receipts first, jobs, log entries, fake Google rows),
+  plus jobs and fake Chat rows of events the tests deleted themselves and payout batches left
+  without claims; both suites run it before and after (vitest `globalSetup`, Playwright global
+  setup/teardown) and `npm run clean:test-data` runs it by hand. Activity-log rows of events the
+  tests deleted themselves stay (the log outlives events by design). **The monthly E2E's time
+  travel takes the quiz out of its far-future cycle** (an event without a cycle is valid) instead
+  of borrowing the current month's cycle, which may exist already (the month is unique, e.g. the
+  demo's); the cycle hand-in E2E uses a past test month whose events really happened. The DB
+  tests' shared world still puts near-dated events into far-future cycles through the service
+  role; it never reaches the dev UI because it is removed after the run.
+- **B1 – After payout only the method is left** ("Paid to your PayPal account"): the details are
+  deleted when a claim is paid.
+- **B2 – The team part is counts only** (receipts and outstanding Belege), never names or
+  amounts; team members who are not on the event see the event's counts.
+- **B3 – `plural(n, one, many?)` and `isAre(n)` in `lib/plural.ts`**, used everywhere; this also
+  changes the ported bot warning "The intro has n sentence(s)" (the only message of the literal
+  port that changed). A unit test fails when "(s)", "(e)" or an inline plural comes back.
+- **B4 – Each next step names its section** (`anchor`); on its own tab the banner says "Go to it
+  ↓" and scrolls there, elsewhere it links to tab + section.
+- **B5 – The badge goes where the steps are shown** (hand-in "Your receipts"); a claim still
+  waiting for its Beleg says what to do. The Finance table and Home keep their badges (no steps
+  there).
+- **B6 – Wording per viewer:** the OC, the Events team ("can decide in the OC's place") and
+  everyone else; without an OC "the Events team decides", and only cancelling is offered.
