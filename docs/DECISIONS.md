@@ -355,3 +355,98 @@ Implemented autonomously after the second review; the user was not available.
   there).
 - **B6 – Wording per viewer:** the OC, the Events team ("can decide in the OC's place") and
   everyone else; without an OC "the Events team decides", and only cancelling is offered.
+
+## 2026-10-29 – Staging (docs/BRIEF-2026-10-29-staging.md)
+
+Implemented autonomously; the user was not available. How to set it up and present: `docs/STAGING.md`.
+
+- **Two variables, both must say staging.** `NEXT_PUBLIC_APP_ENV` (build) and `APP_ENV`
+  (runtime); unset means production in builds and development in `next dev`. `next.config.ts`
+  always defines `NEXT_PUBLIC_APP_ENV` (`env`), because Next.js inlines a `NEXT_PUBLIC_` variable
+  only when it is set at build time – the bundle scan found the staging link in a production
+  build while it was unset. Staging-only code is guarded by the literal
+  `process.env.NEXT_PUBLIC_APP_ENV === "staging"`, so production builds drop it.
+- **The project ref** is the subdomain of a hosted project (`https://<ref>.supabase.co`), otherwise
+  host and port of the URL (self-hosted, the local stack `127.0.0.1:54421`), so the same gate works
+  for every target. Look-alike hosts (`<ref>.supabase.co.evil.example`) are not the project.
+- **Boot check** in `instrumentation.ts` (Node runtime only, `lib/staging/boot.ts`): a staging build
+  or runtime exits with a list of problems if build and runtime disagree, a gate fails,
+  `GOOGLE_MODE` is not `fake`, `GOOGLE_SERVICE_ACCOUNT_*` or `TELEGRAM_BOT_TOKEN` is set, or the
+  access code is shorter than 16 characters. It checks the Supabase URL the build baked in.
+  `googleMode()` returns fake whenever `APP_ENV=staging`, whatever else is set (Telegram does the
+  same in `telegramMode()`).
+- **Banner** in the root layout, a server component, on every page (login, public forms and
+  legal pages included). **"Switch role" and "Demo outbox" sit in the banner**, not in the member
+  header: the banner is on every page, and the member layout belongs to the logo round.
+- **robots.txt disallows everything in every environment** (an internal tool, and the public
+  attendance form links should not be indexed either); `X-Robots-Tag: noindex, nofollow` only on
+  staging (proxy, and next.config headers for static files in staging builds).
+- **Demo outbox** (`/admin/demo-outbox`): staging and development only (404 in production builds),
+  for **any signed-in member** – presenters switch roles, and the fakes hold demo data only. It
+  reads the `fake_*` tables with the service role, newest first, with filters; mentions become
+  names, semester folders are left out.
+- **Demo sign-in** (`/staging`): server-rendered with plain forms and two route handlers, so no
+  client code exists that a production build could carry. The code is compared in constant time
+  (SHA-256 of both, `timingSafeEqual`); failed attempts are limited to 5 per client and 30 overall
+  per 15 minutes, in memory per server instance (enough with 16+ characters; on Vercel each
+  instance counts its own). A correct code sets a browser-session cookie (httpOnly, SameSite=Lax,
+  Secure on https) holding an HMAC of the code and the project ref, so changing the code locks
+  everyone out again.
+- **Demo members sign in with a password derived from the service-role key** (HMAC per address).
+  The anon key is public and the Email provider must be on for password sign-in, so a known
+  password would let anyone skip the access code. Ten personas (one per role, plus a newcomer)
+  map to members of the cast.
+- **Demo members are created by a database function** (`staging_upsert_demo_user`): Auth's admin
+  API creates users with provider "email", which the Workspace-only signup trigger refuses. The
+  function inserts them as Google sign-in would, service role only, and only for addresses whose
+  local part ends in `.demo` – it cannot touch a real member's account.
+- **The database must be marked as a demo database** (`private.config` `environment` = `staging`,
+  or `development` – set by `supabase/seed.sql` locally). Creating demo members and wiping refuse
+  otherwise, so even a staging app pointed at the production database by mistake cannot wipe it.
+  It is set by hand on the staging project, never by a migration.
+- **The wipe** (`staging_wipe`) truncates a list of workflow tables and keeps members, accepted
+  rules, team roles of real accounts, settings, the first rules version and the publication
+  channels; demo members' roles and acknowledgements go (the seed adds them again). A table in
+  neither list makes the wipe refuse, and a DB test checks the plan, so a new table needs a
+  decision. No `CASCADE`: a kept table referencing a wiped one fails loudly.
+- **"Reset demo data"** is a server-rendered form posting to `/admin/demo-data/reset`, which runs the
+  action through `run()` (admin role, every gate) – a client component would have put the card into
+  production bundles. Confirmed by typing RESET (plus a same-origin check); logged as an
+  `activity_log` entry `staging`/`reset` written after the wipe.
+- **The seed is TypeScript in `lib/staging/`**, shared by the Admin button and the CLI. The CLI loads
+  it with a small loader (`scripts/staging/ts-loader.mjs`: the `@/` alias, extensionless imports,
+  TypeScript's `transpileModule`) – Node's own type stripping cannot handle constructor parameter
+  properties, and Node 26 dropped `--experimental-transform-types`. It reuses the app's own code:
+  the description template, Chat message texts, allocation, reimbursement rules, photo folder
+  names, the bot-archive import and the Telegram message builder.
+- **Deterministic:** a fixed random seed and fixed ids (events keep their URLs across resets); only
+  dates move with today (Berlin). The current month's events are placed by days from today and kept
+  inside the month; only when that would put a past event in the future (or the other way round)
+  do they fall into the neighbour month.
+- **Six cycles:** three done months (confirmed, handed in, claims paid), the current month
+  (confirmed), next month allocated by `lib/allocation.ts` from the volunteer answers plus one
+  manual OC/helper swap, the month after with the form open; ideas for the month after that.
+- **`seed:staging` replaces only its own data** (tag `staging-seed.demo@<domain>`) and the small
+  demo seed's, whose months it takes over; it refuses if a cycle it did not create occupies one of
+  the months. Members stay across runs. `--remove` takes the demo out again.
+- **What went out is recorded consistently:** Chat spaces, messages and DMs use the real message
+  builders and the same message ids as the jobs; matching `done` jobs carry the jobs' idempotency
+  keys, so the schedulers do not send reminders again; the seed's Telegram messages use ids
+  90000–90999 in the fake channel; planned Telegram posts have their pending job, as the board
+  creates it. The triggers' log rows from the seed are replaced by a timeline with plausible times
+  and the people who acted.
+- **Money:** suggestions from `suggestAmount()` with rules version 1; paid claims went out with
+  their month's batch (paid on the 3rd of the next month), checked ones wait in this month's open
+  batch, early payouts have no batch; payout details exist only for open claims; official example
+  IBANs and `@example.com` PayPal addresses only.
+- **The local stack:** the other suites expect the normal demo state (with the staging demo loaded,
+  its Events and Comms members join every new Chat space and its events queue photo jobs). The DB
+  test and the staging E2E record what was there and put it back.
+- **The staging build goes to `.next-staging`** (`distDir` from `NEXT_DIST_DIR`), so it never replaces
+  the production build the E2E and bundle scan use; Next.js added its type folders to `tsconfig.json`.
+  Locally it runs on port 3200 with the gates for the local stack and a test access code
+  (`scripts/staging/local-env.mjs`).
+- **Hosting:** a separate Supabase project and a separate Vercel project (not a Vercel environment of
+  the production project: the database, keys and domain must differ anyway). The VPS path builds the
+  same image with `NEXT_PUBLIC_APP_ENV=staging` next to production (port 3001) and runs the seed from
+  the Dockerfile's `tools` stage.

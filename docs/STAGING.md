@@ -178,6 +178,19 @@ so "today" and "next month" still match.
 Every way refuses unless all staging gates hold, and the database refuses unless it is marked
 `environment = staging`.
 
+## When something refuses
+
+| Message | Meaning |
+|---|---|
+| "Refusing to start: the staging configuration is unsafe" (server log) | A pre-flight item is missing; the list under it names which. |
+| "Refusing: not a staging target" (seed script with `--remote`) | The environment file does not pass the gates (wrong ref, `APP_ENV`, …). |
+| "Not a demo database" | `private.config` has no `environment = staging` row (step 3). |
+| "Only demo addresses …" | Something tried to create a demo member with a real-looking address. |
+| "Reset refused: no decision for table(s) …" | A newer migration added a table; add it to `private.staging_wipe_lists()` in a new migration. |
+| "permission denied for table users" while seeding | The demo members are written into `auth.users` by a function owned by `postgres` (as `supabase/seed.sql` does locally). Not verified on a hosted project – nothing was deployed. Check in the SQL editor: `select has_table_privilege('postgres', 'auth.users', 'insert');` – if it says false, the project does not allow it and the demo members need another way in (docs/DECISIONS.md, "Staging"). |
+| `/staging` asks for the code again | The access code changed, or the browser session ended. |
+| A role in the picker says "The demo members are missing" | Run the reset. |
+
 ## Rehearsing locally
 
 - `npm run seed:staging` puts the same data into the local stack (it replaces the small
