@@ -486,25 +486,25 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
   };
 
   const specs: Spec[] = [...PAST, ...CURRENT, ...NEXT, ...LATER];
-  const built: Built[] = specs.map((s) => {
-    const plan = EVENTS[s.plan] as (typeof EVENTS)[EventKey] & { hours?: number; days?: number };
-    const { start, month } = placed(s);
+  const built: Built[] = specs.map((spec) => {
+    const plan = EVENTS[spec.plan] as (typeof EVENTS)[EventKey] & { hours?: number; days?: number };
+    const { start, month } = placed(spec);
     const end = plan.days ? iso(Date.parse(at(monthOf(start), Number(berlinDate(start).slice(8)), plan.time)) + (plan.days - 1) * DAY + 11 * HOUR) : plan.hours ? iso(Date.parse(start) + plan.hours * HOUR) : null;
     const over = (end ? Date.parse(end) : Date.parse(start) + DAY) < now;
-    let status: EventStatus = s.status ?? (s.cycle >= 1 ? "scheduled" : over ? "completed" : "confirmed");
-    if (!s.status && status === "confirmed" && s.dropouts?.some((d) => !d.replacedBy) && !s.decision) status = "understaffed";
+    let status: EventStatus = spec.status ?? (spec.cycle >= 1 ? "scheduled" : over ? "completed" : "confirmed");
+    if (!spec.status && status === "confirmed" && spec.dropouts?.some((d) => !d.replacedBy) && !spec.decision) status = "understaffed";
     return {
-      spec: s,
+      spec,
       id: rng.uuid(),
       title: plan.title,
       type: plan.type,
       startsAt: start,
       endsAt: end,
-      cycleMonth: months.get(month === 0 ? s.cycle : month)!,
+      cycleMonth: months.get(month === 0 ? spec.cycle : month)!,
       status,
       space: null,
-      oc: s.oc ?? null,
-      helpers: s.helpers ?? [],
+      oc: spec.oc ?? null,
+      helpers: spec.helpers ?? [],
       assignments: [],
     };
   });
