@@ -64,6 +64,16 @@ function LoginForm() {
         {loading ? "Redirecting…" : "Sign in with Google"}
       </button>
 
+      {/* Staging builds only (a build-time constant): the demo sign-in behind the access code (tests/bundle). */}
+      {process.env.NEXT_PUBLIC_APP_ENV === "staging" && (
+        <a
+          href="/staging"
+          className="mt-3 w-full flex items-center justify-center rounded-md border border-dashed border-amber-500 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+        >
+          Demo sign-in (staging)
+        </a>
+      )}
+
       {/* NODE_ENV is a build-time constant: production builds drop this block entirely (tests/bundle). */}
       {process.env.NODE_ENV !== "production" && localLoginEnabled() && (
         <form action="/auth/local-login" method="post" className="mt-4 pt-4 border-t border-dashed border-gray-300 text-left space-y-2">
