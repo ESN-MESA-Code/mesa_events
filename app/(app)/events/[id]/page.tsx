@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatDateTime, formatShortDate, isoToBerlinInput, nowMs } from "@/lib/dates";
 import { describeActivity } from "@/lib/activity";
+import { understaffedNote } from "@/lib/checklist";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
@@ -26,6 +27,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const active = (roster ?? []).filter((a) => a.status === "active");
   const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
   const slot = (slots ?? []).find((s) => s.event_id === id);
+  const hasOc = active.some((a) => a.role === "oc");
   const upcoming = Date.parse(event.starts_at) > nowMs();
   const name = (a: (typeof active)[number]) => (a.profiles as { full_name: string } | null)?.full_name ?? "?";
   const names = new Map((roster ?? []).map((a) => [a.profile_id, name(a)]));
@@ -45,13 +47,15 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             <p className="mt-1">
               {slot?.open_oc ? "It has no OC. " : ""}
               {slot && slot.open_helpers > 0 ? `${plural(slot.open_helpers, "helper slot")} ${isAre(slot.open_helpers)} open. ` : ""}
-              {canManage ? "As OC you decide whether it runs as it is or is cancelled." : "The OC decides whether it runs."}
+              {understaffedNote(hasOc, isOc ? "oc" : isEvents ? "events" : "other")}
             </p>
             {canManage && (
               <div className="mt-2 flex gap-2">
-                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success">
-                  Run it anyway
-                </ActionButton>
+                {hasOc && (
+                  <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success">
+                    Run it anyway
+                  </ActionButton>
+                )}
                 <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "cancel" }} variant="destructive" confirm={`Cancel this event? ${CANCEL_CONSEQUENCES}`}>
                   Cancel the event
                 </ActionButton>

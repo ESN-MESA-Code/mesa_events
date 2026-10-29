@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checklistDone, eventChecklist, nextStep, stepLink, type ChecklistInput } from "@/lib/checklist";
+import { checklistDone, eventChecklist, nextStep, stepLink, understaffedNote, type ChecklistInput } from "@/lib/checklist";
 
 const now = Date.parse("2026-11-10T12:00:00Z");
 const base: ChecklistInput = {
@@ -92,5 +92,19 @@ describe("next-step banner link (review 2026-10-29 B4)", () => {
   it("on the step's own tab: down to the section, not a link to itself", () => {
     expect(stepLink(id, { tab: "", anchor: "decide" }, "/events/e1")).toEqual({ href: "#decide", label: "Go to it ↓" });
     expect(stepLink(id, { tab: "hand-in", anchor: "hand-in-status" }, "/events/e1/hand-in")).toEqual({ href: "#hand-in-status", label: "Go to it ↓" });
+  });
+});
+
+describe("under-staffed banner (review 2026-10-29 B6)", () => {
+  it("tells the OC they decide, everyone else who does", () => {
+    expect(understaffedNote(true, "oc")).toBe("As OC you decide whether it runs as it is or is cancelled.");
+    expect(understaffedNote(true, "events")).toBe("The OC decides whether it runs; the Events team can decide in their place.");
+    expect(understaffedNote(true, "other")).toBe("The OC decides whether it runs.");
+  });
+  it("without an OC, the Events team decides", () => {
+    expect(understaffedNote(false, "events")).toMatch(/^Without an OC the Events team decides: find an OC/);
+    expect(understaffedNote(false, "other")).toBe("Without an OC the Events team decides whether it runs.");
+    // Even the former OC's view (they dropped out) does not say "As OC".
+    expect(understaffedNote(false, "oc")).not.toContain("As OC");
   });
 });

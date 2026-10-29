@@ -149,3 +149,18 @@ export function stepLink(eventId: string, step: Pick<NextStep, "tab" | "anchor">
   const tabPath = `/events/${eventId}${step.tab ? `/${step.tab}` : ""}`;
   return pathname === tabPath ? { href: `#${step.anchor}`, label: "Go to it ↓" } : { href: `${tabPath}#${step.anchor}`, label: `${TAB_LABEL[step.tab]} →` };
 }
+
+/**
+ * Who decides whether an under-staffed event runs, said to the one reading
+ * (review 2026-10-29 B6): the OC; without an OC, the Events team.
+ */
+export function understaffedNote(hasOc: boolean, viewer: "oc" | "events" | "other"): string {
+  if (!hasOc) {
+    return viewer === "events"
+      ? "Without an OC the Events team decides: find an OC (an open slot or the roster) so it can run, or cancel it."
+      : "Without an OC the Events team decides whether it runs.";
+  }
+  if (viewer === "oc") return "As OC you decide whether it runs as it is or is cancelled.";
+  if (viewer === "events") return "The OC decides whether it runs; the Events team can decide in their place.";
+  return "The OC decides whether it runs.";
+}
