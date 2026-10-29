@@ -4,6 +4,9 @@
 import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { TEST_MONTHS, TEST_TAG } from "../../scripts/clean-test-data.mjs";
+
+export { TEST_MONTHS, TEST_TAG };
 
 export const SUPABASE_URL = process.env.TEST_SUPABASE_URL ?? "http://127.0.0.1:54421";
 export const ANON_KEY =
@@ -102,11 +105,12 @@ export const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 3_6
 export const daysFromNow = (days: number) => hoursFromNow(days * 24);
 
 /**
- * Test data lives in test months: cycles before 2020 or from 2040 on, which
- * no real or demo cycle uses. The global teardown (tests/helpers/cleanup.ts)
- * removes every cycle there with everything in it.
+ * Test data is tagged (review 2026-10-29 A7): cycles live in test months
+ * (before 2020 or from 2040 on, which no real or demo cycle uses), and the
+ * helpers below mark what they create with created_by = TEST_TAG. The
+ * suites' global setup/teardown (scripts/clean-test-data.mjs) removes
+ * every tagged row with everything that depends on it.
  */
-export const TEST_MONTHS = { before: "2020-01-01", from: "2040-01-01" } as const;
 export const isTestMonth = (month: string) => month < TEST_MONTHS.before || month >= TEST_MONTHS.from;
 
 /** A random far-future test month unused by other tests, as "YYYY-MM-01". */
@@ -130,7 +134,7 @@ function check<T>(res: { data: T; error: { message: string } | null }, what: str
 
 export async function createCycle(extra: Partial<Database["public"]["Tables"]["planning_cycles"]["Insert"]> = {}) {
   for (let i = 0; i < 5; i++) {
-    const res = await admin.from("planning_cycles").insert({ month: testMonth(), ...extra }).select().single();
+    const res = await admin.from("planning_cycles").insert({ month: testMonth(), created_by: TEST_TAG, ...extra }).select().single();
     if (!res.error) return res.data;
   }
   throw new Error("Could not create a test cycle");
@@ -162,6 +166,7 @@ export async function createEvent(setup: EventSetup = {}) {
         helpers_needed: setup.helpers_needed ?? 2,
         cycle_id: setup.cycle_id ?? null,
         location: "Test venue",
+        created_by: TEST_TAG,
       })
       .select()
       .single(),

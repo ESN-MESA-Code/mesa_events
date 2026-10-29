@@ -17,6 +17,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL: BASE, trace: "retain-on-failure" },
+  // The suite shares the local database with dev:local: test data goes before and after the run.
+  globalSetup: "./tests/e2e/global-setup.ts",
+  globalTeardown: "./tests/e2e/global-teardown.ts",
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     // Participants sign in on their phones.

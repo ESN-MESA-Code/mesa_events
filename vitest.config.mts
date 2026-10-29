@@ -18,6 +18,8 @@ export default defineConfig({
           hookTimeout: 60_000,
           // The tests share one local stack and its seeded members.
           fileParallelism: false,
+          // Removes the test data before and after the run (the dev database is the same).
+          globalSetup: ["tests/helpers/global-cleanup.ts"],
         },
       },
       // After `npm run build`: no secrets in the browser bundle: `npm run test:bundle`

@@ -2,7 +2,7 @@
 // form → allocation → roster adjustment → confirmation → Chat space →
 // description with a Comms review → publish → attendance → receipt →
 // Finance → paid.
-import { USERS, admin, hoursFromNow } from "../helpers/local";
+import { TEST_TAG, USERS, admin, hoursFromNow } from "../helpers/local";
 import { cycleLabel } from "../../lib/dates";
 import { expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
 
@@ -164,8 +164,11 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("on the day: a participant signs in, the OC signs the list off", async () => {
     // Time travel: the quiz started a quarter of an hour ago (sign-ins open,
-    // and the hand-in is open whatever the time of day the test runs).
-    await admin.from("events").update({ starts_at: hoursFromNow(-0.25) }).eq("id", quizId);
+    // and the hand-in is open whatever the time of day the test runs). Its
+    // cycle is in a far-future test month, so the quiz leaves the cycle
+    // (an event without a cycle is valid) instead of sitting in it outside
+    // its month (review 2026-10-29 A7); the tag lets the teardown find it.
+    await admin.from("events").update({ starts_at: hoursFromNow(-0.25), cycle_id: null, created_by: TEST_TAG }).eq("id", quizId);
     const { data: list } = await admin.from("attendance_lists").select("public_token").eq("event_id", quizId).single();
     const visitor = await browser.newContext();
     const form = await visitor.newPage();
