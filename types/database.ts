@@ -789,6 +789,9 @@ isOneToOne: false
 "complete_job":
 { Args: { "job_id": number,"job_result"?: Json }; Returns: undefined
                            },
+"complete_past_events":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "confidentiality_version":
 { Args: Record<PropertyKey, never>; Returns: string
                            },

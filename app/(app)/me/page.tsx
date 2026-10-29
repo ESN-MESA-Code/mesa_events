@@ -4,6 +4,9 @@ import { createSessionClient, getViewer } from "@/lib/supabase/session";
 import { formatDateTime, formatShortDate, nowMs } from "@/lib/dates";
 import type { EventStatus } from "@/lib/labels";
 import { maskIban, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
+import { nextStep } from "@/lib/checklist";
+import { checklistInput } from "@/lib/eventStatus";
+import { groupEvents, handInState, type HandInState } from "@/lib/myEvents";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { EventStatusBadge } from "@/components/status";
 import { ClaimItem } from "@/components/ClaimItem";
@@ -11,19 +14,40 @@ import { PayoutDetailsForm } from "./PayoutDetailsForm";
 
 export const metadata: Metadata = { title: "My events" };
 
-type MyEvent = { id: string; role: string; event: { id: string; title: string; starts_at: string; status: EventStatus } };
+type MyEvent = {
+  id: string;
+  role: string;
+  event: {
+    id: string;
+    title: string;
+    starts_at: string;
+    ends_at: string | null;
+    status: EventStatus;
+    helpers_needed: number;
+    chat_space_name: string | null;
+    chat_space_requested_at: string | null;
+    planning_cycles: { description_deadline: string | null } | null;
+  };
+  handIn?: HandInState;
+};
 
-function EventList({ list }: { list: MyEvent[] }) {
+function EventList({ list, testId }: { list: MyEvent[]; testId: string }) {
   return (
-    <ul className="divide-y divide-gray-100 text-sm">
+    <ul className="divide-y divide-gray-100 text-sm" data-testid={testId}>
       {list.map((a) => (
         <li key={a.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2">
           <span className="w-full sm:w-40 tabular-nums text-gray-600">{formatDateTime(a.event.starts_at)}</span>
-          <Link href={`/events/${a.event.id}?from=me`} className="font-medium text-gray-900 hover:text-esn break-words">
+          <Link href={`/events/${a.event.id}${a.handIn?.label === "Hand-in open" ? "/hand-in" : ""}?from=me`} className="font-medium text-gray-900 hover:text-esn break-words">
             {a.event.title}
           </Link>
           <Badge tone="blue">{a.role === "oc" ? "OC" : "Helper"}</Badge>
-          <EventStatusBadge status={a.event.status} className="ml-auto" />
+          {a.handIn ? (
+            <Badge tone={a.handIn.tone} className="ml-auto">
+              {a.handIn.label}
+            </Badge>
+          ) : (
+            <EventStatusBadge status={a.event.status} className="ml-auto" />
+          )}
         </li>
       ))}
     </ul>
@@ -36,7 +60,7 @@ export default async function MePage() {
   const [{ data: assignments }, { data: claims }] = await Promise.all([
     supabase
       .from("assignments")
-      .select("id, role, status, events(id, title, starts_at, status)")
+      .select("id, role, status, events(id, title, starts_at, ends_at, status, helpers_needed, chat_space_name, chat_space_requested_at, planning_cycles(description_deadline))")
       .eq("profile_id", viewer.id)
       .eq("status", "active")
       .order("created_at", { ascending: false }),
@@ -49,12 +73,17 @@ export default async function MePage() {
       .order("created_at"),
   ]);
   const now = nowMs();
-  const events = (assignments ?? [])
-    .map((a) => ({ ...a, event: a.events as MyEvent["event"] }))
-    .filter((a) => a.event)
-    .sort((a, b) => a.event.starts_at.localeCompare(b.event.starts_at));
-  const upcoming = events.filter((a) => Date.parse(a.event.starts_at) >= now - 86_400_000);
-  const past = events.filter((a) => Date.parse(a.event.starts_at) < now - 86_400_000).reverse();
+  const events: MyEvent[] = (assignments ?? [])
+    .map((a) => ({ id: a.id, role: a.role, event: a.events as unknown as MyEvent["event"] }))
+    .filter((a) => a.event && !["draft"].includes(a.event.status));
+  const byTime = groupEvents(events, (a) => a.event, now);
+  // Past events are labelled by their hand-in: is something still mine to do?
+  const past = await Promise.all(
+    byTime.past.map(async (a) => {
+      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null);
+      return { ...a, handIn: handInState(a.event.status, nextStep(input, a.role as "oc" | "helper")) };
+    })
+  );
 
   // Claims grouped by event, newest event first.
   type Ev = { id: string; title: string; starts_at: string };
@@ -72,12 +101,26 @@ export default async function MePage() {
     <>
       <PageHeader title="My events" description="Where you are OC or helper, and your reimbursements." />
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Coming up</CardTitle>
-          </CardHeader>
-          <CardContent data-testid="my-upcoming">{upcoming.length ? <EventList list={upcoming} /> : <EmptyState>Nothing planned – volunteer or claim an open slot.</EmptyState>}</CardContent>
-        </Card>
+        <div className="space-y-6">
+          {byTime.today.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Today</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <EventList list={byTime.today} testId="my-today" />
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Coming up</CardTitle>
+            </CardHeader>
+            <CardContent data-testid="my-upcoming">
+              {byTime.upcoming.length ? <EventList list={byTime.upcoming} testId="my-upcoming-list" /> : <EmptyState>Nothing planned – volunteer or claim an open slot.</EmptyState>}
+            </CardContent>
+          </Card>
+        </div>
         <Card id="claims">
           <CardHeader>
             <CardTitle>My reimbursements</CardTitle>
@@ -140,7 +183,7 @@ export default async function MePage() {
               <CardTitle>Past events</CardTitle>
             </CardHeader>
             <CardContent>
-              <EventList list={past} />
+              <EventList list={past} testId="my-past" />
             </CardContent>
           </Card>
         )}
