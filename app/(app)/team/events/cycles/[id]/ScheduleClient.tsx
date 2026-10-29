@@ -26,7 +26,15 @@ export function CycleControls({
   canEdit,
   responses,
 }: {
-  cycle: { id: string; status: CycleStatus; formClosesAt: string | null; descriptionDeadline: string; defaultCloses: string };
+  cycle: {
+    id: string;
+    status: CycleStatus;
+    formClosesAt: string | null;
+    descriptionDeadline: string;
+    /** The latest allowed deadlines (review 2026-10-29 A5): Berlin input values and labels. */
+    formLatest: { input: string; label: string };
+    descriptionLatest: { input: string; label: string } | null;
+  };
   canEdit: boolean;
   responses: number;
 }) {
@@ -50,8 +58,8 @@ export function CycleControls({
               run(openForm, { cycle_id: cycle.id, closes_at: closes });
             }}
           >
-            <Field label="Form deadline" htmlFor="form-deadline">
-              <Input id="form-deadline" type="datetime-local" value={closes} onChange={(e) => setCloses(e.target.value)} required />
+            <Field label="Form deadline" htmlFor="form-deadline" hint={`At the latest ${cycle.formLatest.label} (the month's first day)`}>
+              <Input id="form-deadline" type="datetime-local" value={closes} max={cycle.formLatest.input} onChange={(e) => setCloses(e.target.value)} required />
             </Field>
             <Button disabled={pending || !closes}>{cycle.status === "planning" ? "Open volunteer form" : "Reopen form"}</Button>
           </form>
@@ -101,8 +109,12 @@ export function CycleControls({
             run(setDescriptionDeadline, { cycle_id: cycle.id, deadline: deadline || null });
           }}
         >
-          <Field label="Description deadline (all events of the month)" htmlFor="desc-deadline">
-            <Input id="desc-deadline" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          <Field
+            label="Description deadline (all events of the month)"
+            htmlFor="desc-deadline"
+            hint={cycle.descriptionLatest ? `At the latest ${cycle.descriptionLatest.label} (when the first event starts)` : "Before the month's first event"}
+          >
+            <Input id="desc-deadline" type="datetime-local" value={deadline} max={cycle.descriptionLatest?.input} onChange={(e) => setDeadline(e.target.value)} />
           </Field>
           <Button variant="outline" disabled={pending}>
             Save deadline

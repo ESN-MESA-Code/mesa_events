@@ -798,6 +798,11 @@ isOneToOne: false
 "confirm_allocation":
 { Args: { "cycle": string }; Returns: undefined
                            },
+"cycle_deadline_limits":
+{ Args: { "cycle": string }; Returns: {
+              "description_latest": string,"form_latest": string
+            }[]
+                           },
 "cycle_hand_in":
 { Args: { "cycles": (string)[] }; Returns: {
               "belege_missing": number,"cycle_id": string,"ends_at": string,"event_id": string,"photos": number,"receipts": number,"signed_off": boolean,"starts_at": string,"status": Database["public"]['Enums']["event_status"]

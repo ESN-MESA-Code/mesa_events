@@ -83,7 +83,7 @@ async function main() {
   const cycleOf = async (iso) => {
     const month = berlinMonth(iso);
     if (!confirmed.has(month)) {
-      confirmed.set(month, await cycle(month, "confirmed", { description_deadline: at(3, 20), confirmed_at: new Date().toISOString(), confirmed_by: "events@esnmesa.org" }));
+      confirmed.set(month, await cycle(month, "confirmed", { confirmed_at: new Date().toISOString(), confirmed_by: "events@esnmesa.org" }));
     }
     return confirmed.get(month);
   };
@@ -119,6 +119,16 @@ async function main() {
     if (payout) check(await db.from("payout_details").insert({ reimbursement_id: claim.id, ...payout }), "payout");
   }
 
+  // The description deadline lies before each cycle's first event (the
+  // database refuses a later one from the app): in three days, or two days
+  // before the first event if that is earlier.
+  for (const id of confirmed.values()) {
+    const first = check(await db.from("events").select("starts_at").eq("cycle_id", id).order("starts_at").limit(1).maybeSingle(), "first event");
+    const latest = first ? Date.parse(first.starts_at) - 2 * day : Infinity;
+    const deadline = new Date(Math.min(Date.parse(at(3, 20)), latest)).toISOString();
+    check(await db.from("planning_cycles").update({ description_deadline: deadline }).eq("id", id).eq("created_by", DEMO), "deadline");
+  }
+
   // A published description to start templates from.
   check(
     await db.from("descriptions").upsert({
@@ -133,7 +143,9 @@ async function main() {
 
   // The month after those: the volunteer form is open.
   const formMonth = addMonths([...confirmed.keys()].sort().at(-1), 1);
-  const next = await cycle(formMonth, "form_open", { form_closes_at: at(4, 23) });
+  // The form closes in four days, and on the month's first day at the latest.
+  const formLatest = Date.parse(onDay(formMonth, 1, 24)) - 60_000;
+  const next = await cycle(formMonth, "form_open", { form_closes_at: new Date(Math.min(Date.parse(at(4, 23)), formLatest)).toISOString() });
   for (const [title, type, day] of [
     ["Language Café", "standard", 6],
     ["International Dinner", "special", 12],

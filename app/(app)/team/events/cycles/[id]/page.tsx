@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { cycleLabel, cyclePlannedIn, formatDateTime, formatShortDate, isoToBerlinInput } from "@/lib/dates";
+import { cycleLabel, cyclePlannedIn, formatDateTime, formatShortDate, isoToBerlinInput, monthStartIso } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
@@ -45,7 +45,11 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const signupCount = new Map<string, number>();
   for (const s of signups ?? []) signupCount.set(s.event_id, (signupCount.get(s.event_id) ?? 0) + 1);
   const people = (responses ?? []).length;
-  const [{ progress, handInOpen }] = await cyclesWithProgress(supabase, [cycle]);
+  const [[{ progress, handInOpen }], { data: limitRows }] = await Promise.all([
+    cyclesWithProgress(supabase, [cycle]),
+    supabase.rpc("cycle_deadline_limits", { cycle: cycle.id }),
+  ]);
+  const limits = limitRows?.[0] ?? { form_latest: monthStartIso(cycle.month), description_latest: null };
   const planned = (events ?? []).filter((e) => e.status !== "dropped");
   const editableSchedule = canEdit && ["planning", "form_open"].includes(cycle.status);
 
@@ -89,7 +93,8 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                 status: cycle.status,
                 formClosesAt: cycle.form_closes_at ? formatDateTime(cycle.form_closes_at) : null,
                 descriptionDeadline: cycle.description_deadline ? isoToBerlinInput(cycle.description_deadline) : "",
-                defaultCloses: `${cycle.month.slice(0, 8)}01T23:59`,
+                formLatest: { input: isoToBerlinInput(limits.form_latest), label: formatDateTime(limits.form_latest) },
+                descriptionLatest: limits.description_latest ? { input: isoToBerlinInput(limits.description_latest), label: formatDateTime(limits.description_latest) } : null,
               }}
               canEdit={canEdit}
               responses={people}
