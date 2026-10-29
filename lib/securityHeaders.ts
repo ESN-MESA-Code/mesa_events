@@ -5,7 +5,8 @@
 // tests/e2e/security.spec.ts check it.
 
 // Pages open without login (proxy.ts); everything else needs a member.
-const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs"];
+// /api/esn: the ESN Activities script, with a personal access token instead of a session.
+const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs", "/api/esn"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

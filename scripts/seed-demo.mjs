@@ -2,7 +2,9 @@
 // through: confirmed events around today with Chat spaces requested (each in
 // the cycle of the month it takes place in), the following month's volunteer
 // form open, ideas for the month after, an event happening now (attendance
-// open) and a past event ready for hand-in with receipts.
+// open), a past event ready for hand-in with receipts, Drive photos and an
+// event report (ready for ESN Activities), and one three weeks ago that is
+// handed in and uploaded to ESN Activities.
 // Run it again to start over: it replaces what it created before (everything
 // created_by demo@esnmesa.org, and whatever was added to its cycles). Never
 // touches .env.local.
@@ -141,6 +143,19 @@ async function main() {
   check(await db.from("attendance_lists").update({ signed_off_at: at(-5, 12), signed_off_by: "oc@esnmesa.org", headcount: 23 }).eq("event_id", crawl), "sign-off");
   // The team uploaded 14 photos to its Drive folder (fake), counted since.
   await photoFolder(crawl, at(-6, 20), "Pub Crawl Maxvorstadt", 14, at(-4, 10));
+  // Published, and the OC wrote the event report: ready for ESN Activities.
+  const crawlFields = { title: "Pub Crawl Maxvorstadt", dateIso: at(-6, 20).slice(0, 10), time: "20:00", venue: "Schelling-Salon, Schellingstraße 54, 80799 München", price: "free", hook: "a night out in Maxvorstadt", intro: "Four bars, one evening, lots of new friends. We start at the Schelling-Salon and walk together.", program: "Meet at the Schelling-Salon\nFour bars", bring: "Your ESNcard", closing: "celebrate with you", esnType: "10", esnObjectives: "413,426" };
+  check(await db.from("descriptions").upsert({ event_id: crawl, status: "published", published_at: at(-8, 12), published_by: "comms@esnmesa.org", fields: crawlFields, approved_fields: crawlFields }), "crawl description");
+  check(await db.from("event_reports").upsert({ event_id: crawl, intl_participants: 20, local_participants: 3, organizers: 2, goals_reached: true, went_well: "Great mood, everyone stayed until the last bar.", could_be_better: "Book the first bar earlier.", created_by: "oc@esnmesa.org", updated_by: "oc@esnmesa.org" }), "crawl report");
+
+  // Three weeks ago: handed in and on ESN Activities.
+  const games = await ev({ title: "Board Game Night", type: "standard", status: "completed", starts_at: at(-20, 19), helpers_needed: 1, price_cents: 0 }, [[U.volunteer1, "oc"], [U.member, "helper"]]);
+  check(await db.from("attendance_lists").update({ signed_off_at: at(-19, 10), signed_off_by: "volunteer1@esnmesa.org", headcount: 31 }).eq("event_id", games), "games sign-off");
+  await photoFolder(games, at(-20, 19), "Board Game Night", 22, at(-18, 10));
+  const gamesFields = { title: "Board Game Night", dateIso: at(-20, 19).slice(0, 10), time: "19:00", venue: "Café Gans am Wasser, Siegfriedstraße 24, 80803 München", price: "free", hook: "an evening of board games", intro: "Bring your favourite game or learn a new one. Snacks are on us!", program: "Games for everyone\nSnacks", bring: "A game if you like", closing: "play with you", esnType: "10", esnObjectives: "413,426" };
+  check(await db.from("descriptions").upsert({ event_id: games, status: "published", published_at: at(-24, 12), published_by: "comms@esnmesa.org", fields: gamesFields, approved_fields: gamesFields }), "games description");
+  check(await db.from("event_reports").upsert({ event_id: games, intl_participants: 27, local_participants: 4, organizers: 2, goals_reached: true, went_well: "Full house, many new faces.", created_by: "volunteer1@esnmesa.org", updated_by: "volunteer1@esnmesa.org" }), "games report");
+  check(await db.from("esn_uploads").upsert({ event_id: games, activity_url: "https://activities.esn.org/activity/board-game-night-mesa-12345", via: "manual", uploaded_by: "comms@esnmesa.org", uploaded_at: at(-15, 11) }), "games upload");
   const { data: v1 } = await db.from("reimbursement_policies").select("id, version").eq("version", 1).single();
   const rules = check(await db.from("reimbursement_rules").select("id, expense_kind, event_type").eq("policy_id", v1.id), "rules");
   const ruleId = (kind, type) => rules.find((r) => r.expense_kind === kind && r.event_type === type).id;

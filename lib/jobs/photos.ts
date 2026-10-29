@@ -76,7 +76,10 @@ export const photoReminder: JobHandler = async (job, deps) => {
     return { posted: "start" };
   }
   const folder = await ensurePhotoFolder(deps, event);
-  const reportUrl = null;
+  // Until the report is in, the reminder asks for it (as the bot's report button did).
+  const { data: report, error: reportError } = await deps.admin.from("event_reports").select("event_id").eq("event_id", event.id).maybeSingle();
+  if (reportError) throw new Error(reportError.message);
+  const reportUrl = report ? null : `${deps.baseUrl}/events/${event.id}/hand-in#event-report`;
   const name = folder.path.split("/").at(-1)!;
   await deps.google.chat.postMessage(event.chat_space_name, photoUploadMessage(event.title, { url: folder.url, name }, reportUrl), `photos-upload-${event.id}`);
   return { posted: "upload", folder: folder.path };

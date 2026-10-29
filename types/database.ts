@@ -145,6 +145,46 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"esn_access_tokens": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"id": string,"label": string,"last_used_at": string | null,"profile_id": string,"revoked_at": string | null,"token_hash": string,"token_prefix": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at": string,"id"?: string,"label": string,"last_used_at"?: string | null,"profile_id": string,"revoked_at"?: string | null,"token_hash": string,"token_prefix": string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"label"?: string,"last_used_at"?: string | null,"profile_id"?: string,"revoked_at"?: string | null,"token_hash"?: string,"token_prefix"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "esn_access_tokens_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"esn_uploads": {
+                  Row: {
+                    "activity_url": string,"event_id": string,"uploaded_at": string,"uploaded_by": string,"via": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activity_url": string,"event_id": string,"uploaded_at"?: string,"uploaded_by": string,"via": string
+                  }
+                  Update: {
+                    "activity_url"?: string,"event_id"?: string,"uploaded_at"?: string,"uploaded_by"?: string,"via"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "esn_uploads_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"event_chat_members": {
                   Row: {
                     "added_at": string,"email": string,"event_id": string
@@ -205,6 +245,26 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "event_photo_folders_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"event_reports": {
+                  Row: {
+                    "access_needs": boolean,"access_note": string,"could_be_better": string,"created_at": string,"created_by": string | null,"event_id": string,"goals_reached": boolean,"intl_participants": number,"local_participants": number,"organizers": number,"updated_at": string,"updated_by": string | null,"went_well": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "access_needs"?: boolean,"access_note"?: string,"could_be_better"?: string,"created_at"?: string,"created_by"?: string | null,"event_id": string,"goals_reached"?: boolean,"intl_participants": number,"local_participants"?: number,"organizers": number,"updated_at"?: string,"updated_by"?: string | null,"went_well": string
+                  }
+                  Update: {
+                    "access_needs"?: boolean,"access_note"?: string,"could_be_better"?: string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string,"goals_reached"?: boolean,"intl_participants"?: number,"local_participants"?: number,"organizers"?: number,"updated_at"?: string,"updated_by"?: string | null,"went_well"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_reports_event_id_fkey"
       columns: ["event_id"]
 isOneToOne: true
       referencedRelation: "events"
@@ -815,6 +875,9 @@ isOneToOne: false
 "confirm_allocation":
 { Args: { "cycle": string }; Returns: undefined
                            },
+"create_esn_token":
+{ Args: { "label": string,"valid_days"?: number }; Returns: string
+                           },
 "cycle_deadline_limits":
 { Args: { "cycle": string }; Returns: {
               "description_latest": string,"form_latest": string
@@ -822,7 +885,7 @@ isOneToOne: false
                            },
 "cycle_hand_in":
 { Args: { "cycles": (string)[] }; Returns: {
-              "belege_missing": number,"cycle_id": string,"ends_at": string,"event_id": string,"photos_in": boolean,"receipts": number,"signed_off": boolean,"starts_at": string,"status": Database["public"]['Enums']["event_status"]
+              "belege_missing": number,"cycle_id": string,"ends_at": string,"event_id": string,"photos_in": boolean,"receipts": number,"report_in": boolean,"signed_off": boolean,"starts_at": string,"status": Database["public"]['Enums']["event_status"]
             }[]
                            },
 "cycle_responses":
@@ -861,6 +924,14 @@ isOneToOne: false
 "enqueue_job":
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
                            },
+"esn_api_link":
+{ Args: { "event": string,"hash": string,"url": string }; Returns: undefined
+                           },
+"esn_token_owner":
+{ Args: { "hash": string }; Returns: {
+              "email": string,"profile_id": string,"token_id": string
+            }[]
+                           },
 "event_accepts_signins":
 { Args: { "event": string }; Returns: boolean
                            },
@@ -872,6 +943,11 @@ isOneToOne: false
                            },
 "event_on_calendar":
 { Args: { "event": string }; Returns: boolean
+                           },
+"event_report_prefill":
+{ Args: { "event": string }; Returns: {
+              "headcount": number,"local_participants": number,"organizers": number
+            }[]
                            },
 "event_signin_counts":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -918,6 +994,9 @@ isOneToOne: false
                            },
 "mark_description_published":
 { Args: { "event": string,"message_name": string,"posted_text": string }; Returns: undefined
+                           },
+"mark_esn_uploaded":
+{ Args: { "event": string,"url": string }; Returns: undefined
                            },
 "mark_photos_uploaded":
 { Args: { "event": string,"uploaded": boolean }; Returns: undefined
@@ -984,6 +1063,9 @@ isOneToOne: false
 "review_description":
 { Args: { "comment": string,"decision": string,"event": string,"rendered"?: string }; Returns: undefined
                            },
+"revoke_esn_token":
+{ Args: { "token": string }; Returns: undefined
+                           },
 "roster_published":
 { Args: { "event": string }; Returns: boolean
                            },
@@ -994,6 +1076,9 @@ isOneToOne: false
 { Args: { "event": string,"patch": Json }; Returns: {
               "fields": Json,"status": string,"version": number
             }[]
+                           },
+"save_event_report":
+{ Args: { "access_needs"?: boolean,"access_note"?: string,"could_be_better"?: string,"event": string,"goals_reached": boolean,"intl_participants": number,"local_participants": number,"organizers": number,"went_well": string }; Returns: undefined
                            },
 "schedule_photo_jobs":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -1037,6 +1122,9 @@ isOneToOne: false
                            },
 "test_invoke_job_runner":
 { Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"unmark_esn_uploaded":
+{ Args: { "event": string }; Returns: undefined
                            },
 "withdraw_receipt":
 { Args: { "claim": string }; Returns: undefined

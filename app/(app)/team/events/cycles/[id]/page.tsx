@@ -73,7 +73,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
               <ul className="text-sm space-y-1" data-testid="hand-in-open">
                 {handInOpen.map((h) => {
                   const e = (events ?? []).find((x) => x.id === h.event_id);
-                  const missing = [!h.signed_off && "attendance list", !h.photos_in && "photos", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean);
+                  const missing = [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean);
                   return (
                     <li key={h.event_id} className="flex flex-wrap gap-x-2">
                       <Link href={`/events/${h.event_id}/hand-in?from=cycle:${cycle.id}`} className="font-medium text-esn hover:underline">

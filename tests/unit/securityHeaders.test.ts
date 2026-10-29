@@ -48,11 +48,11 @@ describe("security headers", () => {
 });
 
 describe("public paths (no login)", () => {
-  it.each(["/login", "/auth/callback", "/event/abc", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs/run"])("%s is public", (p) => {
+  it.each(["/login", "/auth/callback", "/event/abc", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs/run", "/api/esn/events/x"])("%s is public", (p) => {
     expect(isPublicPath(p)).toBe(true);
   });
 
-  it.each(["/", "/calendar", "/events/1", "/eventsx", "/loginx", "/admin", "/team/finance", "/kiosk/1", "/api/other", "/api/jobsx"])(
+  it.each(["/", "/calendar", "/events/1", "/eventsx", "/loginx", "/admin", "/team/finance", "/kiosk/1", "/api/other", "/api/jobsx", "/api/esnx"])(
     "%s needs a member",
     (p) => {
       expect(isPublicPath(p)).toBe(false);

@@ -15,6 +15,7 @@ const base: ChecklistInput = {
   listSignedOff: false,
   photos: null,
   photosIn: false,
+  reportIn: false,
   receipts: 0,
   belegeMissing: 0,
 };
@@ -22,7 +23,7 @@ const state = (i: Partial<ChecklistInput>) => Object.fromEntries(eventChecklist(
 
 describe("event checklist", () => {
   it("before the event: team and space done, description to do, hand-in later", () => {
-    expect(state({})).toEqual({ team: "done", chat: "done", description: "todo", attendance: "later", photos: "later", receipts: "later" });
+    expect(state({})).toEqual({ team: "done", chat: "done", description: "todo", attendance: "later", photos: "later", report: "later", receipts: "later" });
   });
 
   it("flags a missing OC or helpers, and a late description", () => {
@@ -34,9 +35,10 @@ describe("event checklist", () => {
 
   it("after the event: the hand-in is due, Belege count", () => {
     const after = { now: Date.parse("2026-11-21T10:00:00Z"), description: "published" as const };
-    expect(state(after)).toMatchObject({ attendance: "todo", photos: "todo", receipts: "todo" });
+    expect(state(after)).toMatchObject({ attendance: "todo", photos: "todo", report: "todo", receipts: "todo" });
     expect(state({ ...after, listSignedOff: true, photos: 12, photosIn: true, receipts: 3, belegeMissing: 1 })).toMatchObject({ attendance: "done", photos: "done", receipts: "todo" });
-    const done = eventChecklist({ ...base, ...after, listSignedOff: true, photos: 12, photosIn: true, receipts: 3, belegeMissing: 0 });
+    expect(checklistDone(eventChecklist({ ...base, ...after, listSignedOff: true, photos: 12, photosIn: true, receipts: 3, belegeMissing: 0 }))).toBe(false);
+    const done = eventChecklist({ ...base, ...after, listSignedOff: true, photos: 12, photosIn: true, reportIn: true, receipts: 3, belegeMissing: 0 });
     expect(checklistDone(done)).toBe(true);
   });
 
@@ -57,7 +59,7 @@ describe("event checklist", () => {
 describe("checklist links and deadlines", () => {
   it("every item says where it is done; the description carries its deadline until done", () => {
     const items = eventChecklist(base);
-    expect(Object.fromEntries(items.map((x) => [x.key, x.tab]))).toEqual({ team: "", chat: "", description: "description", attendance: "attendance", photos: "hand-in", receipts: "hand-in" });
+    expect(Object.fromEntries(items.map((x) => [x.key, x.tab]))).toEqual({ team: "", chat: "", description: "description", attendance: "attendance", photos: "hand-in", report: "hand-in", receipts: "hand-in" });
     expect(items.find((x) => x.key === "description")!.due).toBe(base.descriptionDeadline);
     expect(eventChecklist({ ...base, description: "published" }).find((x) => x.key === "description")!.due).toBeUndefined();
     expect(items.find((x) => x.key === "photos")!.detail).toBe("after the event");
@@ -75,9 +77,11 @@ describe("next step", () => {
     expect(step({ description: "submitted" })).toMatchObject({ kind: "waiting" });
     expect(step({ description: "published" })).toMatchObject({ kind: "done", tab: "attendance" });
     expect(step({ now: after, description: "published" })).toMatchObject({ label: "Sign off the attendance list", tab: "attendance" });
-    expect(step({ now: after, listSignedOff: true })).toMatchObject({ label: "Upload the photos to Drive and hand in the Belege", tab: "hand-in" });
-    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1 })).toMatchObject({ label: "Upload the photos to Drive and hand in the Belege" });
-    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true })).toMatchObject({ kind: "done" });
+    expect(step({ now: after, listSignedOff: true })).toMatchObject({ label: "Upload the photos to Drive and write the event report", tab: "hand-in" });
+    expect(step({ now: after, listSignedOff: true, belegeMissing: 1 })).toMatchObject({ label: "Upload the photos to Drive, write the event report and hand in the Belege" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1, reportIn: true })).toMatchObject({ label: "Hand in the Belege" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true })).toMatchObject({ label: "Write the event report", anchor: "hand-in-status" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, reportIn: true })).toMatchObject({ kind: "done" });
   });
 
   it("a helper: help, then hand in their Belege", () => {

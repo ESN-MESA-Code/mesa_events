@@ -281,10 +281,64 @@ SPECS_EXTRA.push(
   }
 );
 
+// ESN Activities (brief 2026-10-29, B): the report like the hand-in; the
+// upload status for Comms, Events and executives only; tokens their owner's.
+const reportOf = async (eventId: string): Promise<Match> => {
+  await admin.from("event_reports").upsert({ event_id: eventId, intl_participants: 10, organizers: 2, went_well: "RLS" });
+  return { event_id: eventId };
+};
+const uploadOf = async (eventId: string): Promise<Match> => {
+  await admin.from("esn_uploads").upsert({ event_id: eventId, activity_url: "https://activities.esn.org/activity/rls-1", via: "manual", uploaded_by: "comms@esnmesa.org" });
+  return { event_id: eventId };
+};
+const tokenOf = async (owner: string): Promise<Match> => {
+  const hash = crypto.createHash("sha256").update(uid()).digest("hex");
+  return insertRow("esn_access_tokens", { profile_id: owner, label: "RLS", token_hash: hash, token_prefix: "mesa_esn_RLS", expires_at: "2999-01-01T00:00:00Z" });
+};
+const ESN_READERS: Role[] = ["comms", "events", "executive"];
+
+SPECS_EXTRA.push(
+  {
+    table: "event_reports",
+    select: [
+      { name: "report of event A", make: (w) => reportOf(w.eventA.id), allowed: STAFF_A },
+      { name: "report of event B", make: (w) => reportOf(w.eventB.id), allowed: TEAM },
+    ],
+    insert: [{ payload: (w) => ({ event_id: w.eventD.id, intl_participants: 1, organizers: 1, went_well: "x" }), allowed: NOBODY, match: (p) => ({ event_id: p.event_id as string }) }],
+    update: [{ name: "report of A", make: (w) => reportOf(w.eventA.id), patch: () => ({ intl_participants: 999 }), allowed: NOBODY }],
+    delete: [{ name: "report of A", make: (w) => reportOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "esn_uploads",
+    select: [{ name: "upload of event A", make: (w) => uploadOf(w.eventA.id), allowed: ESN_READERS }],
+    insert: [{ payload: (w) => ({ event_id: w.eventD.id, activity_url: "https://activities.esn.org/activity/x-1", via: "manual", uploaded_by: "x" }), allowed: NOBODY, match: (p) => ({ event_id: p.event_id as string }) }],
+    update: [{ name: "upload of A", make: (w) => uploadOf(w.eventA.id), patch: () => ({ uploaded_by: "forged" }), allowed: NOBODY }],
+    delete: [{ name: "upload of A", make: (w) => uploadOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "esn_access_tokens",
+    select: [
+      { name: "Comms member's token", make: () => tokenOf(USERS.comms.id), allowed: ["comms"] },
+      { name: "member's token", make: () => tokenOf(USERS.member.id), allowed: ["member"] },
+    ],
+    insert: [
+      {
+        name: "own token",
+        payload: (_w, role) => ({ id: uid(), profile_id: userOf(role).id, label: "RLS", token_hash: "0".repeat(64), token_prefix: "x", expires_at: "2999-01-01T00:00:00Z" }),
+        allowed: NOBODY,
+        match: (p) => ({ id: p.id as string }),
+      },
+    ],
+    update: [{ name: "Comms member's token", make: () => tokenOf(USERS.comms.id), patch: () => ({ expires_at: "3999-01-01T00:00:00Z", revoked_at: null }), allowed: NOBODY }],
+    delete: [{ name: "Comms member's token", make: () => tokenOf(USERS.comms.id), allowed: NOBODY }],
+  }
+);
+
 export async function cleanupExtra() {
   await admin.from("event_ideas").delete().like("title", "RLS%");
   const { data: claims } = await admin.from("reimbursements").select("id, receipt_id").eq("claimant_id", USERS.helper.id).eq("suggested_cents", 50);
   if (claims?.length) await admin.from("reimbursements").delete().in("id", claims.map((c) => c.id));
   await admin.from("receipts").delete().eq("vendor", "RLS");
   await admin.from("payout_batches").delete().gte("month", "3000-01-01");
+  await admin.from("esn_access_tokens").delete().eq("label", "RLS");
 }

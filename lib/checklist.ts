@@ -25,6 +25,8 @@ export interface ChecklistInput {
   photos: number | null;
   /** At least one file in the folder, or ticked by hand (lib/photos.ts photosIn). */
   photosIn: boolean;
+  /** The OC's event report after the event (ESN Activities) is in. */
+  reportIn: boolean;
   receipts: number;
   belegeMissing: number;
 }
@@ -82,6 +84,13 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
       tab: "hand-in",
     },
     {
+      key: "report",
+      label: "Event report written",
+      state: i.reportIn ? "done" : started ? "todo" : "later",
+      detail: i.reportIn ? undefined : started ? "participants and results, for ESN Activities" : "after the event",
+      tab: "hand-in",
+    },
+    {
       key: "receipts",
       label: "Belege handed to Finance",
       state: i.belegeMissing > 0 ? "todo" : i.receipts > 0 ? "done" : started ? "todo" : "later",
@@ -115,7 +124,7 @@ export interface NextStep {
  */
 export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const started = Date.parse(i.startsAt) <= i.now;
-  const handInOpen = !i.photosIn || i.belegeMissing > 0;
+  const handInOpen = !i.photosIn || !i.reportIn || i.belegeMissing > 0;
   if (i.status === "cancelled" || i.status === "dropped") {
     return i.belegeMissing > 0
       ? { label: "Hand the Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" }
@@ -138,8 +147,15 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
     return { label: "All set – the attendance list opens on the day", tab: "attendance", anchor: "sign-off", kind: "done" };
   }
   if (!i.listSignedOff) return { label: "Sign off the attendance list", tab: "attendance", anchor: "sign-off", kind: "action" };
-  if (handInOpen) return { label: "Upload the photos to Drive and hand in the Belege", tab: "hand-in", anchor: "hand-in-status", kind: "action" };
+  if (handInOpen) return { label: handInLabel(i), tab: "hand-in", anchor: "hand-in-status", kind: "action" };
   return { label: "Hand-in complete", tab: "hand-in", anchor: "hand-in-status", kind: "done" };
+}
+
+/** "Upload the photos to Drive, write the event report and hand in the Belege" – what is still open. */
+function handInLabel(i: ChecklistInput): string {
+  const parts = [!i.photosIn && "upload the photos to Drive", !i.reportIn && "write the event report", i.belegeMissing > 0 && "hand in the Belege"].filter((x): x is string => !!x);
+  const text = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export const TAB_LABEL: Record<EventTab, string> = { "": "Overview", description: "Description", attendance: "Attendance", "hand-in": "Hand-in" };

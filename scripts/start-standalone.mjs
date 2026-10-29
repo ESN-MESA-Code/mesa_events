@@ -12,6 +12,7 @@ if (!existsSync(".next/standalone/server.js")) {
 cpSync(".next/static", ".next/standalone/.next/static", { recursive: true });
 cpSync("public", ".next/standalone/public", { recursive: true });
 cpSync("legal", ".next/standalone/legal", { recursive: true });
+cpSync("tools/esn-activities", ".next/standalone/tools/esn-activities", { recursive: true });
 
 const local = process.argv.includes("--local");
 const child = spawn(process.execPath, ["server.js"], {

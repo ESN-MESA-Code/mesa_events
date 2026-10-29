@@ -90,3 +90,8 @@ export function photoUploadMessage(title: string, folder: { url: string; name: s
   if (reportUrl) lines.push(`One organizer please also fill in the short *event report* (for ESN Activities): ${reportUrl}`);
   return lines.join("\n");
 }
+
+/** Comms uploaded the event to ESN Activities (the bot's "📢 PR has uploaded …"), once per event. */
+export function esnUploadedMessage(title: string, url: string): string {
+  return `${MENTION_ALL} 📢 Comms has uploaded *${title}* on ESN Activities. <${url}|Open>`;
+}

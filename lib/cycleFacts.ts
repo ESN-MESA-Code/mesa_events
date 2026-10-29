@@ -19,6 +19,7 @@ export interface HandInRow {
   starts_at: string;
   signed_off: boolean;
   photos_in: boolean;
+  report_in: boolean;
   belege_missing: number;
 }
 
@@ -29,6 +30,9 @@ export type CycleWithProgress = CycleRow & {
   handInOpen: HandInRow[];
 };
 
+
+/** Handed in: list signed off, photos in Drive, the event report written, every Beleg with Finance. */
+const handedIn = (h: HandInRow) => h.signed_off && h.photos_in && h.report_in && h.belege_missing === 0;
 
 /** Description states that count as "in". */
 const IN = ["submitted", "approved", "published"];
@@ -73,10 +77,10 @@ export async function cyclesWithProgress(supabase: Db, cycles: CycleRow[]): Prom
         handIn: {
           total: running.length,
           happened: happened.length,
-          done: happened.filter((h) => h.signed_off && h.photos_in && h.belege_missing === 0).length,
+          done: happened.filter(handedIn).length,
         },
       };
-      const handInOpen = happened.filter((h) => !(h.signed_off && h.photos_in && h.belege_missing === 0));
+      const handInOpen = happened.filter((h) => !handedIn(h));
       return { ...c, facts, progress: cycleProgress(facts), handInOpen };
     })
   );

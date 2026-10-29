@@ -25,7 +25,8 @@ export interface CycleFacts {
   descriptions: { total: number; in: number; published: number; upcomingMissing: number };
   /**
    * Running events (not cancelled), how many have started, and how many are
-   * handed in: attendance list signed off, photos, every Beleg with Finance.
+   * handed in: attendance list signed off, photos in Drive, the event report,
+   * every Beleg with Finance.
    */
   handIn: { total: number; happened: number; done: number };
 }

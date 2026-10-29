@@ -5,13 +5,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   // Files read from disk at runtime must be in the standalone bundle: pages
-  // rendered on request read their legal texts from legal/*.md.
+  // rendered on request read their legal texts from legal/*.md, the ESN
+  // Activities page the browser script from tools/esn-activities/.
   outputFileTracingIncludes: {
-    "/**": ["./legal/*.md"],
+    "/**": ["./legal/*.md", "./tools/esn-activities/*.js"],
   },
   experimental: {
     serverActions: {
-      // Hand-in photos are uploaded straight to Storage; actions only carry form data.
+      // Actions only carry form data (photos go straight to Drive).
       bodySizeLimit: "1mb",
     },
   },

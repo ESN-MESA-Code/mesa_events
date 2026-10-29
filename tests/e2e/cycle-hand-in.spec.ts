@@ -22,6 +22,7 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   const handIn = async (eventId: string) => {
     await admin.from("attendance_lists").update({ signed_off_at: day(21), signed_off_by: USERS.oc.email, headcount: 10 }).eq("event_id", eventId);
     await admin.from("event_photo_folders").upsert({ event_id: eventId, photo_count: 3, counted_at: day(22) });
+    await admin.from("event_reports").upsert({ event_id: eventId, intl_participants: 9, organizers: 2, went_well: "Fine." });
   };
   await handIn(done.id);
   const label = cycleLabel(month);
@@ -35,7 +36,7 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   await expect(page.getByTestId("cycle-next")).not.toContainText("descriptions are missing");
   const missing = page.getByTestId("hand-in-open");
   await expect(missing).toContainText(`Not handed in ${tag}`);
-  await expect(missing).toContainText("missing: attendance list, photos");
+  await expect(missing).toContainText("missing: attendance list, photos, event report");
   await expect(missing).not.toContainText(`Handed in ${tag}`);
   await expect(missing.getByRole("link", { name: `Not handed in ${tag}` })).toHaveAttribute("href", `/events/${open.id}/hand-in?from=cycle:${cycle!.id}`);
 

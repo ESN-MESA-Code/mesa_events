@@ -10,12 +10,19 @@ import { withdrawReceipt } from "@/app/actions/handin";
 import { PhotoFolder, PreapprovalForm, ReceiptForm } from "./HandInClient";
 import { photosIn } from "@/lib/photos";
 import { plural } from "@/lib/plural";
+import { EventReportForm } from "./EventReport";
+import { EsnUpload } from "@/components/EsnUpload";
+import { loadEsn } from "@/lib/esn/load";
+import type { EventReport } from "@/lib/esn/formData";
+import { hasRole } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
 
-// After the event: photos (in the event's Drive folder), the attendance list closed, every
-// receipt registered and the paper Beleg handed to Finance.
+// After the event: photos (in the event's Drive folder), the attendance
+// list closed, the event report (for ESN Activities), every receipt
+// registered and the paper Beleg handed to Finance. Comms, Events and
+// executives also see the event's ESN Activities status here.
 export default async function HandInPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { event, supabase, viewer, isStaff, isTeam, isOc, isEvents, myAssignment } = await loadEventForPage(id);
@@ -27,7 +34,8 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const [{ data: list }, { data: photos }, { data: claims }, { data: summary }, { data: policyId }, { data: preapprovals }, { data: budget }] = await Promise.all([
+  const seesEsn = hasRole(viewer.roles, "comms") || isEvents || hasRole(viewer.roles, "executive");
+  const [{ data: list }, { data: photos }, { data: claims }, { data: summary }, { data: policyId }, { data: preapprovals }, { data: budget }, { data: report }, { data: prefill }, esn] = await Promise.all([
     supabase.from("attendance_lists").select("signed_off_at, headcount").eq("event_id", id).maybeSingle(),
     supabase
       .from("event_photo_folders")
@@ -44,7 +52,12 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     supabase.rpc("policy_for", { day: berlinDate(event.starts_at) }),
     supabase.from("preapprovals").select("id, description, estimated_cents, status, note").eq("event_id", id).eq("requester_id", viewer.id),
     supabase.from("trip_budgets").select("amount_cents").eq("event_id", id).maybeSingle(),
+    supabase.from("event_reports").select("*").eq("event_id", id).maybeSingle(),
+    supabase.rpc("event_report_prefill", { event: id }),
+    seesEsn ? loadEsn(supabase, [id]).then((m) => m.get(id) ?? null) : Promise.resolve(null),
   ]);
+  const pre = (prefill ?? [])[0];
+  const canReport = isOc || isEvents;
   const { data: rules } = policyId ? await supabase.from("reimbursement_rules").select("*").eq("policy_id", policyId as string) : { data: [] };
   const eventType = event.type as Exclude<Rule["event_type"], "any">;
   const kinds = kindsFor((rules ?? []) as Rule[], eventType);
@@ -60,7 +73,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           <CardTitle>Hand-in status</CardTitle>
           {!handInOpen && <Badge>Opens on {formatShortDate(event.starts_at)}</Badge>}
         </CardHeader>
-        <CardContent className="text-sm grid gap-2 sm:grid-cols-3" data-testid="handin-status">
+        <CardContent className="text-sm grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="handin-status">
           <p>
             {list?.signed_off_at ? "✅" : "⬜"} Attendance list{" "}
             {list?.signed_off_at ? (
@@ -76,6 +89,18 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           <p>
             {photosIn(photos) ? "✅" : "⬜"} Photos in Drive:{" "}
             {photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "ticked by hand" : started ? "none yet" : <span className="text-gray-500">– after the event</span>}
+          </p>
+          <p data-testid="report-status">
+            {report ? "✅" : "⬜"} Event report{" "}
+            {report ? (
+              "written"
+            ) : started ? (
+              <a href="#event-report" className="text-esn hover:underline">
+                not written yet
+              </a>
+            ) : (
+              <span className="text-gray-500">– after the event</span>
+            )}
           </p>
           <p data-testid="receipts-status">
             {s.receipts && !s.belege_missing ? "✅" : "⬜"}{" "}
@@ -210,6 +235,53 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             )}
           </CardContent>
         </Card>
+
+        <Card id="event-report" className="scroll-mt-4">
+          <CardHeader>
+            <CardTitle>Event report</CardTitle>
+            {report && <Badge tone="green">Written</Badge>}
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-gray-600">Participants and results for ESN Activities – one report per event, by the OC.</p>
+            {!started ? (
+              <p className="text-sm text-gray-500">The report is written after the event has started.</p>
+            ) : canReport && ["confirmed", "understaffed", "completed"].includes(event.status) ? (
+              <EventReportForm eventId={id} report={(report as EventReport | null) ?? null} prefill={{ headcount: pre?.headcount ?? null, local: pre?.local_participants ?? 0, organizers: pre?.organizers ?? 0 }} />
+            ) : report ? (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm" data-testid="event-report">
+                <dt className="text-gray-500">International</dt>
+                <dd>{report.intl_participants}</dd>
+                <dt className="text-gray-500">Local</dt>
+                <dd>{report.local_participants}</dd>
+                <dt className="text-gray-500">Organizers</dt>
+                <dd>{report.organizers}</dd>
+                <dt className="text-gray-500">Goals reached</dt>
+                <dd>{report.goals_reached ? "Yes" : "No"}</dd>
+                <dt className="text-gray-500">Went well</dt>
+                <dd className="break-words">{report.went_well}</dd>
+                {report.could_be_better && (
+                  <>
+                    <dt className="text-gray-500">Could be better</dt>
+                    <dd className="break-words">{report.could_be_better}</dd>
+                  </>
+                )}
+              </dl>
+            ) : (
+              <EmptyState>The OC has not written the report yet.</EmptyState>
+            )}
+          </CardContent>
+        </Card>
+
+        {esn && (
+          <Card id="esn-activities" className="scroll-mt-4">
+            <CardHeader>
+              <CardTitle>ESN Activities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EsnUpload eventId={id} status={esn.status} canSet={hasRole(viewer.roles, "comms")} />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
     </div>

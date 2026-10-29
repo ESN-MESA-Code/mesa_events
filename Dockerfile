@@ -27,6 +27,7 @@ COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/legal ./legal
+COPY --from=build --chown=app:app /app/tools/esn-activities ./tools/esn-activities
 USER app
 EXPOSE 3000
 CMD ["node", "server.js"]

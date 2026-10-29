@@ -5,6 +5,7 @@ import type { JobHandler } from "@/lib/jobs/runner";
 import { createSpace, eventStatusChange, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
 import { publishDescription } from "@/lib/jobs/descriptions";
 import { countPhotos, ensureFolder, photoReminder } from "@/lib/jobs/photos";
+import { esnUploaded } from "@/lib/jobs/esn";
 
 /** Mirrors the configured Google groups into public.role_members ('group' rows). */
 export const syncRoles: JobHandler = async (_job, { admin, google, env }) => {
@@ -34,4 +35,5 @@ export const HANDLERS: Record<string, JobHandler> = {
   "drive.ensure_folder": ensureFolder,
   "drive.count_photos": countPhotos,
   "chat.photo_reminder": photoReminder,
+  "chat.esn_uploaded": esnUploaded,
 };
