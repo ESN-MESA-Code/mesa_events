@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import Image from "next/image";
+import { BrandMark } from "@/components/BrandMark";
 import { supabase } from "@/lib/supabase/client";
 import { isCountryCode, matchCountry } from "@/lib/countries";
 import CountryCombobox from "@/components/attendance/CountryCombobox";
@@ -324,14 +324,7 @@ export default function AttendanceForm({ event, texts, kiosk }: Props) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-lg w-full overflow-hidden">
         {/* ESN branding strip */}
         <div className="bg-esn px-6 py-4 flex items-center gap-3">
-          <Image
-            src="/esn-mesa-logo-white.png"
-            alt="ESN MESA München"
-            width={600}
-            height={334}
-            priority
-            className="h-12 w-auto"
-          />
+          <BrandMark />
         </div>
 
         <div className="p-6">

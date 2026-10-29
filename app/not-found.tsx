@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { BrandMark } from "@/components/BrandMark";
 
 // Outside the member area (and anything the (app) layout does not catch).
 export default function NotFound() {
@@ -7,8 +7,8 @@ export default function NotFound() {
     <div className="min-h-[70vh] flex flex-col">
       <header className="bg-esn text-white shadow-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center">
-          <Link href="/" aria-label="MESA Events – home">
-            <Image src="/esn-mesa-logo-white.png" alt="ESN MESA München" width={600} height={334} className="h-11 w-auto" />
+          <Link href="/" aria-label="ESN MESA Events – home">
+            <BrandMark product="Events" />
           </Link>
         </div>
       </header>

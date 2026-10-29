@@ -1,7 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
 import { redirect } from "next/navigation";
 import Nav from "@/components/Nav";
+import { BrandMark } from "@/components/BrandMark";
 import { getViewer } from "@/lib/supabase/session";
 import { navItems } from "@/lib/nav";
 import { volunteerForms } from "@/lib/eventStatus";
@@ -26,9 +26,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <header className="bg-esn text-white shadow-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-4">
-          <Link href="/" className="shrink-0 flex items-center gap-3" aria-label="MESA Events – home">
-            <Image src="/esn-mesa-logo-white.png" alt="ESN MESA München" width={600} height={334} priority className="h-11 w-auto" />
-            <span className="hidden sm:inline text-lg font-semibold tracking-tight">Events</span>
+          <Link href="/" className="shrink-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white" aria-label="ESN MESA Events – home">
+            <BrandMark product="Events" />
           </Link>
           {/* No Google profile picture: loading it would show Google the member's IP address. */}
           <div className="ml-auto flex items-center gap-3 min-w-0">

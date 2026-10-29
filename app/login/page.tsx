@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Image from "next/image";
+import { BrandMark } from "@/components/BrandMark";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { WORKSPACE_DOMAIN, safeNext } from "@/lib/auth";
@@ -40,8 +40,8 @@ function LoginForm() {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-sm text-center">
-      <Image src="/esn-mesa-logo.png" alt="ESN MESA München" width={600} height={334} priority className="h-20 w-auto mx-auto" />
-      <h1 className="text-xl font-bold text-gray-900 mt-4">MESA Events</h1>
+      <BrandMark tone="dark" size="lg" />
+      <h1 className="text-xl font-bold text-gray-900 mt-4">Events</h1>
       <p className="text-sm text-gray-500 mt-1 mb-6">Sign in with your @{WORKSPACE_DOMAIN} account</p>
 
       {error && (
