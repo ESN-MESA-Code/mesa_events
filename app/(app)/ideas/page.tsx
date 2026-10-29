@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { formatDate } from "@/lib/dates";
+import { berlinDate, formatDate, nowMs } from "@/lib/dates";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawIdea } from "@/app/actions/planning";
-import { IdeaForm } from "./IdeaForm";
+import { IdeasWorkspace } from "./Inspiration";
+import type { PastEvent } from "@/lib/inspiration";
 import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Ideas" };
@@ -19,24 +20,23 @@ const STATUS: Record<string, { label: string; tone: "gray" | "green" | "red" | "
 export default async function IdeasPage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
-  const { data: ideas } = await supabase
-    .from("event_ideas")
-    .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id")
-    .eq("proposer_id", viewer.id)
-    .order("created_at", { ascending: false });
+  const [{ data: ideas }, { data: past }] = await Promise.all([
+    supabase
+      .from("event_ideas")
+      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id")
+      .eq("proposer_id", viewer.id)
+      .order("created_at", { ascending: false }),
+    // Previous events for "Get inspired": only what members may read (published descriptions, headcounts, photo folders).
+    supabase.rpc("inspiration_events"),
+  ]);
 
   return (
     <>
-      <PageHeader title="Ideas" description="Propose an event. The Events team builds each month's schedule from the ideas; by default you become its OC." />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Propose an idea</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <IdeaForm />
-          </CardContent>
-        </Card>
+      <PageHeader
+        title="Ideas"
+        description="Propose an event – or get inspired by what ran before. The Events team builds each month's schedule from the ideas; by default you become its OC."
+      />
+      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} today={berlinDate(new Date(nowMs()).toISOString())}>
         <Card>
           <CardHeader>
             <CardTitle>Your ideas</CardTitle>
@@ -74,7 +74,7 @@ export default async function IdeasPage() {
             </ul>
           </CardContent>
         </Card>
-      </div>
+      </IdeasWorkspace>
     </>
   );
 }

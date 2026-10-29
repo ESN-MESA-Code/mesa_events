@@ -26,6 +26,7 @@ export const proposeIdea = defineAction(
     pitch: z.string().trim().max(2000).default(""),
     helpers_needed: helpers.default(2),
     wants_to_oc: z.boolean().default(true),
+    type_suggestion: z.enum(["standard", "special", "day_trip", "weekend_trip"]).nullable().optional(),
   }),
   async (ctx, input) => {
     const { data, error } = await ctx.supabase

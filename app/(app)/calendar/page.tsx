@@ -23,6 +23,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .gte("starts_at", since.toISOString())
       .neq("status", "draft")
       .neq("status", "dropped")
+      // History imported from the bot is for "Get inspired" on /ideas, not the calendar.
+      .eq("source", "platform")
       .order("starts_at"),
     supabase.from("assignments").select("event_id, role").eq("profile_id", viewer.id).eq("status", "active"),
     supabase.rpc("open_slots"),

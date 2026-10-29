@@ -292,14 +292,15 @@ export function IdeaCard({
   events,
   canEdit,
 }: {
-  idea: { id: string; title: string; date: string; pitch: string; helpers: number; wantsToOc: boolean; proposer: string };
+  idea: { id: string; title: string; date: string; pitch: string; helpers: number; wantsToOc: boolean; proposer: string; typeSuggestion?: EventType | null };
   cycleId: string;
   events: Array<{ id: string; title: string }>;
   canEdit: boolean;
 }) {
   const { run, pending, error } = useAction();
   const [mode, setMode] = useState<"none" | "accept" | "merge" | "reject" | "move">("none");
-  const [type, setType] = useState<EventType>("standard");
+  // "Propose this again" on /ideas suggests the earlier event's type.
+  const [type, setType] = useState<EventType>(idea.typeSuggestion ?? "standard");
   const [start, setStart] = useState(`${idea.date}T19:00`);
   const [helpers, setHelpers] = useState(idea.helpers);
   const [mergeInto, setMergeInto] = useState(events[0]?.id ?? "");

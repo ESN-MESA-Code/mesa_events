@@ -33,7 +33,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
       .order("starts_at"),
     supabase
       .from("event_ideas")
-      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, profiles:proposer_id(full_name)")
+      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, type_suggestion, profiles:proposer_id(full_name)")
       .eq("status", "proposed")
       .gte("proposed_date", cycle.month)
       .lte("proposed_date", monthEnd)
@@ -193,6 +193,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                     pitch: i.pitch,
                     helpers: i.helpers_needed,
                     wantsToOc: i.wants_to_oc,
+                    typeSuggestion: i.type_suggestion,
                     proposer: (i.profiles as { full_name: string } | null)?.full_name ?? "",
                   }}
                 />

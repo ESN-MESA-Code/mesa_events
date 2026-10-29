@@ -1,0 +1,49 @@
+Date,Time,Event,Venue,Price,Space,✔ Approved,⬆ Telegram,⬆ pretix,⬆ ESN,Telegram picture,Upload status,Description,pretix event,ESN Activities link,Chat markup,ESN form data,Published by,Last updated,Event ID
+"Thu, 06.11.2025",19:00,Pub Quiz,"Shamrock Munich, Trautenwolfstraße 6, 80802 Munich",€ 5.00 (incl. a drink),Open space,TRUE,TRUE,FALSE,TRUE,,✓ Telegram · 01.11.2025 10:00 · pr@esnmesa.org,"🗓️ Thursday, 6 November 2025
+⏰ 19:00
+📍 Shamrock Munich, Trautenwolfstraße 6, 80802 Munich
+💸 € 5.00 (incl. a drink)
+
+Dear Internationals,
+
+Are you ready for a night of trivia? 🎉
+
+Teams of four battle it out over six rounds. Prizes for the best three teams!
+
+🤔 WHAT DOES THE EVENT LOOK LIKE?
+
+• Six rounds of questions
+• Prizes for the top three
+
+🎒 WHAT SHOULD I BRING?
+
+• Your smartest friends
+
+We can’t wait to see you there! ✨",,https://activities.esn.org/activity/pub-quiz-mesa-1111,,"{""v"":1,""types"":[""10""],""objectives"":[""413"",""426""],""intl"":34,""local"":5,""coord"":3,""reached"":true,""positive"":""Great mix of teams, lots of laughs."",""improve"":""Bigger room""}",pr@esnmesa.org,"Sat, 01.11.2025",spaces/TESTARCHIVEQUIZ1
+"Sat, 15.11.2025",TBA,"Hike to the Herzogstand","Herzogstand, 82432 Walchensee",FREE,Open space,TRUE,FALSE,FALSE,FALSE,,,"🗓️ Saturday, 15 November 2025
+⏰ TBA
+📍 Herzogstand, 82432 Walchensee
+💸 FREE
+
+Dear Internationals,
+
+Are you ready for a day in the mountains? 🎉
+
+We take the train to Walchensee and hike up together. Views guaranteed.
+
+🤔 WHAT DOES THE EVENT LOOK LIKE?
+
+• Train at 8:00
+• Hike up and down
+
+🎒 WHAT SHOULD I BRING?
+
+• Hiking boots
+• Snacks
+
+We can’t wait to hike with you! ✨",,,,"{""v"":1,""types"":[""9""],""objectives"":[""424"",""425""]}",pr@esnmesa.org,,spaces/TESTARCHIVEHIKE1
+"Wed, 04.03.2026",19:00,Pub Quiz #2,"Shamrock Munich, Trautenwolfstraße 6, 80802 Munich",€ 5.00,Open space,TRUE,FALSE,FALSE,FALSE,,,"Are you ready for round two of trivia? 🎉
+
+The quiz is back.",,,,,pr@esnmesa.org,,spaces/TESTARCHIVEQUIZ2
+,,,,,,,,,,,,,,,,,,,
+"Mon, 07.12.2099",19:00,Future event,Somewhere,TBA,Open space,FALSE,FALSE,FALSE,FALSE,,,,,,,,,,spaces/TESTARCHIVEFUTURE

@@ -4,12 +4,14 @@
 // form open, ideas for the month after, an event happening now (attendance
 // open), a past event ready for hand-in with receipts, Drive photos and an
 // event report (ready for ESN Activities), and one three weeks ago that is
-// handed in and uploaded to ESN Activities.
+// handed in and uploaded to ESN Activities, plus history from the bot's
+// Sheet for "Get inspired" on /ideas.
 // Run it again to start over: it replaces what it created before (everything
 // created_by demo@esnmesa.org, and whatever was added to its cycles). Never
 // touches .env.local.
 import { createClient } from "@supabase/supabase-js";
 import { LOCAL_ENV } from "./local-supabase.mjs";
+import { importArchive } from "./bot-archive.mjs";
 
 const db = createClient(LOCAL_ENV.NEXT_PUBLIC_SUPABASE_URL, LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const DEMO = "demo@esnmesa.org";
@@ -191,6 +193,22 @@ async function main() {
     "description"
   );
 
+  // History from the description bot's Sheet, for "Get inspired" on /ideas
+  // (as `npm run import:bot-archive` would bring it in).
+  const description = (hook, intro) => `Dear Internationals,\n\nAre you ready for ${hook}? 🎉\n\n${intro}\n\nWe can’t wait to see you there! ✨`;
+  const report = (intl, local, positive) => JSON.stringify({ intl, local, coord: 3, reached: true, positive });
+  const history = [
+    ["2025-10-02", "19:00", "Pub Quiz", "Shamrock Munich, Trautenwolfstraße 6, 80802 Munich", "€ 5.00", description("a night of trivia", "Teams of four battle it out over six rounds. Prizes for the best three teams!"), report(34, 5, "Great mix of teams.")],
+    ["2026-02-12", "19:00", "Pub Quiz #2", "Shamrock Munich, Trautenwolfstraße 6, 80802 Munich", "€ 5.00", description("round two of trivia", "The quiz is back, with a music round."), report(28, 3, "Even more teams than last time.")],
+    ["2026-06-18", "19:00", "Pub Quiz 2026", "Shamrock Munich, Trautenwolfstraße 6, 80802 Munich", "€ 5.00", description("the summer quiz", "Trivia in the beer garden."), ""],
+    ["2025-10-18", "08:00", "Hike to the Herzogstand", "Herzogstand, 82432 Walchensee", "FREE", description("a day in the mountains", "We take the train to Walchensee and hike up together. Views guaranteed."), JSON.stringify({ types: ["9"], intl: 21, local: 2, coord: 2, reached: true, positive: "Sunny and clear." })],
+    ["2025-09-27", "11:00", "Oktoberfest together", "Theresienwiese, 80336 München", "FREE", description("the Wiesn", "We meet at the Bavaria statue and find a table together."), report(61, 4, "Huge turnout, everyone found a seat.")],
+    ["2026-01-22", "18:30", "International Dinner", "Studentenwohnheim, Kaulbachstraße 49, 80539 München", "€ 3.00", description("food from all over the world", "Everyone brings a dish from home. We share everything."), report(52, 6, "So many dishes!")],
+    ["2026-04-16", "18:00", "Bouldering evening", "Boulderwelt München Ost (Hanne-Hiob-Straße 4, 81671 München)", "€ 12.50", description("an evening on the wall", "Beginner-friendly bouldering with rental shoes. Our volunteers show you the basics."), report(17, 1, "Everyone made it to the top of something.")],
+    ["2025-12-11", "18:00", "Christmas market walk", "Marienplatz, 80331 München", "FREE", description("Glühwein and lights", "We walk from Marienplatz to the medieval market. Mugs not included."), ""],
+  ].map(([date, time, title, venue, price, text, esnData], i) => ({ date, time, title, venue, price, description: text, esnLink: "", esnData, publishedBy: "pr@esnmesa.org", updated: "", eventId: `spaces/DEMOARCHIVE${i}` }));
+  const imported = await importArchive(db, history, { createdBy: DEMO });
+
   // The month after those: the volunteer form is open.
   const formMonth = addMonths([...confirmed.keys()].sort().at(-1), 1);
   // The form closes in four days, and on the month's first day at the latest.
@@ -216,7 +234,7 @@ async function main() {
     "ideas"
   );
 
-  console.log(`Replaced ${removed} demo events. Sign in with "Local test sign-in" (npm run dev:local).`);
+  console.log(`Replaced ${removed} demo events; ${imported.imported} events of history from the bot. Sign in with "Local test sign-in" (npm run dev:local).`);
   console.log(`  Quiz:   http://localhost:3000/events/${quiz}`);
   console.log(`  Hike:   http://localhost:3000/events/${hike} (under-staffed)`);
   console.log(`  Alps:   http://localhost:3000/events/${alps}`);
