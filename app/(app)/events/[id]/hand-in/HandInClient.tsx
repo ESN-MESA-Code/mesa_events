@@ -9,6 +9,7 @@ import { addEventPhoto, registerReceipt, requestPreapproval } from "@/app/action
 import { EXPENSE_KIND_LABELS, findRule, isValidIban, suggestAmount, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { formatCents, parseEuroToCents } from "@/lib/dates";
 import { photoPath, validateUpload } from "@/lib/uploads";
+import { plural } from "@/lib/plural";
 
 export function ReceiptForm({
   eventId,
@@ -234,7 +235,7 @@ export function PhotoUploader({ eventId }: { eventId: string }) {
       else problems.push(`${file.name}: ${describeError(r)}`);
     }
     setBusy(false);
-    setMessage(problems.length ? { tone: "error", text: problems.join(" · ") } : { tone: "success", text: `${ok} photo(s) handed in – they go to the event's Drive folder.` });
+    setMessage(problems.length ? { tone: "error", text: problems.join(" · ") } : { tone: "success", text: `${plural(ok, "photo")} handed in – they go to the event's Drive folder.` });
     router.refresh();
   }
 

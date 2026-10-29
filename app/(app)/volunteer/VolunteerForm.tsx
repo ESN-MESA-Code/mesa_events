@@ -5,6 +5,7 @@ import { Alert, Button, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { submitVolunteerForm } from "@/app/actions/planning";
 import { RANK_LABELS } from "@/lib/volunteer";
+import { plural } from "@/lib/plural";
 
 type Wish = { oc: number | null; helper: number | null };
 
@@ -30,7 +31,7 @@ export function VolunteerForm({
         e.preventDefault();
         const choices = Object.entries(wishes).map(([event_id, w]) => ({ event_id, oc_rank: w.oc, helper_rank: w.helper }));
         const count = choices.filter((c) => c.oc_rank !== null || c.helper_rank !== null).length;
-        if (!window.confirm(`Submit your answers (${count} event${count === 1 ? "" : "s"})? You can submit only once – afterwards ask the Events team to change anything.`)) return;
+        if (!window.confirm(`Submit your answers (${plural(count, "event")})? You can submit only once – afterwards ask the Events team to change anything.`)) return;
         run(submitVolunteerForm, { cycle_id: cycleId, choices, note });
       }}
       className="space-y-4"
@@ -47,7 +48,7 @@ export function VolunteerForm({
               <p className="font-medium text-gray-900 break-words">{e.title}</p>
               <p className="text-xs text-gray-500">
                 {e.when} · {e.type}
-                {e.location && ` · ${e.location}`} · {e.helpers} helpers
+                {e.location && ` · ${e.location}`} · {plural(e.helpers, "helper")}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:contents">

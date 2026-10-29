@@ -12,6 +12,7 @@ import { Alert, Badge, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { confirmAllocation } from "@/app/actions/planning";
 import { RosterBoard, type BoardEvent, type BoardPerson } from "./RosterBoard";
+import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Roster" };
 
@@ -78,7 +79,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
       </PageHeader>
       {conflicts.length > 0 && (
         <Alert tone="warning" className="mb-4">
-          {conflicts.length} time conflict{conflicts.length === 1 ? "" : "s"}:{" "}
+          {plural(conflicts.length, "time conflict")}:{" "}
           {conflicts
             .map((c) => `${people.get(c.profileId)?.name} on ${c.eventIds.map((e) => boardEvents.find((b) => b.id === e)?.title).join(" and ")}`)
             .join("; ")}

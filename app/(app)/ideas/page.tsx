@@ -5,6 +5,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawIdea } from "@/app/actions/planning";
 import { IdeaForm } from "./IdeaForm";
+import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Ideas" };
 
@@ -52,7 +53,7 @@ export default async function IdeasPage() {
                   </div>
                   {i.pitch && <p className="text-sm text-gray-600 whitespace-pre-line">{i.pitch}</p>}
                   <p className="text-xs text-gray-500">
-                    {i.helpers_needed} helper{i.helpers_needed === 1 ? "" : "s"} · {i.wants_to_oc ? "you OC it" : "someone else OCs"}
+                    {plural(i.helpers_needed, "helper")} · {i.wants_to_oc ? "you OC it" : "someone else OCs"}
                     {i.event_id && (
                       <>
                         {" · "}

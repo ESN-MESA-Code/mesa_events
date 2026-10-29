@@ -67,23 +67,23 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
     case "planning":
       if (f.events === 0) {
         current = "ideas";
-        action = f.openIdeas ? `Accept or reject the ${f.openIdeas} idea${f.openIdeas === 1 ? "" : "s"}, or add events` : "Add events (no ideas for this month yet)";
-        summary = `${f.openIdeas} open idea${f.openIdeas === 1 ? "" : "s"}, no events yet`;
+        action = f.openIdeas ? `Accept or reject the ${plural(f.openIdeas, "idea")}, or add events` : "Add events (no ideas for this month yet)";
+        summary = `${plural(f.openIdeas, "open idea")}, no events yet`;
       } else {
         current = "schedule";
         action = "Set the event types, then open the volunteer form";
-        summary = `${f.events} event${f.events === 1 ? "" : "s"} planned${f.openIdeas ? ` · ${f.openIdeas} idea${f.openIdeas === 1 ? "" : "s"} waiting` : ""}`;
+        summary = `${plural(f.events, "event")} planned${f.openIdeas ? ` · ${plural(f.openIdeas, "idea")} waiting` : ""}`;
       }
       break;
     case "form_open":
       current = "form";
       action = "Wait for answers, or close the form early";
-      summary = `form open · ${f.responses} answer${f.responses === 1 ? "" : "s"}`;
+      summary = `form open · ${plural(f.responses, "answer")}`;
       break;
     case "form_closed":
       current = "allocation";
       action = "Run the allocation";
-      summary = `form closed · ${f.responses} answer${f.responses === 1 ? "" : "s"} · allocate`;
+      summary = `form closed · ${plural(f.responses, "answer")} · allocate`;
       break;
     case "allocated":
       current = "roster";

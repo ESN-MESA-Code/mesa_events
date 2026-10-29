@@ -11,6 +11,7 @@ import type { ClaimStatus } from "@/lib/reimbursement";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
 import { ClaimStatusBadge, EventStatusBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
+import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -78,7 +79,7 @@ export default async function HomePage() {
         {forms.map((f) =>
           f.submittedAt ? (
             <Alert key={f.id} tone="success" data-testid="home-volunteer">
-              Volunteer form for <strong>{cycleLabel(f.month)}</strong>: submitted ✓ – you signed up for {f.events} event{f.events === 1 ? "" : "s"}.{" "}
+              Volunteer form for <strong>{cycleLabel(f.month)}</strong>: submitted ✓ – you signed up for {plural(f.events, "event")}.{" "}
               <Link href="/volunteer" className="font-medium underline">
                 See your answers
               </Link>
@@ -156,7 +157,7 @@ export default async function HomePage() {
                         </Link>
                         <span className="text-xs text-gray-500">{formatShortDate(e.starts_at)}</span>
                         <Badge tone="amber" className="ml-auto">
-                          {s.open_oc ? "OC needed" : `${s.open_helpers} helper slot${s.open_helpers === 1 ? "" : "s"}`}
+                          {s.open_oc ? "OC needed" : plural(s.open_helpers, "helper slot")}
                         </Badge>
                       </li>
                     );

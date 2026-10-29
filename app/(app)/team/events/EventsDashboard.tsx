@@ -3,6 +3,7 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { formatDateTime, nowMs } from "@/lib/dates";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES } from "@/lib/labels";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { plural } from "@/lib/plural";
 
 // The Events team's overview: the schedule ahead and events short of
 // people (the cycles are cards with their step, see page.tsx).
@@ -62,7 +63,7 @@ export async function EventsDashboard() {
                       {e.title}
                     </Link>{" "}
                     <span className="text-gray-500">
-                      {s?.open_oc ? "no OC" : s ? `${s.open_helpers} helper(s) missing` : "under-staffed"}
+                      {s?.open_oc ? "no OC" : s ? `${plural(s.open_helpers, "helper")} missing` : "under-staffed"}
                     </span>
                   </li>
                 );

@@ -122,7 +122,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                   <li key={r.profile_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid={`response-${r.email}`}>
                     <span className="font-medium text-gray-900">{r.full_name}</span>
                     <span className="text-xs text-gray-500">
-                      submitted {formatDateTime(r.submitted_at)} · {r.events} event{r.events === 1 ? "" : "s"}
+                      submitted {formatDateTime(r.submitted_at)} · {plural(r.events, "event")}
                       {r.note && ` · “${r.note}”`}
                     </span>
                     {canEdit && cycle.status === "form_open" && (
@@ -144,7 +144,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
           <Card>
             <CardHeader>
               <CardTitle>Schedule</CardTitle>
-              <span className="text-sm text-gray-500">{planned.length} events</span>
+              <span className="text-sm text-gray-500">{plural(planned.length, "event")}</span>
             </CardHeader>
             <CardContent className="space-y-4">
               {!planned.length && <EmptyState>No events yet: accept ideas or add your own.</EmptyState>}

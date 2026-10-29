@@ -20,6 +20,7 @@ import {
   updateEvent,
 } from "@/app/actions/planning";
 import { setDescriptionDeadline } from "@/app/actions/descriptions";
+import { plural } from "@/lib/plural";
 
 export function CycleControls({
   cycle,
@@ -47,7 +48,7 @@ export function CycleControls({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <span className="text-sm text-gray-600">
-          {responses} volunteer{responses === 1 ? "" : "s"} answered
+          {plural(responses, "volunteer")} answered
           {cycle.formClosesAt && ` · form ${cycle.status === "form_open" ? "closes" : "closed"} ${cycle.formClosesAt}`}
         </span>
         {canEdit && (cycle.status === "planning" || cycle.status === "form_closed") && (
@@ -213,7 +214,7 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
       <Badge>{EVENT_TYPE_LABELS[event.type]}</Badge>
       <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
       <span className="text-xs text-gray-500">
-        {event.helpersNeeded} helpers · {event.signups} sign-up{event.signups === 1 ? "" : "s"}
+        {plural(event.helpersNeeded, "helper")} · {plural(event.signups, "sign-up")}
         {event.proposer && ` · idea by ${event.proposer}`}
       </span>
       {canEdit && (
@@ -312,7 +313,7 @@ export function IdeaCard({
         <span className="text-xs text-gray-500 ml-auto">{idea.date}</span>
       </div>
       <p className="text-xs text-gray-500">
-        by {idea.proposer} · {idea.helpers} helpers · {idea.wantsToOc ? "wants to OC" : "not OC"}
+        by {idea.proposer} · {plural(idea.helpers, "helper")} · {idea.wantsToOc ? "wants to OC" : "not OC"}
       </p>
       {idea.pitch && <p className="text-sm text-gray-700 whitespace-pre-line">{idea.pitch}</p>}
       {canEdit && mode === "none" && (

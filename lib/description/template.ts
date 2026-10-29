@@ -3,6 +3,7 @@
 // Pure functions: fields, normalisation, validation and rendering. The house
 // template, emojis, headings, TBA time and price and the 4,096-character
 // limit are unchanged; tests/unit/description.test.ts pins them.
+import { plural } from "@/lib/plural";
 
 export const CONFIG = {
   BULLET: "•",
@@ -383,7 +384,7 @@ export function validateStep(d: DescriptionFields, step: StepId, todayIso?: stri
       } else {
         const n = countSentences(d.intro);
         const { min, max } = CONFIG.INTRO_SENTENCES;
-        if (n < min || n > max) warnings.push(`The intro has ${n} sentence(s) – the template asks for ${min}–${max}.`);
+        if (n < min || n > max) warnings.push(`The intro has ${plural(n, "sentence")} – the template asks for ${min}–${max}.`);
       }
       break;
     }

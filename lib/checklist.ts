@@ -2,6 +2,7 @@
 // hand-in, each item linked to the event tab where it is done. And the one
 // next step for the OC or a helper (event page banner, Home). Pure, so the
 // rules are tested (tests/unit/checklist.test.ts).
+import { plural } from "@/lib/plural";
 
 /** The event's tabs: "" is the overview. */
 export type EventTab = "" | "description" | "attendance" | "hand-in";
@@ -78,7 +79,7 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
       key: "receipts",
       label: "Belege handed to Finance",
       state: i.belegeMissing > 0 ? "todo" : i.receipts > 0 ? "done" : started ? "todo" : "later",
-      detail: i.receipts ? `${i.receipts} receipt(s)${i.belegeMissing ? `, ${i.belegeMissing} Beleg(e) missing` : ""}` : "none registered",
+      detail: i.receipts ? `${plural(i.receipts, "receipt")}${i.belegeMissing ? `, ${plural(i.belegeMissing, "Beleg", "Belege")} missing` : ""}` : "none registered",
       tab: "hand-in",
     },
   ];

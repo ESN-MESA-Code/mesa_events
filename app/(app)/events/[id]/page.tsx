@@ -7,6 +7,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
 import { CANCEL_CONSEQUENCES, CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient";
 import { EventChecklist } from "./EventChecklist";
+import { isAre, plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Event" };
 
@@ -43,7 +44,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             <p className="font-medium">This event is short of people.</p>
             <p className="mt-1">
               {slot?.open_oc ? "It has no OC. " : ""}
-              {slot && slot.open_helpers > 0 ? `${slot.open_helpers} helper slot(s) are open. ` : ""}
+              {slot && slot.open_helpers > 0 ? `${plural(slot.open_helpers, "helper slot")} ${isAre(slot.open_helpers)} open. ` : ""}
               {canManage ? "As OC you decide whether it runs as it is or is cancelled." : "The OC decides whether it runs."}
             </p>
             {canManage && (
@@ -160,7 +161,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                       Claim a helper slot ({slot.open_helpers} open)
                     </ActionButton>
                   )}
-                  {isStaff && <span className="text-amber-900">{slot.open_oc ? "The OC slot" : `${slot.open_helpers} helper slot(s)`} open – find a replacement in the Chat space.</span>}
+                  {isStaff && <span className="text-amber-900">{slot.open_oc ? "The OC slot" : plural(slot.open_helpers, "helper slot")} open – find a replacement in the Chat space.</span>}
                 </div>
               </div>
             )}

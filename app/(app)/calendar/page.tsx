@@ -4,6 +4,7 @@ import { createSessionClient, getViewer } from "@/lib/supabase/session";
 import { formatDateTime, monthLabel, monthOf, nowMs } from "@/lib/dates";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS } from "@/lib/labels";
 import { Badge, Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
+import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -69,7 +70,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           {role && <Badge tone="blue">You: {role === "oc" ? "OC" : "helper"}</Badge>}
                           {slot && (slot.open_oc || slot.open_helpers > 0) && (
                             <Badge tone="amber">
-                              {slot.open_oc ? "OC needed" : `${slot.open_helpers} helper slot${slot.open_helpers === 1 ? "" : "s"} open`}
+                              {slot.open_oc ? "OC needed" : `${plural(slot.open_helpers, "helper slot")} open`}
                             </Badge>
                           )}
                           <span className="ml-auto text-xs text-gray-500 truncate max-w-[14rem]">{e.location}</span>
