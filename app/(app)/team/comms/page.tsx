@@ -23,6 +23,7 @@ type Row = {
   late: boolean;
   cycle_id: string | null;
   cycle_month: string | null;
+  missed: boolean;
 };
 
 function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testId: string; show: (r: Row) => React.ReactNode }) {
@@ -43,8 +44,9 @@ function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testI
 }
 
 // The Comms team's overview: progress per month, what to review, what is
-// ready to publish, and which descriptions are due or late (late: the
-// month's deadline passed or the event already started).
+// ready to publish, which descriptions are due or late (late: the month's
+// deadline passed and the event is still ahead), and – collapsed – events
+// that happened without one (missed).
 export default async function CommsPage() {
   const viewer = await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const supabase = await createSessionClient();
@@ -61,11 +63,14 @@ export default async function CommsPage() {
   ]);
   const now = nowMs();
   const rows = ((data ?? []) as Row[]).filter((r) => Date.parse(r.starts_at) > now - 7 * 86_400_000).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  const awaiting = rows.filter((r) => r.status === "submitted");
-  const ready = rows.filter((r) => r.status === "approved");
-  const late = rows.filter((r) => r.late);
-  const due = rows.filter((r) => !r.late && ["missing", "draft", "changes_requested"].includes(r.status));
+  // Late: chase the OC (the event is still ahead); missed: it happened without a published description (review 2026-10-29 A6).
+  const ahead = rows.filter((r) => !r.missed);
+  const awaiting = ahead.filter((r) => r.status === "submitted");
+  const ready = ahead.filter((r) => r.status === "approved");
+  const late = ahead.filter((r) => r.late);
+  const due = ahead.filter((r) => !r.late && ["missing", "draft", "changes_requested"].includes(r.status));
   const published = rows.filter((r) => r.status === "published");
+  const missed = ((data ?? []) as Row[]).filter((r) => r.missed && Date.parse(r.starts_at) > now - 60 * 86_400_000).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
   // Progress per cycle, over all its running events (also those already past).
   const all = (data ?? []) as Row[];
   // Done cycles (every event happened and is handed in) drop out (review 2026-10-29 A4).
@@ -159,7 +164,7 @@ export default async function CommsPage() {
               testId="late-descriptions"
               show={(r) => (
                 <span className="text-xs text-red-700">
-                  {Date.parse(r.starts_at) <= now ? "event already started" : r.deadline ? formatDue(r.deadline, now) : ""}
+                  {r.deadline ? formatDue(r.deadline, now) : ""}
                   {` · ${DESCRIPTION_STATUS[r.status]?.label ?? r.status}`}
                 </span>
               )}
@@ -185,6 +190,18 @@ export default async function CommsPage() {
             />
           </CardContent>
         </Card>
+        {missed.length > 0 && (
+          <Card className="lg:col-span-2">
+            <details data-testid="missed-descriptions">
+              <summary className="cursor-pointer px-5 py-4 text-base font-semibold text-gray-900">
+                Missed <span className="text-sm font-normal text-gray-500">({missed.length} · happened without a published description, last 60 days)</span>
+              </summary>
+              <CardContent>
+                <List rows={missed} empty="" testId="missed-list" show={(r) => <span className="text-xs text-gray-500">{DESCRIPTION_STATUS[r.status]?.label ?? r.status}</span>} />
+              </CardContent>
+            </details>
+          </Card>
+        )}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Published</CardTitle>

@@ -273,7 +273,8 @@ async function EventsQueue() {
 async function CommsQueue() {
   const supabase = await createSessionClient();
   const { data } = await supabase.rpc("description_overview");
-  const rows = (data ?? []).filter((r) => Date.parse(r.starts_at) > nowMs() - 7 * DAY);
+  // Only what can still be done: no missed events, Late only while the event is ahead (review 2026-10-29 A6).
+  const rows = (data ?? []).filter((r) => !r.missed);
   return (
     <QueueCard title="Comms" href="/team/comms" testId="queue-comms">
       <Figure label="Awaiting review" value={rows.filter((r) => r.status === "submitted").length} />

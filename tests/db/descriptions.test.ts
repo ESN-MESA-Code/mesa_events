@@ -141,13 +141,18 @@ describe("descriptions", () => {
     // A member who is not staff sees nothing of it.
     expect(((await (await as(USERS.member)).rpc("description_overview")).data ?? []).some((r) => r.event_id === otherId)).toBe(false);
     expect(other).toMatchObject({ cycle_id: cycle!.id, cycle_month: cycle!.month });
-    // Before the deadline, an event that already started is late too (review C8).
-    await admin.from("planning_cycles").update({ description_deadline: new Date(Date.now() + 7 * 86_400_000).toISOString() }).eq("id", cycle!.id);
+    expect(other).toMatchObject({ late: true, missed: false });
+    // An event that happened without a published description is missed, not late:
+    // nobody chases it any more (review 2026-10-29 A6, replacing C8's "late once started").
     const { data: before } = await admin.from("events").select("starts_at").eq("id", otherId).single();
     await admin.from("events").update({ starts_at: new Date(Date.now() - 3_600_000).toISOString() }).eq("id", otherId);
-    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: true });
+    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: false, missed: true });
+    // Before the deadline and ahead: neither.
+    await admin.from("planning_cycles").update({ description_deadline: new Date(Date.now() + 7 * 86_400_000).toISOString() }).eq("id", cycle!.id);
     await admin.from("events").update({ starts_at: new Date(Date.now() + 2 * 86_400_000).toISOString() }).eq("id", otherId);
-    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: false });
+    expect((await (await as(USERS.comms)).rpc("description_overview")).data!.find((r) => r.event_id === otherId)).toMatchObject({ late: false, missed: false });
+    // A published description is never missed.
+    expect(data!.find((r) => r.event_id === eventId)).toMatchObject({ missed: false });
     await admin.from("events").update({ cycle_id: null, starts_at: before!.starts_at }).eq("id", otherId);
     await admin.from("planning_cycles").delete().eq("id", cycle!.id);
   });
