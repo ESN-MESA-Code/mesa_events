@@ -213,7 +213,7 @@ const FOUNDATION: Spec[] = [
     update: [{ name: "member's acceptance", make: async () => ({ email: USERS.member.email }), patch: () => ({ version: "2000-01-01" }), allowed: NOBODY }],
     delete: [{ name: "member's acceptance", make: async () => ({ email: USERS.signout.email }), allowed: NOBODY }],
   },
-  ...(["fake_directory_members", "fake_chat_spaces", "fake_chat_members", "fake_chat_messages", "fake_drive_files"] as const).map(
+  ...(["fake_directory_members", "fake_chat_spaces", "fake_chat_members", "fake_chat_messages", "fake_drive_folders", "fake_drive_files"] as const).map(
     (table): Spec => ({
       table,
       select: [],

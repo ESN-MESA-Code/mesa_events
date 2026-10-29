@@ -16,8 +16,12 @@ export async function withdrawReceipt(input: unknown) {
   return run(A.withdrawReceipt, input);
 }
 
-export async function addEventPhoto(input: unknown) {
-  return run(A.addEventPhoto, input);
+export async function markPhotosUploaded(input: unknown) {
+  return run(A.markPhotosUploaded, input);
+}
+
+export async function checkPhotosAgain(input: unknown) {
+  return run(A.checkPhotosAgain, input);
 }
 
 export async function requestPreapproval(input: unknown) {

@@ -75,3 +75,18 @@ export function eventStatusMessage(kind: "cancelled" | "reopened", e: SpaceEvent
   }
   return [`✅ *${e.title}* on ${formatDateTime(e.starts_at)} is back on – the Events team reopened it.`, `Event page: ${eventUrl}${tell}`].join("\n");
 }
+
+/** At the event's start (the bot's photo reminder). */
+export function photoStartMessage(title: string): string {
+  return `${MENTION_ALL} 📸 *${title}* starts now – please take lots of pictures and videos for our socials! 🎉`;
+}
+
+/**
+ * The next morning: where the pictures go, and – until it is in – the
+ * event report for ESN Activities (the bot's upload reminder).
+ */
+export function photoUploadMessage(title: string, folder: { url: string; name: string }, reportUrl: string | null): string {
+  const lines = [`${MENTION_ALL} 📤 Thanks for making *${title}* happen! Please upload your pictures and videos here: <${folder.url}|📁 ${folder.name}>`];
+  if (reportUrl) lines.push(`One organizer please also fill in the short *event report* (for ESN Activities): ${reportUrl}`);
+  return lines.join("\n");
+}

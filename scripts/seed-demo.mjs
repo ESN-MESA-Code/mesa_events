@@ -47,6 +47,9 @@ async function wipe() {
   const inCycles = cycles.length ? check(await db.from("events").select("id").in("cycle_id", cycles), "cycle events").map((e) => e.id) : [];
   const ids = [...new Set([...own, ...inCycles])];
   if (ids.length) {
+    // Their folders in the fake photo drive (with the "uploaded" files).
+    const folders = check(await db.from("event_photo_folders").select("folder_id").in("event_id", ids).not("folder_id", "is", null), "photo folders");
+    if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id)), "delete drive folders");
     // Finance records keep events from being deleted: remove those first.
     const claims = check(await db.from("reimbursements").select("id, receipt_id").in("event_id", ids), "claims");
     if (claims.length) check(await db.from("reimbursements").delete().in("id", claims.map((c) => c.id)), "delete claims");
@@ -71,6 +74,36 @@ async function event(e, staff = []) {
     check(await db.from("assignments").insert(staff.map(([profile_id, role]) => ({ event_id: row.id, profile_id, role, source: "auto" }))), "assignments");
   }
   return row.id;
+}
+
+// The fake photo drive (lib/google/fakes.ts DbDriveClient, root
+// "fake-photos-root"): <semester>/<yyyy-MM-dd Title> as lib/photos.ts names it.
+const berlinDay = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+function semesterFolder(dateIso) {
+  const y = Number(dateIso.slice(0, 4));
+  const m = Number(dateIso.slice(5, 7));
+  const yy = (n) => String(n % 100).padStart(2, "0");
+  if (m >= 4 && m <= 9) return `SoSe_${yy(y)}`;
+  return m >= 10 ? `WiSe_${yy(y)}-${yy(y + 1)}` : `WiSe_${yy(y - 1)}-${yy(y)}`;
+}
+async function fakeFolder(parent, name) {
+  const existing = check(await db.from("fake_drive_folders").select("id").eq("parent_id", parent).eq("name", name).maybeSingle(), "folder lookup");
+  if (existing) return existing.id;
+  const id = `fakefolder-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  check(await db.from("fake_drive_folders").insert({ id, parent_id: parent, name }), "folder");
+  return id;
+}
+/** The event's folder with `files` photos the team "uploaded", counted. */
+async function photoFolder(eventId, startsAt, title, files, countedAt) {
+  const date = berlinDay(startsAt);
+  const semester = semesterFolder(date);
+  const name = `${date} ${title}`;
+  const id = await fakeFolder(await fakeFolder("fake-photos-root", semester), name);
+  if (files) check(await db.from("fake_drive_files").insert(Array.from({ length: files }, (_, i) => ({ id: `${id}-${i + 1}`, folder_id: id, file_name: `IMG_${4811 + i}.jpg` }))), "photos");
+  check(
+    await db.from("event_photo_folders").upsert({ event_id: eventId, folder_id: id, folder_url: `https://drive.google.com/drive/folders/${id}`, folder_path: `${semester}/${name}`, photo_count: files, counted_at: countedAt }),
+    "photo folder"
+  );
 }
 
 async function main() {
@@ -106,6 +139,8 @@ async function main() {
   // Last week: done, list signed off, receipts in Finance's queue.
   const crawl = await ev({ title: "Pub Crawl Maxvorstadt", type: "standard", status: "confirmed", starts_at: at(-6, 20), helpers_needed: 1, price_cents: 0 }, [[U.oc, "oc"], [U.helper, "helper"]]);
   check(await db.from("attendance_lists").update({ signed_off_at: at(-5, 12), signed_off_by: "oc@esnmesa.org", headcount: 23 }).eq("event_id", crawl), "sign-off");
+  // The team uploaded 14 photos to its Drive folder (fake), counted since.
+  await photoFolder(crawl, at(-6, 20), "Pub Crawl Maxvorstadt", 14, at(-4, 10));
   const { data: v1 } = await db.from("reimbursement_policies").select("id, version").eq("version", 1).single();
   const rules = check(await db.from("reimbursement_rules").select("id, expense_kind, event_type").eq("policy_id", v1.id), "rules");
   const ruleId = (kind, type) => rules.find((r) => r.expense_kind === kind && r.event_type === type).id;

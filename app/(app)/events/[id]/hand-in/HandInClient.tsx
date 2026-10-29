@@ -1,15 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import { Alert, Button, Field, Input, Select } from "@/components/ui";
-import { describeError, useAction } from "@/components/ActionButton";
-import { addEventPhoto, registerReceipt, requestPreapproval } from "@/app/actions/handin";
+import { Alert, Button, Field, Input, Select, buttonVariants } from "@/components/ui";
+import { useAction } from "@/components/ActionButton";
+import { checkPhotosAgain, markPhotosUploaded, registerReceipt, requestPreapproval } from "@/app/actions/handin";
 import { EXPENSE_KIND_LABELS, findRule, isValidIban, suggestAmount, type ExpenseKind, type Rule } from "@/lib/reimbursement";
-import { formatCents, parseEuroToCents } from "@/lib/dates";
-import { photoPath, validateUpload } from "@/lib/uploads";
+import { formatCents, formatDateTime, parseEuroToCents } from "@/lib/dates";
 import { plural } from "@/lib/plural";
+import { cn } from "@/lib/utils";
 
 export function ReceiptForm({
   eventId,
@@ -207,44 +206,119 @@ export function PreapprovalForm({ eventId }: { eventId: string }) {
   );
 }
 
-export function PhotoUploader({ eventId }: { eventId: string }) {
+
+export interface PhotoFolderProps {
+  eventId: string;
+  folder: {
+    folder_url: string | null;
+    folder_path: string | null;
+    photo_count: number | null;
+    counted_at: string | null;
+    count_error: string | null;
+    marked_uploaded_at: string | null;
+    marked_uploaded_by: string | null;
+  } | null;
+  /** The OC or the Events team: may tick "Photos are uploaded". */
+  canTick: boolean;
+  /** Read-only for teams who are not on the event. */
+  canCheck: boolean;
+}
+
+/**
+ * The event's Drive folder (brief 2026-10-29, A): the team uploads there
+ * directly; the count comes from Drive. "Check again" asks a job to count
+ * now and refreshes the page until the new count arrived (at most a minute).
+ */
+export function PhotoFolder({ eventId, folder, canTick, canCheck }: PhotoFolderProps) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const { run, pending, error } = useAction();
+  const [waitingSince, setWaitingSince] = useState<string | null>(null);
+  const counted = folder?.counted_at ?? null;
+  // Until the job's new count arrived (counted after the click).
+  const waiting = !!waitingSince && !(counted && counted > waitingSince);
 
-  async function upload(files: FileList | null) {
-    if (!files?.length) return;
-    setBusy(true);
-    setMessage(null);
-    let ok = 0;
-    const problems: string[] = [];
-    for (const file of Array.from(files)) {
-      const problem = validateUpload("photo", file);
-      if (problem) {
-        problems.push(`${file.name}: ${problem}`);
-        continue;
+  useEffect(() => {
+    if (!waiting || !waitingSince) return;
+    const started = Date.parse(waitingSince);
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > 60_000) {
+        setWaitingSince(null);
+        return;
       }
-      const path = photoPath(eventId, file.type);
-      const { error } = await supabase.storage.from("event-photos").upload(path, file, { contentType: file.type });
-      if (error) {
-        problems.push(`${file.name}: ${error.message}`);
-        continue;
-      }
-      const r = await addEventPhoto({ event_id: eventId, path, file_name: file.name.slice(0, 200), mime_type: file.type, size_bytes: file.size });
-      if (r.ok) ok++;
-      else problems.push(`${file.name}: ${describeError(r)}`);
-    }
-    setBusy(false);
-    setMessage(problems.length ? { tone: "error", text: problems.join(" · ") } : { tone: "success", text: `${plural(ok, "photo")} handed in – they go to the event's Drive folder.` });
-    router.refresh();
+      router.refresh();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [waiting, waitingSince, router]);
+
+  if (!folder?.folder_url) {
+    return (
+      <div className="space-y-3" data-testid="photo-folder">
+        <p className="text-sm text-gray-600">The photo folder in Drive is being created – it appears here within a few minutes.</p>
+        {canTick && <TickPhotos eventId={eventId} marked={!!folder?.marked_uploaded_at} by={folder?.marked_uploaded_by ?? null} />}
+      </div>
+    );
   }
-
+  const name = folder.folder_path?.split("/").at(-1) ?? "Photo folder";
   return (
-    <div className="space-y-2">
-      <Input aria-label="Upload photos" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic" disabled={busy} onChange={(e) => upload(e.target.files)} />
-      <p className="text-xs text-gray-500">JPG, PNG, WebP or HEIC, at most 15 MB each.</p>
-      {busy && <p className="text-xs text-gray-500">Uploading…</p>}
-      {message && <Alert tone={message.tone}>{message.text}</Alert>}
+    <div className="space-y-3" data-testid="photo-folder">
+      <a
+        href={folder.folder_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(buttonVariants({ size: "lg" }), "w-full h-12 text-base")}
+        data-testid="open-photo-folder"
+      >
+        📁 Open the photo folder in Drive
+      </a>
+      <p className="text-xs text-gray-500 break-words">
+        {folder.folder_path ?? name} – upload your pictures and videos there with your @esnmesa.org account.
+      </p>
+      <p className="text-sm" data-testid="photo-count">
+        {folder.photo_count === null ? (
+          "Not counted yet."
+        ) : (
+          <>
+            <strong>{plural(folder.photo_count, "file")}</strong> in the folder
+            {folder.counted_at && <span className="text-gray-500"> (checked {formatDateTime(folder.counted_at)})</span>}
+          </>
+        )}
+      </p>
+      {folder.count_error && <Alert tone="warning">Drive could not be read the last time. {canTick ? "If the photos are there, tick them below." : ""}</Alert>}
+      {canCheck && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending || waiting}
+            onClick={() => run(checkPhotosAgain, { event_id: eventId }, () => setWaitingSince(new Date().toISOString()))}
+          >
+            {waiting ? "Checking Drive…" : "Check again"}
+          </Button>
+          {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+      )}
+      {canTick && <TickPhotos eventId={eventId} marked={!!folder.marked_uploaded_at} by={folder.marked_uploaded_by} />}
+    </div>
+  );
+}
+
+function TickPhotos({ eventId, marked, by }: { eventId: string; marked: boolean; by: string | null }) {
+  const { run, pending, error } = useAction();
+  return (
+    <div className="rounded-md border border-gray-200 px-3 py-2 text-sm space-y-1">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={marked}
+          disabled={pending}
+          onChange={(e) => run(markPhotosUploaded, { event_id: eventId, uploaded: e.target.checked })}
+          data-testid="photos-ticked"
+        />
+        Photos are uploaded
+      </label>
+      <p className="text-xs text-gray-500">{marked && by ? `Ticked by ${by}. ` : ""}Only if Drive cannot be read – the count above is enough otherwise.</p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

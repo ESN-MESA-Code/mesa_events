@@ -191,22 +191,22 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"event_photos": {
+                },"event_photo_folders": {
                   Row: {
-                    "created_at": string,"drive_file_id": string | null,"drive_url": string | null,"event_id": string,"file_name": string,"id": string,"mime_type": string,"size_bytes": number,"status": string,"storage_path": string,"uploaded_by": string | null
+                    "count_error": string | null,"counted_at": string | null,"created_at": string,"event_id": string,"folder_id": string | null,"folder_path": string | null,"folder_url": string | null,"marked_uploaded_at": string | null,"marked_uploaded_by": string | null,"photo_count": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"drive_file_id"?: string | null,"drive_url"?: string | null,"event_id": string,"file_name": string,"id"?: string,"mime_type": string,"size_bytes": number,"status"?: string,"storage_path": string,"uploaded_by"?: string | null
+                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id": string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"photo_count"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"drive_file_id"?: string | null,"drive_url"?: string | null,"event_id"?: string,"file_name"?: string,"id"?: string,"mime_type"?: string,"size_bytes"?: number,"status"?: string,"storage_path"?: string,"uploaded_by"?: string | null
+                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id"?: string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"photo_count"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "event_photos_event_id_fkey"
+      foreignKeyName: "event_photo_folders_event_id_fkey"
       columns: ["event_id"]
-isOneToOne: false
+isOneToOne: true
       referencedRelation: "events"
       referencedColumns: ["id"]
     }
@@ -341,14 +341,34 @@ isOneToOne: false
                   ]
                 },"fake_drive_files": {
                   Row: {
-                    "created_at": string,"file_name": string,"folder": string,"id": string,"mime_type": string,"size": number
+                    "created_at": string,"file_name": string,"folder_id": string,"id": string,"mime_type": string,"size": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"file_name": string,"folder": string,"id": string,"mime_type": string,"size": number
+                    "created_at"?: string,"file_name": string,"folder_id": string,"id": string,"mime_type"?: string,"size"?: number
                   }
                   Update: {
-                    "created_at"?: string,"file_name"?: string,"folder"?: string,"id"?: string,"mime_type"?: string,"size"?: number
+                    "created_at"?: string,"file_name"?: string,"folder_id"?: string,"id"?: string,"mime_type"?: string,"size"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fake_drive_files_folder_id_fkey"
+      columns: ["folder_id"]
+isOneToOne: false
+      referencedRelation: "fake_drive_folders"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"fake_drive_folders": {
+                  Row: {
+                    "created_at": string,"id": string,"name": string,"parent_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id": string,"name": string,"parent_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"name"?: string,"parent_id"?: string
                   }
                   Relationships: [
                     
@@ -729,9 +749,6 @@ isOneToOne: false
 "acknowledge_confidentiality":
 { Args: { "accepted_version": string }; Returns: undefined
                            },
-"add_event_photo":
-{ Args: { "event": string,"file_name": string,"mime_type": string,"path": string,"size_bytes": number }; Returns: string
-                           },
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -805,7 +822,7 @@ isOneToOne: false
                            },
 "cycle_hand_in":
 { Args: { "cycles": (string)[] }; Returns: {
-              "belege_missing": number,"cycle_id": string,"ends_at": string,"event_id": string,"photos": number,"receipts": number,"signed_off": boolean,"starts_at": string,"status": Database["public"]['Enums']["event_status"]
+              "belege_missing": number,"cycle_id": string,"ends_at": string,"event_id": string,"photos_in": boolean,"receipts": number,"signed_off": boolean,"starts_at": string,"status": Database["public"]['Enums']["event_status"]
             }[]
                            },
 "cycle_responses":
@@ -902,6 +919,9 @@ isOneToOne: false
 "mark_description_published":
 { Args: { "event": string,"message_name": string,"posted_text": string }; Returns: undefined
                            },
+"mark_photos_uploaded":
+{ Args: { "event": string,"uploaded": boolean }; Returns: undefined
+                           },
 "my_context":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -952,6 +972,9 @@ isOneToOne: false
 "request_chat_space":
 { Args: { "event": string }; Returns: undefined
                            },
+"request_photo_count":
+{ Args: { "event": string }; Returns: undefined
+                           },
 "request_preapproval":
 { Args: { "description": string,"estimated": number,"event": string }; Returns: string
                            },
@@ -971,6 +994,9 @@ isOneToOne: false
 { Args: { "event": string,"patch": Json }; Returns: {
               "fields": Json,"status": string,"version": number
             }[]
+                           },
+"schedule_photo_jobs":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined

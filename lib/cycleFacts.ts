@@ -18,7 +18,7 @@ export interface HandInRow {
   event_id: string;
   starts_at: string;
   signed_off: boolean;
-  photos: number;
+  photos_in: boolean;
   belege_missing: number;
 }
 
@@ -73,10 +73,10 @@ export async function cyclesWithProgress(supabase: Db, cycles: CycleRow[]): Prom
         handIn: {
           total: running.length,
           happened: happened.length,
-          done: happened.filter((h) => h.signed_off && h.photos > 0 && h.belege_missing === 0).length,
+          done: happened.filter((h) => h.signed_off && h.photos_in && h.belege_missing === 0).length,
         },
       };
-      const handInOpen = happened.filter((h) => !(h.signed_off && h.photos > 0 && h.belege_missing === 0));
+      const handInOpen = happened.filter((h) => !(h.signed_off && h.photos_in && h.belege_missing === 0));
       return { ...c, facts, progress: cycleProgress(facts), handInOpen };
     })
   );

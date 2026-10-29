@@ -26,8 +26,6 @@ const check = (res, what) => {
 
 const chunks = (list, size = 100) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
 
-const berlinDate = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
-
 /** Deletes every tagged row; returns what was removed. */
 export async function removeTestData(db) {
   const inTestMonths = `month.lt.${TEST_MONTHS.before},month.gte.${TEST_MONTHS.from},created_by.eq.${TEST_TAG}`;
@@ -58,8 +56,10 @@ export async function removeTestData(db) {
     const about = dms.filter((m) => eventIds.some((id) => m.text.includes(`/events/${id}`))).map((m) => m.name);
     for (const part of chunks(about)) check(await db.from("fake_chat_messages").delete().in("name", part), "delete direct messages");
   }
-  const folders = [...events.values()].map((e) => `${berlinDate(e.starts_at)} ${e.title}`);
-  for (const part of chunks(folders)) check(await db.from("fake_drive_files").delete().in("folder", part), "drive files");
+  for (const part of chunks(eventIds)) {
+    const folders = check(await db.from("event_photo_folders").select("folder_id").in("event_id", part).not("folder_id", "is", null), "photo folders");
+    if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id)), "drive folders");
+  }
 
   for (const part of chunks(eventIds)) {
     check(await db.from("reimbursements").delete().in("event_id", part), "claims");
@@ -98,14 +98,13 @@ async function missing(db, table, ids) {
 
 /**
  * What tests left behind when they deleted their own events: jobs and fake
- * Chat rows of events (and photos) that no longer exist. Useless for any
- * data, so removed whatever made them.
+ * Chat and Drive rows of events that no longer exist. Useless for any data,
+ * so removed whatever made them.
  */
 async function removeOrphans(db) {
   const jobs = check(await db.from("jobs").select("id, kind, payload").is("event_id", null).or("kind.like.chat.%,kind.like.drive.%"), "orphan jobs");
   const goneEvents = await missing(db, "events", jobs.map((j) => j.payload?.event_id).filter(Boolean));
-  const gonePhotos = await missing(db, "event_photos", jobs.map((j) => j.payload?.photo_id).filter(Boolean));
-  const orphanJobs = jobs.filter((j) => goneEvents.has(j.payload?.event_id) || gonePhotos.has(j.payload?.photo_id)).map((j) => j.id);
+  const orphanJobs = jobs.filter((j) => goneEvents.has(j.payload?.event_id)).map((j) => j.id);
   for (const part of chunks(orphanJobs)) check(await db.from("jobs").delete().in("id", part), "delete orphan jobs");
 
   const spaces = check(await db.from("fake_chat_spaces").select("name, request_id").like("request_id", "mesa-event-%"), "fake spaces");
@@ -123,14 +122,23 @@ async function removeOrphans(db) {
   const orphanDms = mentioned.filter((m) => m.ids.length && m.ids.every((id) => goneDmEvents.has(id))).map((m) => m.name);
   for (const part of chunks(orphanDms)) check(await db.from("fake_chat_messages").delete().in("name", part), "orphan direct messages");
 
-  return orphanJobs.length + orphanSpaces.length + orphanDms.length;
+  // Event folders ("2026-11-02 Pub quiz") no event points to, then empty semester folders.
+  const used = new Set(check(await db.from("event_photo_folders").select("folder_id").not("folder_id", "is", null), "used folders").map((f) => f.folder_id));
+  const folders = check(await db.from("fake_drive_folders").select("id, parent_id, name"), "fake folders");
+  const orphanFolders = folders.filter((f) => /^\d{4}-\d{2}-\d{2} /.test(f.name) && !used.has(f.id)).map((f) => f.id);
+  for (const part of chunks(orphanFolders)) check(await db.from("fake_drive_folders").delete().in("id", part), "orphan folders");
+  const parents = new Set(folders.filter((f) => !orphanFolders.includes(f.id)).map((f) => f.parent_id));
+  const emptySemesters = folders.filter((f) => /^(SoSe|WiSe)_/.test(f.name) && !parents.has(f.id)).map((f) => f.id);
+  for (const part of chunks(emptySemesters)) check(await db.from("fake_drive_folders").delete().in("id", part), "empty semester folders");
+
+  return orphanJobs.length + orphanSpaces.length + orphanDms.length + orphanFolders.length;
 }
 
 // Run directly (no import.meta: Playwright loads this file through its CommonJS transform).
 if (/clean-test-data\.mjs$/.test(process.argv[1] ?? "")) {
   const db = createClient(LOCAL_ENV.NEXT_PUBLIC_SUPABASE_URL, LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   removeTestData(db)
-    .then((n) => console.log(`Removed test data: ${n.cycles} cycles, ${n.events} events, ${n.ideas} ideas, ${n.orphans} orphaned jobs and fake Chat rows, ${n.batches} empty payout batches.`))
+    .then((n) => console.log(`Removed test data: ${n.cycles} cycles, ${n.events} events, ${n.ideas} ideas, ${n.orphans} orphaned jobs and fake Chat/Drive rows, ${n.batches} empty payout batches.`))
     .catch((err) => {
       console.error(err.message ?? err);
       console.error("Is the local stack running? npm run supabase:start");

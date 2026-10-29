@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatClient, ChatSpace, DirectoryClient, DriveClient } from "@/lib/google/types";
 import { chatMessageId } from "@/lib/google/chat";
+import { driveFolderUrl } from "@/lib/photos";
 import type { Database } from "@/types/database";
 
 type Admin = SupabaseClient<Database>;
@@ -78,17 +79,52 @@ export class MemoryChatClient implements ChatClient {
   }
 }
 
-export class MemoryDriveClient implements DriveClient {
-  files = new Map<string, { id: string; mimeType: string; size: number }>();
+/** The fake photo drive's root when DRIVE_PHOTOS_FOLDER_ID is not set. */
+export const FAKE_DRIVE_ROOT = "fake-photos-root";
+const newFolderId = () => `fakefolder-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
-  async uploadFile({ folder, fileName, mimeType, data }: { folder: string; fileName: string; mimeType: string; data: Uint8Array }) {
-    const key = `${folder}/${fileName}`;
-    let file = this.files.get(key);
-    if (!file) {
-      file = { id: `fake-${crypto.randomUUID()}`, mimeType, size: data.byteLength };
-      this.files.set(key, file);
+export class MemoryDriveClient implements DriveClient {
+  /** id → folder */
+  folders = new Map<string, { parent: string; name: string }>();
+  /** Files uploaded by "members": folder id → file names. */
+  files = new Map<string, string[]>();
+  failNext = 0;
+
+  constructor(public root = FAKE_DRIVE_ROOT) {}
+
+  private maybeFail() {
+    if (this.failNext > 0) {
+      this.failNext--;
+      throw new Error("Fake Drive API failure");
     }
-    return { id: file.id, url: `https://drive.google.com/file/d/${file.id}/view` };
+  }
+
+  async ensureFolder(path: string[]) {
+    this.maybeFail();
+    let id = this.root;
+    for (const name of path) {
+      const found = [...this.folders].find(([, f]) => f.parent === id && f.name === name)?.[0];
+      if (found) id = found;
+      else {
+        const created = newFolderId();
+        this.folders.set(created, { parent: id, name });
+        id = created;
+      }
+    }
+    return { id, url: driveFolderUrl(id) };
+  }
+
+  /** A member puts a file into a folder (tests). */
+  addFile(folderId: string, name: string) {
+    this.files.set(folderId, [...(this.files.get(folderId) ?? []), name]);
+  }
+
+  async countFiles(folderId: string): Promise<number> {
+    this.maybeFail();
+    const sub = [...this.folders].filter(([, f]) => f.parent === folderId).map(([id]) => id);
+    let n = (this.files.get(folderId) ?? []).length;
+    for (const id of sub) n += await this.countFiles(id);
+    return n;
   }
 }
 
@@ -156,18 +192,41 @@ export class DbChatClient implements ChatClient {
   }
 }
 
+/**
+ * Folders in fake_drive_folders; files in fake_drive_files stand for what
+ * members upload (the demo seed and tests insert them; `npm run
+ * fake:drive -- <event id> [n]` adds some by hand).
+ */
 export class DbDriveClient implements DriveClient {
-  constructor(private db: Admin) {}
+  constructor(
+    private db: Admin,
+    private root = FAKE_DRIVE_ROOT
+  ) {}
 
-  async uploadFile({ folder, fileName, mimeType, data }: { folder: string; fileName: string; mimeType: string; data: Uint8Array }) {
-    const existing = check(
-      await this.db.from("fake_drive_files").select("id").eq("folder", folder).eq("file_name", fileName).maybeSingle()
-    );
-    const id = existing?.id ?? `fake-${crypto.randomUUID()}`;
-    if (!existing) {
-      check(await this.db.from("fake_drive_files").insert({ id, folder, file_name: fileName, mime_type: mimeType, size: data.byteLength }));
+  async ensureFolder(path: string[]) {
+    let id = this.root;
+    for (const name of path) {
+      const existing = check(await this.db.from("fake_drive_folders").select("id").eq("parent_id", id).eq("name", name).maybeSingle());
+      if (existing) {
+        id = existing.id;
+        continue;
+      }
+      const created = newFolderId();
+      // A concurrent run may have created it: the unique (parent, name) keeps one.
+      check(await this.db.from("fake_drive_folders").upsert({ id: created, parent_id: id, name }, { onConflict: "parent_id,name", ignoreDuplicates: true }));
+      id = check(await this.db.from("fake_drive_folders").select("id").eq("parent_id", id).eq("name", name).single())!.id;
     }
-    return { id, url: `https://drive.google.com/file/d/${id}/view` };
+    return { id, url: driveFolderUrl(id) };
+  }
+
+  async countFiles(folderId: string, depth = 0): Promise<number> {
+    const [{ count }, subs] = await Promise.all([
+      this.db.from("fake_drive_files").select("id", { count: "exact", head: true }).eq("folder_id", folderId),
+      this.db.from("fake_drive_folders").select("id").eq("parent_id", folderId),
+    ]);
+    let n = count ?? 0;
+    if (depth + 1 < 3) for (const s of check(subs) ?? []) n += await this.countFiles(s.id, depth + 1);
+    return n;
   }
 }
 

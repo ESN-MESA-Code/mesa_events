@@ -4,6 +4,7 @@ import { cache } from "react";
 import { createSessionClient, type Db } from "@/lib/supabase/session";
 import { nowMs } from "@/lib/dates";
 import type { ChecklistInput } from "@/lib/checklist";
+import { photosIn } from "@/lib/photos";
 
 export interface EventForStatus {
   id: string;
@@ -15,11 +16,11 @@ export interface EventForStatus {
 }
 
 export async function checklistInput(supabase: Db, event: EventForStatus, descriptionDeadline: string | null): Promise<ChecklistInput> {
-  const [{ data: assignments }, { data: description }, { data: list }, { count: photos }, { data: claims }] = await Promise.all([
+  const [{ data: assignments }, { data: description }, { data: list }, { data: photos }, { data: claims }] = await Promise.all([
     supabase.from("assignments").select("role").eq("event_id", event.id).eq("status", "active"),
     supabase.from("descriptions").select("status").eq("event_id", event.id).maybeSingle(),
     supabase.from("attendance_lists").select("signed_off_at").eq("event_id", event.id).maybeSingle(),
-    supabase.from("event_photos").select("id", { count: "exact", head: true }).eq("event_id", event.id),
+    supabase.from("event_photo_folders").select("photo_count, marked_uploaded_at").eq("event_id", event.id).maybeSingle(),
     supabase.rpc("event_claims_summary", { event: event.id }),
   ]);
   const c = (claims ?? {}) as { receipts?: number; belege_missing?: number };
@@ -34,7 +35,8 @@ export async function checklistInput(supabase: Db, event: EventForStatus, descri
     description: (description?.status as ChecklistInput["description"]) ?? "missing",
     descriptionDeadline,
     listSignedOff: !!list?.signed_off_at,
-    photos: photos ?? 0,
+    photos: photos?.photo_count ?? null,
+    photosIn: photosIn(photos),
     receipts: c.receipts ?? 0,
     belegeMissing: c.belege_missing ?? 0,
   };

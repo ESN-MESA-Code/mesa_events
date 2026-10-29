@@ -7,7 +7,7 @@ import { GoogleChatClient, chatMessageId } from "@/lib/google/chat";
 import { GoogleDriveClient } from "@/lib/google/drive";
 import { accessToken, clearTokenCache, serviceAccountFromEnv, signedAssertion } from "@/lib/google/serviceAccount";
 import { googleClients, googleMode } from "@/lib/google";
-import { MemoryChatClient } from "@/lib/google/fakes";
+import { MemoryChatClient, MemoryDriveClient } from "@/lib/google/fakes";
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -151,26 +151,49 @@ describe("Chat API", () => {
 });
 
 describe("Drive API", () => {
-  it("creates the event folder, then uploads multipart", async () => {
+  it("finds or creates each folder of the path below the root", async () => {
     const { fn, fetch } = fetchReturning(
       json({ access_token: "t" }),
-      json({ files: [] }), // folder lookup
-      json({ id: "folder1" }), // folder created
-      json({ files: [] }), // file lookup
-      json({ id: "file1", webViewLink: "https://drive.google.com/file/d/file1/view" })
+      json({ files: [{ id: "sem1", mimeType: "application/vnd.google-apps.folder" }] }), // WiSe_26-27 exists
+      json({ files: [] }), // event folder missing
+      json({ id: "folder1" }) // created
     );
-    const drive = new GoogleDriveClient(sa, "parent", undefined, fetch);
-    const out = await drive.uploadFile({ folder: "2026-11-05 Pub Quiz", fileName: "a.jpg", mimeType: "image/jpeg", data: new Uint8Array([1, 2, 3]) });
-    expect(out).toEqual({ id: "file1", url: "https://drive.google.com/file/d/file1/view" });
-    const upload = calls(fn)[4];
-    expect(upload.url).toContain("uploadType=multipart");
-    expect(String(upload.init.headers && (upload.init.headers as Record<string, string>)["Content-Type"])).toMatch(/^multipart\/related; boundary=/);
+    const drive = new GoogleDriveClient(sa, "root", undefined, fetch);
+    expect(await drive.ensureFolder(["WiSe_26-27", "2026-11-02 Pub's quiz"])).toEqual({ id: "folder1", url: "https://drive.google.com/drive/folders/folder1" });
+    const [, first, second, create] = calls(fn);
+    expect(decodeURIComponent(first.url)).toContain("name = 'WiSe_26-27' and 'root' in parents");
+    expect(decodeURIComponent(second.url)).toContain("name = '2026-11-02 Pub\\'s quiz' and 'sem1' in parents");
+    expect(first.url).toContain("supportsAllDrives=true");
+    expect(JSON.parse(String(create.init.body))).toEqual({ name: "2026-11-02 Pub's quiz", mimeType: "application/vnd.google-apps.folder", parents: ["sem1"] });
   });
 
-  it("returns an existing file instead of uploading twice", async () => {
-    const { fn, fetch } = fetchReturning(json({ access_token: "t" }), json({ files: [{ id: "folder1" }] }), json({ files: [{ id: "f", webViewLink: "u" }] }));
-    expect(await new GoogleDriveClient(sa, "parent", undefined, fetch).uploadFile({ folder: "x", fileName: "a.jpg", mimeType: "image/jpeg", data: new Uint8Array() })).toEqual({ id: "f", url: "u" });
-    expect(fn).toHaveBeenCalledTimes(3);
+  it("counts files through pages and subfolders, not the folders", async () => {
+    const F = "application/vnd.google-apps.folder";
+    const { fetch } = fetchReturning(
+      json({ access_token: "t" }),
+      json({ files: [{ id: "a", mimeType: "image/jpeg" }, { id: "videos", mimeType: F }], nextPageToken: "p2" }),
+      json({ files: [{ id: "c", mimeType: "video/mp4" }] }), // subfolder "videos"
+      json({ files: [{ id: "b", mimeType: "image/heic" }] }) // page 2
+    );
+    expect(await new GoogleDriveClient(sa, "root", undefined, fetch).countFiles("folder1")).toBe(3);
+  });
+
+  it("reports Drive errors", async () => {
+    const { fetch } = fetchReturning(json({ access_token: "t" }), json({ error: "denied" }, 403));
+    await expect(new GoogleDriveClient(sa, "root", undefined, fetch).countFiles("folder1")).rejects.toThrow(/Drive search failed \(403\)/);
+  });
+});
+
+describe("memory Drive fake", () => {
+  it("reuses folders by name and counts what members added", async () => {
+    const drive = new MemoryDriveClient();
+    const a = await drive.ensureFolder(["SoSe_26", "2026-05-01 Hike"]);
+    expect(await drive.ensureFolder(["SoSe_26", "2026-05-01 Hike"])).toEqual(a);
+    expect(await drive.countFiles(a.id)).toBe(0);
+    drive.addFile(a.id, "1.jpg");
+    const sub = await drive.ensureFolder(["SoSe_26", "2026-05-01 Hike", "Videos"]);
+    drive.addFile(sub.id, "1.mp4");
+    expect(await drive.countFiles(a.id)).toBe(2);
   });
 });
 

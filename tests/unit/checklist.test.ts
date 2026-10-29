@@ -13,7 +13,8 @@ const base: ChecklistInput = {
   description: "draft",
   descriptionDeadline: "2026-11-15T20:00:00Z",
   listSignedOff: false,
-  photos: 0,
+  photos: null,
+  photosIn: false,
   receipts: 0,
   belegeMissing: 0,
 };
@@ -34,9 +35,17 @@ describe("event checklist", () => {
   it("after the event: the hand-in is due, Belege count", () => {
     const after = { now: Date.parse("2026-11-21T10:00:00Z"), description: "published" as const };
     expect(state(after)).toMatchObject({ attendance: "todo", photos: "todo", receipts: "todo" });
-    expect(state({ ...after, listSignedOff: true, photos: 12, receipts: 3, belegeMissing: 1 })).toMatchObject({ attendance: "done", photos: "done", receipts: "todo" });
-    const done = eventChecklist({ ...base, ...after, listSignedOff: true, photos: 12, receipts: 3, belegeMissing: 0 });
+    expect(state({ ...after, listSignedOff: true, photos: 12, photosIn: true, receipts: 3, belegeMissing: 1 })).toMatchObject({ attendance: "done", photos: "done", receipts: "todo" });
+    const done = eventChecklist({ ...base, ...after, listSignedOff: true, photos: 12, photosIn: true, receipts: 3, belegeMissing: 0 });
     expect(checklistDone(done)).toBe(true);
+  });
+
+  it("photos: the Drive count, or the OC's tick when Drive cannot be read", () => {
+    const after = { now: Date.parse("2026-11-21T10:00:00Z") };
+    const photos = (i: Partial<ChecklistInput>) => eventChecklist({ ...base, ...after, ...i }).find((x) => x.key === "photos")!;
+    expect(photos({ photos: 0 })).toMatchObject({ state: "todo", label: "Photos in Drive" });
+    expect(photos({ photos: 7, photosIn: true })).toMatchObject({ state: "done", detail: "7 in the folder" });
+    expect(photos({ photos: null, photosIn: true })).toMatchObject({ state: "done", detail: "ticked by hand" });
   });
 
   it("cancelled events only keep open money matters", () => {
@@ -66,9 +75,9 @@ describe("next step", () => {
     expect(step({ description: "submitted" })).toMatchObject({ kind: "waiting" });
     expect(step({ description: "published" })).toMatchObject({ kind: "done", tab: "attendance" });
     expect(step({ now: after, description: "published" })).toMatchObject({ label: "Sign off the attendance list", tab: "attendance" });
-    expect(step({ now: after, listSignedOff: true })).toMatchObject({ label: "Hand in photos and Belege", tab: "hand-in" });
-    expect(step({ now: after, listSignedOff: true, photos: 3, receipts: 1, belegeMissing: 1 })).toMatchObject({ label: "Hand in photos and Belege" });
-    expect(step({ now: after, listSignedOff: true, photos: 3 })).toMatchObject({ kind: "done" });
+    expect(step({ now: after, listSignedOff: true })).toMatchObject({ label: "Upload the photos to Drive and hand in the Belege", tab: "hand-in" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1 })).toMatchObject({ label: "Upload the photos to Drive and hand in the Belege" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true })).toMatchObject({ kind: "done" });
   });
 
   it("a helper: help, then hand in their Belege", () => {

@@ -1,16 +1,12 @@
 // Hand-in and reimbursements: the formula in the database equals the
 // TypeScript one, policies are versioned and Treasurer-only, receipts and
 // bank details are Finance's and the claimant's only, statuses, batches,
-// early payout, pre-approval, trip budgets, no receipt photos, Drive photos.
+// early payout, pre-approval, trip budgets, no receipt or event photos in Storage.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin, anonClient, as, createEvent, daysFromNow, type SeedUser } from "../helpers/local";
 import { actionContext } from "./actionContext";
 import * as H from "@/lib/actions/handin";
 import { SPEC_RULES, suggestAmount, type Rule } from "@/lib/reimbursement";
-import { runDueJobs } from "@/lib/jobs/runner";
-import { HANDLERS } from "@/lib/jobs/handlers";
-import { googleClients } from "@/lib/google";
-import { photoPath } from "@/lib/uploads";
 import type { Json } from "@/types/database";
 
 const IBAN = "DE89370400440532013000";
@@ -288,7 +284,7 @@ describe("the activity log does not leak claims (review B1)", () => {
   });
 });
 
-describe("Storage: hand-in photos only", () => {
+describe("Storage: no files at all", () => {
   const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" });
 
   it("receipts are data only: no receipt photo bucket, column or parameter", async () => {
@@ -306,25 +302,9 @@ describe("Storage: hand-in photos only", () => {
     expect(data).toEqual({ expense_kind: "ticket", vendor: "No photo", amount_cents: 2500, purchased_on: "2026-11-01", description: "" });
   });
 
-  it("the photo bucket refuses wrong types and oversized files", async () => {
-    const oc = await as(USERS.oc);
-    const html = new Blob(["<script>alert(1)</script>"], { type: "text/html" });
-    expect((await oc.storage.from("event-photos").upload(`${standard}/${crypto.randomUUID()}.png`, html, { contentType: "text/html" })).error).not.toBeNull();
-    const big = new Blob([new Uint8Array(15 * 1024 * 1024 + 1)], { type: "image/png" });
-    expect((await oc.storage.from("event-photos").upload(photoPath(standard, "image/png"), big, { contentType: "image/png" })).error).not.toBeNull();
-  });
-
-  it("hand-in photos go to Drive by a job and leave Storage", async () => {
-    const path = photoPath(standard, "image/png");
-    expect((await (await as(USERS.member)).storage.from("event-photos").upload(path, png, { contentType: "image/png" })).error).not.toBeNull();
-    expect((await (await as(USERS.oc)).storage.from("event-photos").upload(path, png, { contentType: "image/png" })).error).toBeNull();
-    expect(await H.addEventPhoto(await actionContext(USERS.oc), { event_id: standard, path, file_name: "group.png", mime_type: "image/gif", size_bytes: 8 })).toMatchObject({ ok: false, error: "invalid_input" });
-    expect((await H.addEventPhoto(await actionContext(USERS.oc), { event_id: standard, path, file_name: "group.png", mime_type: "image/png", size_bytes: 8 })).ok).toBe(true);
-    await runDueJobs({ admin, google: googleClients(admin, { GOOGLE_MODE: "fake" }), env: {}, baseUrl: "http://x" }, HANDLERS, { worker: "photo-test" });
-    const { data: photo } = await admin.from("event_photos").select("status, drive_file_id").eq("storage_path", path).single();
-    expect(photo!.status).toBe("uploaded");
-    const { data: file } = await admin.from("fake_drive_files").select("folder, file_name").eq("id", photo!.drive_file_id!).single();
-    expect(file!.folder).toMatch(/ Quiz \(claims\)$/);
-    expect((await admin.storage.from("event-photos").download(path)).error).not.toBeNull();
+  it("no event photos in Storage either: they go to Drive (brief 2026-10-29, A)", async () => {
+    expect((await admin.storage.getBucket("event-photos")).error).not.toBeNull();
+    expect((await (await as(USERS.oc)).storage.from("event-photos").upload(`${standard}/${crypto.randomUUID()}.png`, png, { contentType: "image/png" })).error).not.toBeNull();
+    expect((await (await as(USERS.oc)).rpc("add_event_photo" as never, { event: standard } as never)).error).not.toBeNull();
   });
 });

@@ -21,7 +21,10 @@ export interface ChecklistInput {
   description: "missing" | "draft" | "submitted" | "changes_requested" | "approved" | "published";
   descriptionDeadline: string | null;
   listSignedOff: boolean;
-  photos: number;
+  /** Files in the event's Drive folder when last counted (null: not counted yet). */
+  photos: number | null;
+  /** At least one file in the folder, or ticked by hand (lib/photos.ts photosIn). */
+  photosIn: boolean;
   receipts: number;
   belegeMissing: number;
 }
@@ -73,9 +76,9 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
     },
     {
       key: "photos",
-      label: "Photos handed in",
-      state: i.photos > 0 ? "done" : started ? "todo" : "later",
-      detail: i.photos ? `${i.photos}` : started ? undefined : "after the event",
+      label: "Photos in Drive",
+      state: i.photosIn ? "done" : started ? "todo" : "later",
+      detail: i.photos ? `${i.photos} in the folder` : i.photosIn ? "ticked by hand" : started ? undefined : "after the event",
       tab: "hand-in",
     },
     {
@@ -112,7 +115,7 @@ export interface NextStep {
  */
 export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const started = Date.parse(i.startsAt) <= i.now;
-  const handInOpen = i.photos === 0 || i.belegeMissing > 0;
+  const handInOpen = !i.photosIn || i.belegeMissing > 0;
   if (i.status === "cancelled" || i.status === "dropped") {
     return i.belegeMissing > 0
       ? { label: "Hand the Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" }
@@ -135,7 +138,7 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
     return { label: "All set – the attendance list opens on the day", tab: "attendance", anchor: "sign-off", kind: "done" };
   }
   if (!i.listSignedOff) return { label: "Sign off the attendance list", tab: "attendance", anchor: "sign-off", kind: "action" };
-  if (handInOpen) return { label: "Hand in photos and Belege", tab: "hand-in", anchor: "hand-in-status", kind: "action" };
+  if (handInOpen) return { label: "Upload the photos to Drive and hand in the Belege", tab: "hand-in", anchor: "hand-in-status", kind: "action" };
   return { label: "Hand-in complete", tab: "hand-in", anchor: "hand-in-status", kind: "done" };
 }
 

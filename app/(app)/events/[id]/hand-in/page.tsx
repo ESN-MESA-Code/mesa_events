@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
-import { formatCents, formatDateTime, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
+import { formatCents, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
 import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { ClaimItem } from "@/components/ClaimItem";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawReceipt } from "@/app/actions/handin";
-import { PhotoUploader, PreapprovalForm, ReceiptForm } from "./HandInClient";
+import { PhotoFolder, PreapprovalForm, ReceiptForm } from "./HandInClient";
+import { photosIn } from "@/lib/photos";
+import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
 
-// After the event: photos (to Drive), the attendance list closed, every
+// After the event: photos (in the event's Drive folder), the attendance list closed, every
 // receipt registered and the paper Beleg handed to Finance.
 export default async function HandInPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { event, supabase, viewer, isStaff, isTeam, myAssignment } = await loadEventForPage(id);
+  const { event, supabase, viewer, isStaff, isTeam, isOc, isEvents, myAssignment } = await loadEventForPage(id);
   if (!isStaff && !isTeam) {
     return (
       <Card>
@@ -27,7 +29,11 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
 
   const [{ data: list }, { data: photos }, { data: claims }, { data: summary }, { data: policyId }, { data: preapprovals }, { data: budget }] = await Promise.all([
     supabase.from("attendance_lists").select("signed_off_at, headcount").eq("event_id", id).maybeSingle(),
-    supabase.from("event_photos").select("id, file_name, status, drive_url, uploaded_by, created_at").eq("event_id", id).order("created_at"),
+    supabase
+      .from("event_photo_folders")
+      .select("folder_url, folder_path, photo_count, counted_at, count_error, marked_uploaded_at, marked_uploaded_by")
+      .eq("event_id", id)
+      .maybeSingle(),
     supabase
       .from("reimbursements")
       .select("id, status, suggested_cents, approved_cents, flags, payout_method, rejected_reason, checked_at, paid_at, receipts(expense_kind, vendor, amount_cents, purchased_on, beleg_received_at)")
@@ -68,7 +74,8 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             )}
           </p>
           <p>
-            {(photos ?? []).length ? "✅" : "⬜"} Photos: {(photos ?? []).length}
+            {photosIn(photos) ? "✅" : "⬜"} Photos in Drive:{" "}
+            {photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "ticked by hand" : started ? "none yet" : <span className="text-gray-500">– after the event</span>}
           </p>
           <p data-testid="receipts-status">
             {s.receipts && !s.belege_missing ? "✅" : "⬜"}{" "}
@@ -191,27 +198,16 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="space-y-6">
-        <Card>
+        <Card id="photos" className="scroll-mt-4">
           <CardHeader>
             <CardTitle>Photos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {isStaff && (handInOpen ? <PhotoUploader eventId={id} /> : <p className="text-sm text-gray-500">Photos can be handed in from the day of the event.</p>)}
-            <ul className="text-sm space-y-1" data-testid="photos">
-              {(photos ?? []).map((p) => (
-                <li key={p.id} className="flex items-center gap-2">
-                  <span className="truncate">{p.file_name}</span>
-                  {p.status === "uploaded" && p.drive_url ? (
-                    <a href={p.drive_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-xs text-esn hover:underline">
-                      in Drive
-                    </a>
-                  ) : (
-                    <span className="ml-auto text-xs text-gray-500">uploading to Drive…</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {(photos ?? []).length > 0 && <p className="text-xs text-gray-500">Last upload {formatDateTime(photos!.at(-1)!.created_at)}</p>}
+            {handInOpen ? (
+              <PhotoFolder eventId={id} folder={photos ?? null} canTick={isOc || isEvents} canCheck={isStaff || isTeam} />
+            ) : (
+              <p className="text-sm text-gray-500">The event&apos;s photo folder in Drive opens on the day of the event.</p>
+            )}
           </CardContent>
         </Card>
       </div>

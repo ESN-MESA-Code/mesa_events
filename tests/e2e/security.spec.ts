@@ -171,6 +171,8 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
     await expect(page.getByTestId("receipt-form").locator('input[type="file"]')).toHaveCount(0);
     await expect(page.getByTestId("my-claims")).toContainText("IDOR");
     await expect(page.getByText("View photo")).toHaveCount(0);
+    // Event photos go straight to Drive too (brief 2026-10-29, A): no file input on the whole tab.
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
   });
 
   test("another event's helper sees neither names nor receipts there", async ({ page, context, baseURL }) => {

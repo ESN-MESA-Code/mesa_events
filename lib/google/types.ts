@@ -30,8 +30,14 @@ export interface ChatClient {
 }
 
 export interface DriveClient {
-  /** Uploads a file into the event's folder (created if missing). Idempotent per fileName within a folder. */
-  uploadFile(input: { folder: string; fileName: string; mimeType: string; data: Uint8Array }): Promise<{ id: string; url: string }>;
+  /**
+   * The folder at `path` below the photo drive's root (DRIVE_PHOTOS_FOLDER_ID),
+   * e.g. ["WiSe_26-27", "2026-11-02 Pub quiz"]; missing folders are created,
+   * existing ones of the same name reused (idempotent).
+   */
+  ensureFolder(path: string[]): Promise<{ id: string; url: string }>;
+  /** Files in the folder and its subfolders (not the folders themselves, nothing trashed). */
+  countFiles(folderId: string): Promise<number>;
 }
 
 /** Mentions in Chat message text. */

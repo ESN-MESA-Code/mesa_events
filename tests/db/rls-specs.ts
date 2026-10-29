@@ -195,8 +195,10 @@ async function budgetOf(eventId: string): Promise<Match> {
   return { event_id: eventId };
 }
 const batch = () => insertRow("payout_batches", { month: `${3000 + Math.floor(Math.random() * 6000)}-${String(1 + Math.floor(Math.random() * 12)).padStart(2, "0")}-01` });
-const photoOf = (eventId: string) =>
-  insertRow("event_photos", { event_id: eventId, storage_path: `${eventId}/${uid()}.png`, file_name: "rls.png", mime_type: "image/png", size_bytes: 10 });
+const folderOf = async (eventId: string): Promise<Match> => {
+  await admin.from("event_photo_folders").upsert({ event_id: eventId, folder_id: "rls-folder", folder_url: "https://drive.google.com/drive/folders/rls-folder", folder_path: "x/y", photo_count: 2 });
+  return { event_id: eventId };
+};
 
 const readOnly = (table: string, rows: Spec["select"], make: (w: World) => Promise<Match>, insert: (w: World) => Record<string, unknown>, patch: Record<string, unknown>): Spec => ({
   table: table as Spec["table"],
@@ -263,16 +265,20 @@ SPECS_EXTRA.push(
     { amount_cents: 999999 }
   ),
   readOnly("payout_batches", [{ name: "a batch", make: () => batch(), allowed: [...FINANCE, "executive"] }], () => batch(), () => ({ month: "2999-01-01" }), { status: "paid" }),
-  readOnly(
-    "event_photos",
-    [
-      { name: "photo of event A", make: (w) => photoOf(w.eventA.id), allowed: STAFF_A },
-      { name: "photo of event B", make: (w) => photoOf(w.eventB.id), allowed: TEAM },
+  // The event's Drive folder and photo count (brief 2026-10-29, A): written by jobs and definer functions only.
+  {
+    table: "event_photo_folders",
+    select: [
+      { name: "folder of event A", make: (w) => folderOf(w.eventA.id), allowed: STAFF_A },
+      { name: "folder of event B", make: (w) => folderOf(w.eventB.id), allowed: TEAM },
     ],
-    (w) => photoOf(w.eventA.id),
-    (w) => ({ event_id: w.eventA.id, storage_path: "x", file_name: "x", mime_type: "image/png", size_bytes: 1 }),
-    { status: "uploaded" }
-  )
+    insert: [{ payload: (w) => ({ event_id: w.eventD.id, photo_count: 5 }), allowed: NOBODY, match: (p) => ({ event_id: p.event_id as string }) }],
+    update: [
+      { name: "count of A", make: (w) => folderOf(w.eventA.id), patch: () => ({ photo_count: 999 }), allowed: NOBODY },
+      { name: "tick of A", make: (w) => folderOf(w.eventA.id), patch: () => ({ marked_uploaded_at: new Date().toISOString() }), allowed: NOBODY },
+    ],
+    delete: [{ name: "folder of A", make: (w) => folderOf(w.eventA.id), allowed: NOBODY }],
+  }
 );
 
 export async function cleanupExtra() {

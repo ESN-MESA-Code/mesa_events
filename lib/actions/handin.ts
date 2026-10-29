@@ -1,9 +1,9 @@
 // Hand-in (receipts, photos, pre-approvals) and Finance (Beleg, checks,
 // payouts, budgets) and the Treasurer (rules, pre-approvals).
 import { z } from "zod";
-import { dbError, defineAction, PAGES, forbidden, requireEventStaff, requireRole, uuid, cents } from "@/lib/actions/core";
+import { dbError, defineAction, PAGES, forbidden, requireEventOc, requireEventStaff, requireRole, uuid, cents } from "@/lib/actions/core";
 import { isValidIban } from "@/lib/reimbursement";
-import { PHOTO_PATH, UPLOADS } from "@/lib/uploads";
+import { isTeam } from "@/lib/roles";
 
 const kind = z.enum(["ticket", "food_allowance", "ancillary", "travel_accommodation", "further_expenses", "social_ancillary"]);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date");
@@ -65,22 +65,20 @@ export const withdrawReceipt = defineAction(z.object({ claim_id: uuid }), async 
   dbError((await ctx.supabase.rpc("withdraw_receipt", { claim: i.claim_id })).error);
 }, { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] });
 
-export const addEventPhoto = defineAction(
-  z.object({
-    event_id: uuid,
-    path: z.string().regex(PHOTO_PATH),
-    file_name: z.string().trim().min(1).max(200),
-    mime_type: z.enum(UPLOADS.photo.types),
-    size_bytes: z.number().int().min(1).max(UPLOADS.photo.maxBytes),
-  }),
-  async (ctx, i) => {
-    if (!i.path.startsWith(`${i.event_id}/`)) throw forbidden("The photo belongs to another event.");
-    await requireEventStaff(ctx, i.event_id, null);
-    const { error } = await ctx.supabase.rpc("add_event_photo", { event: i.event_id, path: i.path, file_name: i.file_name, mime_type: i.mime_type, size_bytes: i.size_bytes });
-    dbError(error);
-  },
-  { revalidate: [PAGES.event, PAGES.home] }
-);
+// Photos go straight into the event's Drive folder (brief 2026-10-29, A);
+// the platform counts them, or the OC ticks them when Drive cannot be read.
+export const markPhotosUploaded = defineAction(z.object({ event_id: uuid, uploaded: z.boolean() }), async (ctx, i) => {
+  await requireEventOc(ctx, i.event_id);
+  dbError((await ctx.supabase.rpc("mark_photos_uploaded", { event: i.event_id, uploaded: i.uploaded })).error);
+}, { revalidate: [PAGES.event, PAGES.home, PAGES.eventsTeam] });
+
+/** "Check again": a job counts the folder's files now (the page refreshes until it did). */
+export const checkPhotosAgain = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
+  await requireEventStaff(ctx, i.event_id, null).catch(() => {
+    if (!isTeam(ctx.viewer.roles)) throw forbidden("Only the event's OC and helpers and the teams can do this.");
+  });
+  dbError((await ctx.supabase.rpc("request_photo_count", { event: i.event_id })).error);
+}, { revalidate: [] });
 
 export const requestPreapproval = defineAction(
   z.object({ event_id: uuid, description: z.string().trim().min(1).max(1000), estimated_cents: cents }),

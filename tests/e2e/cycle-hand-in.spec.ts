@@ -21,7 +21,7 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   const open = await createEvent({ title: `Not handed in ${tag}`, cycle_id: cycle!.id, status: "completed", starts_at: day(20), oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 1 });
   const handIn = async (eventId: string) => {
     await admin.from("attendance_lists").update({ signed_off_at: day(21), signed_off_by: USERS.oc.email, headcount: 10 }).eq("event_id", eventId);
-    await admin.from("event_photos").insert({ event_id: eventId, storage_path: `test/${eventId}/1.jpg`, file_name: "1.jpg", mime_type: "image/jpeg", size_bytes: 1000, status: "uploaded" });
+    await admin.from("event_photo_folders").upsert({ event_id: eventId, photo_count: 3, counted_at: day(22) });
   };
   await handIn(done.id);
   const label = cycleLabel(month);

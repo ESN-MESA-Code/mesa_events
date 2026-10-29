@@ -36,12 +36,13 @@ class NotConfigured implements ChatClient, DriveClient {
   postMessage = async () => this.fail();
   updateMessage = async () => this.fail();
   notify = async () => this.fail();
-  uploadFile = async () => this.fail();
+  ensureFolder = async () => this.fail();
+  countFiles = async () => this.fail();
 }
 
 export function googleClients(admin: SupabaseClient<Database>, env: Record<string, string | undefined> = process.env): GoogleClients {
   if (googleMode(env) === "fake") {
-    return { mode: "fake", chat: new DbChatClient(admin), drive: new DbDriveClient(admin), directory: new DbDirectoryClient(admin) };
+    return { mode: "fake", chat: new DbChatClient(admin), drive: new DbDriveClient(admin, env.DRIVE_PHOTOS_FOLDER_ID || undefined), directory: new DbDirectoryClient(admin) };
   }
   const sa = serviceAccountFromEnv(env);
   if (!sa) throw new Error("GOOGLE_MODE=real needs GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_KEY");

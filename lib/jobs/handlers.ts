@@ -4,7 +4,7 @@ import { roleGroups, type AppRole } from "@/lib/roles";
 import type { JobHandler } from "@/lib/jobs/runner";
 import { createSpace, eventStatusChange, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
 import { publishDescription } from "@/lib/jobs/descriptions";
-import { uploadPhoto } from "@/lib/jobs/drive";
+import { countPhotos, ensureFolder, photoReminder } from "@/lib/jobs/photos";
 
 /** Mirrors the configured Google groups into public.role_members ('group' rows). */
 export const syncRoles: JobHandler = async (_job, { admin, google, env }) => {
@@ -31,5 +31,7 @@ export const HANDLERS: Record<string, JobHandler> = {
   "chat.roster_message": rosterChange,
   "chat.event_status": eventStatusChange,
   "chat.publish_description": publishDescription,
-  "drive.upload_photo": uploadPhoto,
+  "drive.ensure_folder": ensureFolder,
+  "drive.count_photos": countPhotos,
+  "chat.photo_reminder": photoReminder,
 };

@@ -30,8 +30,8 @@ export default async function AdminPage() {
       <div className="space-y-6">
         {mode === "fake" && (
           <Alert tone="warning">
-            Google services run in <strong>fake mode</strong> (no service account configured): Chat spaces, messages and Drive
-            uploads are recorded in the database only.
+            Google services run in <strong>fake mode</strong> (no service account configured): Chat spaces, messages and the Drive
+            photo folders are recorded in the database only (<code>npm run fake:drive</code> puts files into a folder).
           </Alert>
         )}
         <Card>
