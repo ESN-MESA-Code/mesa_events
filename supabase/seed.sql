@@ -60,9 +60,12 @@ insert into public.role_members (email, role, source) values
   ('admin@esnmesa.org', 'admin', 'group');
 
 -- The local job runner: pg_cron calls `npm run dev:local` on the host.
+-- 'environment': a demo database, so the staging seed may create demo members
+-- and reset the data (migration 20261029005000_staging_demo.sql).
 insert into private.config (key, value) values
   ('job_runner_url', 'http://host.docker.internal:3000/api/jobs/run'),
-  ('job_runner_secret', 'local-jobs-secret-not-for-production')
+  ('job_runner_secret', 'local-jobs-secret-not-for-production'),
+  ('environment', 'development')
 on conflict (key) do update set value = excluded.value;
 
 -- Test-only views of what the database schedules and sends (service role,

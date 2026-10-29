@@ -8,6 +8,8 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } fr
 import { ActionButton } from "@/components/ActionButton";
 import { AddRoleForm, SettingsForm } from "./forms";
 import { removeManualRole, retryJob, syncRolesNow } from "@/app/actions/admin";
+import { isStaging } from "@/lib/staging";
+import { StagingCard } from "./StagingCard";
 import { setChannelEnabled } from "@/app/actions/publishing";
 import { telegramMode } from "@/lib/telegram";
 
@@ -15,8 +17,9 @@ export const metadata: Metadata = { title: "Admin" };
 
 // Admin (IT): role mapping (groups from env), manual role members, settings,
 // and the jobs queue (Chat, Drive, role sync) with retries.
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ demo?: string }> }) {
   await requirePageRole(["admin"], { page: "Admin" });
+  const { demo } = await searchParams;
   const supabase = await createSessionClient();
   const [{ data: members }, { data: jobs }, { data: settings }, { data: channels }] = await Promise.all([
     supabase.from("role_members").select("*").order("role").order("email"),
@@ -31,6 +34,8 @@ export default async function AdminPage() {
     <>
       <PageHeader title="Admin" description="Role mapping, settings and background jobs." />
       <div className="space-y-6">
+        {/* Staging builds only (a build-time constant), and only on the staging site. */}
+        {process.env.NEXT_PUBLIC_APP_ENV === "staging" && isStaging() && <StagingCard result={demo} />}
         {mode === "fake" && (
           <Alert tone="warning">
             Google services run in <strong>fake mode</strong> (no service account configured): Chat spaces, messages and the Drive

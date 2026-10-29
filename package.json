@@ -21,6 +21,8 @@
     "gen:types": "node scripts/gen-types.mjs",
     "gen:actions": "node scripts/gen-actions.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:staging": "node scripts/seed-staging.mjs",
+    "staging:reset": "node scripts/seed-staging.mjs --reset",
     "clean:test-data": "node scripts/clean-test-data.mjs",
     "fake:drive": "node scripts/fake-drive.mjs",
     "import:bot-archive": "node scripts/bot-archive.mjs",
