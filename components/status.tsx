@@ -44,6 +44,25 @@ export interface StepView {
   note?: string;
 }
 
+/**
+ * An event's stage track (Comms page): the whole stepper from the small
+ * breakpoint on; on phones only the current stage and "n of m".
+ */
+export function StageTrack({ steps, label, position, testId }: { steps: StepView[]; label: string; position: number; testId?: string }) {
+  const current = steps.find((s) => s.state === "current");
+  return (
+    <div data-testid={testId}>
+      <div className="hidden sm:block">
+        <Stepper steps={steps} label={label} compact />
+      </div>
+      <p className="sm:hidden text-[11px] text-gray-600" data-testid="stage-compact">
+        <span className={cn("rounded-full px-2 py-0.5 font-medium", current ? "bg-esn text-white" : "bg-emerald-50 text-emerald-800")}>{current ? current.label : "✓ All done"}</span>{" "}
+        {position} of {steps.length}
+      </p>
+    </div>
+  );
+}
+
 /** Steps in a row (wrapping on phones): done ✓, the current one highlighted. */
 export function Stepper({ steps, label, compact = false, testId }: { steps: StepView[]; label: string; compact?: boolean; testId?: string }) {
   return (

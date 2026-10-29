@@ -1,7 +1,8 @@
 // Event descriptions: the month's deadline, editing (autosave), Comms
-// review, publishing.
+// review, publishing, reminding the OC.
 import { z } from "zod";
-import { ActionError, dbError, defineAction, PAGES, notFound, requireRole, uuid } from "@/lib/actions/core";
+import { ActionError, dbError, defineAction, PAGES, forbidden, notFound, requireRole, uuid } from "@/lib/actions/core";
+import { hasRole } from "@/lib/roles";
 import { localDateTime } from "@/lib/actions/planning";
 import { coerceFields, renderDescription, validateAll, TEXT_FIELDS } from "@/lib/description/template";
 import { berlinDate, nowMs } from "@/lib/dates";
@@ -72,3 +73,11 @@ export const noteCancellation = defineAction(z.object({ event_id: uuid }), async
   requireRole(ctx, "comms");
   dbError((await ctx.supabase.rpc("note_cancellation", { event: i.event_id })).error);
 }, { revalidate: [PAGES.comms, PAGES.home] });
+
+/** "Remind OC" on the Comms page (brief 2026-10-29, C): once a day per event and topic. */
+export const remindOc = defineAction(z.object({ event_id: uuid, about: z.enum(["description", "report"]) }), async (ctx, i) => {
+  if (!hasRole(ctx.viewer.roles, "comms") && !hasRole(ctx.viewer.roles, "events")) throw forbidden("Only the Comms and Events teams send reminders.");
+  const { data, error } = await ctx.supabase.rpc("remind_oc", { event: i.event_id, about: i.about });
+  dbError(error);
+  return { sent: data === true };
+}, { revalidate: [] });

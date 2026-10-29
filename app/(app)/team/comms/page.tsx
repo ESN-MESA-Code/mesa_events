@@ -2,13 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { cycleLabel, formatDateTime, formatDue, nowMs } from "@/lib/dates";
-import { DESCRIPTION_STATUS } from "@/components/status";
-import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { addMonths, cycleLabel, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { Alert, Badge, Card, CardContent, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
-import { noteCancellation } from "@/app/actions/descriptions";
+import { StageTrack } from "@/components/status";
+import { MonthSelector } from "@/components/MonthSelector";
+import { EsnUpload } from "@/components/EsnUpload";
+import { noteCancellation, publishDescription } from "@/app/actions/descriptions";
 import { hasRole } from "@/lib/roles";
-import { cyclesWithProgress } from "@/lib/cycleFacts";
+import { loadEsn } from "@/lib/esn/load";
+import { FILTERS, eventStage, parseFilter, stageCounts, type FilterId } from "@/lib/commsStages";
+import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
+import { cn } from "@/lib/utils";
+import { RemindButton } from "./RemindButton";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -26,30 +32,19 @@ type Row = {
   missed: boolean;
 };
 
-function List({ rows, empty, testId, show }: { rows: Row[]; empty: string; testId: string; show: (r: Row) => React.ReactNode }) {
-  if (!rows.length) return <EmptyState>{empty}</EmptyState>;
-  return (
-    <ul className="divide-y divide-gray-100 text-sm" data-testid={testId}>
-      {rows.map((r) => (
-        <li key={r.event_id} className="flex flex-wrap items-center gap-2 py-2">
-          <Link href={`/events/${r.event_id}/description?from=comms`} className="font-medium text-gray-900 hover:text-esn">
-            {r.title}
-          </Link>
-          <span className="text-xs text-gray-500">{formatDateTime(r.starts_at)}</span>
-          <span className="ml-auto">{show(r)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// The Comms team's overview: progress per month, what to review, what is
-// ready to publish, which descriptions are due or late (late: the month's
-// deadline passed and the event is still ahead), and – collapsed – events
-// that happened without one (missed).
-export default async function CommsPage() {
+// The Comms team's page, one month at a time (brief 2026-10-29, C): each
+// event of the month with its stage – description to write, in review,
+// approved, published, the event, the report, ESN Activities – and the
+// action of that stage right there. Filters by stage ("Needs Comms" first);
+// late and missed are marks on the row. Months: those with events from half
+// a year back on; the page opens on the first one with work for Comms.
+export default async function CommsPage({ searchParams }: { searchParams: Promise<{ month?: string; show?: string }> }) {
   const viewer = await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
+  const isComms = hasRole(viewer.roles, "comms");
+  const sp = await searchParams;
   const supabase = await createSessionClient();
+  const now = nowMs();
+  const thisMonth = monthOf(new Date(now).toISOString());
   const [{ data }, { data: cancelled }] = await Promise.all([
     supabase.rpc("description_overview"),
     // Cancelled after the description went out: Comms decides about a correction (review 2026-10-29 A2).
@@ -61,52 +56,61 @@ export default async function CommsPage() {
       .not("descriptions.published_at", "is", null)
       .order("starts_at"),
   ]);
-  const now = nowMs();
-  const rows = ((data ?? []) as Row[]).filter((r) => Date.parse(r.starts_at) > now - 7 * 86_400_000).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  // Late: chase the OC (the event is still ahead); missed: it happened without a published description (review 2026-10-29 A6).
-  const ahead = rows.filter((r) => !r.missed);
-  const awaiting = ahead.filter((r) => r.status === "submitted");
-  const ready = ahead.filter((r) => r.status === "approved");
-  const late = ahead.filter((r) => r.late);
-  const due = ahead.filter((r) => !r.late && ["missing", "draft", "changes_requested"].includes(r.status));
-  const published = rows.filter((r) => r.status === "published");
-  const missed = ((data ?? []) as Row[]).filter((r) => r.missed && Date.parse(r.starts_at) > now - 60 * 86_400_000).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
-  // Progress per cycle, over all its running events (also those already past).
-  const all = (data ?? []) as Row[];
-  // Done cycles (every event happened and is handed in) drop out (review 2026-10-29 A4).
-  const recentIds = [...new Set(all.filter((r) => r.cycle_id && Date.parse(r.starts_at) > now - 7 * 86_400_000).map((r) => r.cycle_id!))];
-  const { data: cycleRows } = recentIds.length
-    ? await supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").in("id", recentIds)
-    : { data: [] };
-  const running = (await cyclesWithProgress(supabase, cycleRows ?? [])).filter((c) => !c.progress.done);
-  const cycles = running.map((c) => c.month).sort();
-  const progress = cycles.map((month) => {
-    const list = all.filter((r) => r.cycle_month === month);
-    const done = list.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;
-    return { month, total: list.length, done, published: list.filter((r) => r.status === "published").length, late: list.filter((r) => r.late).length, deadline: list[0]?.deadline ?? null };
+  const from = addMonths(thisMonth, -6);
+  const rows = ((data ?? []) as Row[]).filter((r) => monthOf(r.starts_at) >= from).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const [esn, { data: requested }] = await Promise.all([
+    loadEsn(supabase, rows.map((r) => r.event_id)),
+    // Published by a job: until it ran, the row says so instead of offering "Publish" again.
+    supabase.from("descriptions").select("event_id").eq("status", "approved").not("publish_requested_at", "is", null).in("event_id", rows.map((r) => r.event_id)),
+  ]);
+  const publishing = new Set((requested ?? []).map((d) => d.event_id));
+  const views = new Map(
+    rows.map((r) => {
+      const e = esn.get(r.event_id);
+      return [r.event_id, eventStage({ description: r.status, startsAt: r.starts_at, now, late: r.late, missed: r.missed, reportIn: !!e?.report, esn: e?.status.state ?? "not_ready" })];
+    })
+  );
+  const months = [...new Set(rows.map((r) => monthOf(r.starts_at)))].sort();
+  const work = (m: string) => rows.filter((r) => monthOf(r.starts_at) === m && views.get(r.event_id)!.needsComms).length;
+  const month = pickMonth(
+    months.map((m) => ({ month: m, hasWork: work(m) > 0 })),
+    parseMonthParam(sp.month),
+    thisMonth
+  );
+
+  const inMonth = month ? rows.filter((r) => monthOf(r.starts_at) === month) : [];
+  const monthViews = inMonth.map((r) => views.get(r.event_id)!);
+  const counts = stageCounts(monthViews);
+  const filter = parseFilter(sp.show);
+  const shown = inMonth.filter((r) => {
+    const v = views.get(r.event_id)!;
+    return filter === "all" || (filter === "needs" ? v.needsComms : v.filter === filter);
   });
+  const descriptionsIn = inMonth.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;
+  const happened = inMonth.filter((r) => Date.parse(r.starts_at) <= now);
+  const uploaded = happened.filter((r) => esn.get(r.event_id)?.status.state === "uploaded").length;
+  const deadline = inMonth.find((r) => r.deadline)?.deadline ?? null;
+  const showHref = (show: FilterId) => `/team/comms?month=${monthParam(month!)}${show === "needs" ? "" : `&show=${show}`}`;
 
   return (
     <>
-      <PageHeader title="Comms" description="Review event descriptions and publish them to the events' Chat spaces." />
-      {progress.length > 0 && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="comms-progress">
-          {progress.map((p) => (
-            <Card key={p.month} className="p-4 space-y-2">
-              <p className="text-sm font-medium text-gray-900">{cycleLabel(p.month)}</p>
-              <p className="text-xl font-semibold tabular-nums">
-                {p.done} of {p.total} <span className="text-sm font-normal text-gray-500">descriptions in</span>
-              </p>
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
-                <div className="h-full bg-esn" style={{ width: `${p.total ? Math.round((p.done / p.total) * 100) : 0}%` }} />
-              </div>
-              <p className="text-xs text-gray-500">
-                {p.published} published{p.late ? ` · ${p.late} late` : ""} · {p.deadline ? formatDue(p.deadline, now) : "no deadline set"}
-              </p>
-            </Card>
-          ))}
+      <PageHeader title="Comms" description="Each event of the month from its description to ESN Activities – what is next, and the action right there.">
+        <div className="flex flex-wrap items-center gap-3">
+          {isComms && (
+            <Link href="/team/comms/esn-activities" className="text-sm text-esn hover:underline">
+              ESN Activities script →
+            </Link>
+          )}
+          <MonthSelector
+            options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
+            current={month ? monthParam(month) : null}
+            path="/team/comms"
+            storageKey="mesa:month:comms"
+            explicit={!!parseMonthParam(sp.month)}
+          />
         </div>
-      )}
+      </PageHeader>
+
       {(cancelled ?? []).length > 0 && (
         <Alert tone="warning" className="mb-6 space-y-2" data-testid="cancelled-published">
           <p className="font-medium">Cancelled after the description was published</p>
@@ -121,7 +125,7 @@ export default async function CommsPage() {
                   {formatDateTime(e.starts_at)} · cancelled {e.cancelled_at ? formatDateTime(e.cancelled_at) : ""}
                   {e.cancel_reason ? ` – ${e.cancel_reason}` : ""}
                 </span>
-                {hasRole(viewer.roles, "comms") && (
+                {isComms && (
                   <span className="ml-auto">
                     <ActionButton action={noteCancellation} input={{ event_id: e.id }} variant="outline">
                       Handled
@@ -133,85 +137,106 @@ export default async function CommsPage() {
           </ul>
         </Alert>
       )}
-      <div className="grid gap-6 lg:grid-cols-2">
+
+      {!month ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Awaiting review</CardTitle>
-            <Badge tone={awaiting.length ? "blue" : "gray"}>{awaiting.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <List rows={awaiting} empty="Nothing to review." testId="awaiting-review" show={(r) => <span className="text-xs text-gray-500">submitted {r.submitted_at ? formatDateTime(r.submitted_at) : ""}</span>} />
-          </CardContent>
+          <EmptyState>No events in the last six months or ahead.</EmptyState>
         </Card>
+      ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>Approved – ready to publish</CardTitle>
-            <Badge tone={ready.length ? "green" : "gray"}>{ready.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <List rows={ready} empty="Nothing waiting to be published." testId="ready-to-publish" show={() => <Badge tone="green">Approved</Badge>} />
+          <CardContent className="space-y-4 pt-5">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="comms-month">
+              <h2 className="text-base font-semibold text-gray-900">{cycleLabel(month)}</h2>
+              <p className="text-sm text-gray-600" data-testid="comms-progress">
+                {descriptionsIn} of {inMonth.length} descriptions in · {uploaded} of {happened.length} on ESN Activities
+              </p>
+              <p className="text-xs text-gray-500">{deadline ? `Description ${formatDue(deadline, now)}` : "No description deadline set"}</p>
+            </div>
+
+            <nav aria-label="Filter by stage" className="flex flex-wrap gap-2" data-testid="stage-filters">
+              {(["needs", ...FILTERS.map((f) => f.id), "all"] as FilterId[]).map((id) => {
+                const label = id === "needs" ? "Needs Comms" : id === "all" ? "All" : FILTERS.find((f) => f.id === id)!.label;
+                if (id !== "needs" && id !== "all" && counts[id] === 0 && filter !== id) return null;
+                return (
+                  <Link
+                    key={id}
+                    href={showHref(id)}
+                    aria-current={filter === id ? "page" : undefined}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium",
+                      filter === id ? "border-esn bg-esn text-white" : "border-gray-300 bg-white text-gray-700 hover:border-esn hover:text-esn"
+                    )}
+                    data-testid={`filter-${id}`}
+                  >
+                    {label} <span className="tabular-nums opacity-80">{counts[id]}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {!shown.length ? (
+              <EmptyState>
+                {filter === "needs" ? (
+                  <>
+                    Nothing needs Comms in this month.{" "}
+                    <Link href={showHref("all")} className="text-esn hover:underline">
+                      Show all {inMonth.length}
+                    </Link>
+                  </>
+                ) : (
+                  "No events at this stage."
+                )}
+              </EmptyState>
+            ) : (
+              <ul className="divide-y divide-gray-100" data-testid="comms-rows">
+                {shown.map((r) => {
+                  const v = views.get(r.event_id)!;
+                  const e = esn.get(r.event_id);
+                  return (
+                    <li key={r.event_id} className="space-y-2 py-3" data-testid={`comms-row-${r.event_id}`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/events/${r.event_id}/description?from=comms`} className="font-medium text-gray-900 hover:text-esn">
+                          {r.title}
+                        </Link>
+                        <span className="text-xs text-gray-500">{formatShortDate(r.starts_at)}</span>
+                        {v.marks.includes("late") && <Badge tone="red">late</Badge>}
+                        {v.marks.includes("missed") && <Badge tone="gray">missed</Badge>}
+                        <span className="ml-auto flex flex-wrap items-center gap-2" data-testid="row-action">
+                          {v.current === "write" && (isComms ? <RemindButton eventId={r.event_id} about="description" /> : <span className="text-xs text-gray-500">The OC writes it</span>)}
+                          {v.current === "review" && (
+                            <Link href={`/events/${r.event_id}/description?from=comms`} className={buttonVariants({ size: "sm" })}>
+                              Review
+                            </Link>
+                          )}
+                          {v.current === "approved" &&
+                            (publishing.has(r.event_id) ? (
+                              <span className="text-xs text-gray-500">Publishing to the Chat space…</span>
+                            ) : isComms ? (
+                              <ActionButton action={publishDescription} input={{ event_id: r.event_id }} confirm={`Publish “${r.title}” to the event's Chat space?`}>
+                                Publish
+                              </ActionButton>
+                            ) : (
+                              <span className="text-xs text-gray-500">Ready to publish</span>
+                            ))}
+                          {v.current === "published" && <span className="text-xs text-gray-500">Published – the event is on {formatShortDate(r.starts_at)}</span>}
+                          {v.current === "report" && (isComms ? <RemindButton eventId={r.event_id} about="report" /> : <span className="text-xs text-gray-500">The OC writes the report</span>)}
+                          {v.current === null && e?.status.state === "uploaded" && (
+                            <a href={e.status.url} target="_blank" rel="noopener noreferrer" className="text-xs text-esn hover:underline">
+                              View on ESN Activities
+                            </a>
+                          )}
+                        </span>
+                      </div>
+                      <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
+                      {v.current === "esn" && e && <EsnUpload eventId={r.event_id} status={e.status} canSet={isComms} compact />}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Late</CardTitle>
-            <Badge tone={late.length ? "red" : "gray"}>{late.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <List
-              rows={late}
-              empty="Nothing late."
-              testId="late-descriptions"
-              show={(r) => (
-                <span className="text-xs text-red-700">
-                  {r.deadline ? formatDue(r.deadline, now) : ""}
-                  {` · ${DESCRIPTION_STATUS[r.status]?.label ?? r.status}`}
-                </span>
-              )}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Due</CardTitle>
-            <Badge>{due.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <List
-              rows={due}
-              empty="All descriptions are in."
-              testId="due-descriptions"
-              show={(r) => (
-                <span className="text-xs text-gray-500">
-                  {DESCRIPTION_STATUS[r.status]?.label ?? r.status}
-                  {r.deadline ? ` · ${formatDue(r.deadline, now)}` : " · no deadline set"}
-                </span>
-              )}
-            />
-          </CardContent>
-        </Card>
-        {missed.length > 0 && (
-          <Card className="lg:col-span-2">
-            <details data-testid="missed-descriptions">
-              <summary className="cursor-pointer px-5 py-4 text-base font-semibold text-gray-900">
-                Missed <span className="text-sm font-normal text-gray-500">({missed.length} · happened without a published description, last 60 days)</span>
-              </summary>
-              <CardContent>
-                <List rows={missed} empty="" testId="missed-list" show={(r) => <span className="text-xs text-gray-500">{DESCRIPTION_STATUS[r.status]?.label ?? r.status}</span>} />
-              </CardContent>
-            </details>
-          </Card>
-        )}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Published</CardTitle>
-            <Badge>{published.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <List rows={published} empty="Nothing published yet." testId="published-descriptions" show={(r) => <span className="text-xs text-gray-500">{r.published_at ? formatDateTime(r.published_at) : ""}</span>} />
-          </CardContent>
-        </Card>
-      </div>
+      )}
     </>
   );
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { cycleLabel, formatCents, formatDateTime, formatDue, formatShortDate, nowMs } from "@/lib/dates";
+import { cycleLabel, formatCents, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { monthParam } from "@/lib/month";
 import { nextStep, type NextStep } from "@/lib/checklist";
 import { checklistInput, volunteerForms } from "@/lib/eventStatus";
 import { cyclesWithProgress } from "@/lib/cycleFacts";
@@ -234,10 +235,16 @@ function QueueCard({ title, href, testId, children }: { title: string; href: str
   );
 }
 
-function Figure({ label, value, tone }: { label: string; value: number; tone?: "amber" | "red" | "blue" }) {
+function Figure({ label, value, tone, href }: { label: string; value: number; tone?: "amber" | "red" | "blue"; href?: string }) {
   return (
     <p className="flex items-center gap-2">
-      <span className="text-gray-600">{label}</span>
+      {href && value ? (
+        <Link href={href} className="text-esn hover:underline">
+          {label}
+        </Link>
+      ) : (
+        <span className="text-gray-600">{label}</span>
+      )}
       <Badge tone={value ? (tone ?? "blue") : "gray"} className="ml-auto tabular-nums">
         {value}
       </Badge>
@@ -259,7 +266,7 @@ async function EventsQueue() {
       <ul className="space-y-1.5">
         {progress.map((c) => (
           <li key={c.id}>
-            <Link href={`/team/events/cycles/${c.id}`} className="font-medium text-esn hover:underline">
+            <Link href={`/team/events?month=${monthParam(c.month)}`} className="font-medium text-esn hover:underline">
               {cycleLabel(c.month)}
             </Link>
             <span className="block text-xs text-gray-600">{c.progress.current ? `${c.progress.steps.find((s) => s.state === "current")!.label}: ${c.progress.action}` : c.progress.summary}</span>
@@ -275,12 +282,17 @@ async function CommsQueue() {
   const supabase = await createSessionClient();
   const { data } = await supabase.rpc("description_overview");
   // Only what can still be done: no missed events, Late only while the event is ahead (review 2026-10-29 A6).
-  const rows = (data ?? []).filter((r) => !r.missed);
+  const rows = (data ?? []).filter((r) => !r.missed).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  // Each figure leads to the month of its first event, filtered to that stage (brief 2026-10-29, C).
+  const link = (list: typeof rows, show: string) => (list.length ? `/team/comms?month=${monthParam(monthOf(list[0].starts_at))}&show=${show}` : undefined);
+  const review = rows.filter((r) => r.status === "submitted");
+  const ready = rows.filter((r) => r.status === "approved");
+  const late = rows.filter((r) => r.late);
   return (
-    <QueueCard title="Comms" href="/team/comms" testId="queue-comms">
-      <Figure label="Awaiting review" value={rows.filter((r) => r.status === "submitted").length} />
-      <Figure label="Approved – ready to publish" value={rows.filter((r) => r.status === "approved").length} />
-      <Figure label="Late" value={rows.filter((r) => r.late).length} tone="red" />
+    <QueueCard title="Comms" href={link([...review, ...ready, ...late].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), "needs") ?? "/team/comms"} testId="queue-comms">
+      <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
+      <Figure label="Approved – ready to publish" value={ready.length} href={link(ready, "publish")} />
+      <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
     </QueueCard>
   );
 }

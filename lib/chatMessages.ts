@@ -95,3 +95,12 @@ export function photoUploadMessage(title: string, folder: { url: string; name: s
 export function esnUploadedMessage(title: string, url: string): string {
   return `${MENTION_ALL} 📢 Comms has uploaded *${title}* on ESN Activities. <${url}|Open>`;
 }
+
+/** Comms (or Events) reminds the OC: the description, or the event report after the event. */
+export function remindOcMessage(about: "description" | "report", title: string, ocEmail: string | null, eventUrl: string, deadline: string | null): string {
+  const who = ocEmail ? `${mention(ocEmail)} ` : "";
+  if (about === "description") {
+    return `✍️ ${who}A reminder from Comms: please write the description of *${title}*${deadline ? ` – due ${formatDateTime(deadline)}` : ""}: ${eventUrl}/description`;
+  }
+  return `📝 ${who}A reminder from Comms: please fill in the short event report of *${title}* (for ESN Activities): ${eventUrl}/hand-in#event-report`;
+}

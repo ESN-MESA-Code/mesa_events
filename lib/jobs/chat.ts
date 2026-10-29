@@ -3,7 +3,7 @@
 // a failure halfway through finishes the work without duplicates.
 import { createHash } from "node:crypto";
 import type { Job, JobDeps, JobHandler } from "@/lib/jobs/runner";
-import { eventStatusMessage, rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
+import { eventStatusMessage, remindOcMessage, rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
 
 const eventIdOf = (job: Job) => {
   const id = (job.payload as { event_id?: string }).event_id;
@@ -129,4 +129,27 @@ export const eventStatusChange: JobHandler = async (job, deps) => {
   const staff = people.filter((x) => x.kind !== "team");
   for (const person of staff) await deps.google.chat.notify(person.email, text, `${id}-${person.email}`);
   return { posted: false, notified: staff.length };
+};
+
+/**
+ * Comms reminds the OC (brief 2026-10-29, C): in the event's space,
+ * @-mentioning the OC; without a space, a direct message to the OC.
+ * remind_oc() enqueues at most one per event, topic and day.
+ */
+export const remindOc: JobHandler = async (job, deps) => {
+  const p = job.payload as { event_id: string; about: "description" | "report" };
+  const { data: event, error } = await deps.admin.from("events").select("id, title, starts_at, status, chat_space_name, planning_cycles(description_deadline)").eq("id", p.event_id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!event) return { skipped: "event gone" };
+  const oc = (await roster(deps, event.id)).find((x) => x.kind === "oc") ?? null;
+  const deadline = (event.planning_cycles as { description_deadline: string | null } | null)?.description_deadline ?? null;
+  const text = remindOcMessage(p.about, event.title, oc?.email ?? null, eventUrl(deps, event.id), deadline);
+  const id = `remind-${p.about}-${createHash("sha256").update(job.idempotency_key).digest("hex").slice(0, 32)}`;
+  if (event.chat_space_name) {
+    await deps.google.chat.postMessage(event.chat_space_name, text, id);
+    return { posted: true };
+  }
+  if (!oc) return { skipped: "no space and no OC" };
+  await deps.google.chat.notify(oc.email, text, id);
+  return { notified: oc.email };
 };

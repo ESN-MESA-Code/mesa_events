@@ -27,3 +27,7 @@ export async function publishDescription(input: unknown) {
 export async function noteCancellation(input: unknown) {
   return run(A.noteCancellation, input);
 }
+
+export async function remindOc(input: unknown) {
+  return run(A.remindOc, input);
+}

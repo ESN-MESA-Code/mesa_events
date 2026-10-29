@@ -40,9 +40,11 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   await expect(missing).not.toContainText(`Handed in ${tag}`);
   await expect(missing.getByRole("link", { name: `Not handed in ${tag}` })).toHaveAttribute("href", `/events/${open.id}/hand-in?from=cycle:${cycle!.id}`);
 
-  // Still running: on the dashboard as a card.
-  await page.goto("/team/events");
-  await expect(page.getByTestId(`cycle-card-${month}`)).toContainText("hand-in · 1 of 2 events handed in");
+  // Still running: the month on the Events page, each event with what is missing.
+  await page.goto(`/team/events?month=${month.slice(0, 7)}`);
+  await expect(page.getByTestId("month-summary")).toContainText("hand-in · 1 of 2 events handed in");
+  await expect(page.getByTestId(`month-event-${open.id}`).getByTestId("handin")).toHaveText("Hand-in: missing attendance list, photos, event report");
+  await expect(page.getByTestId(`month-event-${done.id}`).getByTestId("handin")).toHaveText("Hand-in: ✓ handed in");
 
   await page.goto("/");
   await expect(page.getByTestId("queue-events")).toContainText(label);
@@ -53,12 +55,9 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   await expect(page.getByTestId("cycle-next")).toContainText("Every event is handed in – the cycle is done");
   await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toHaveCount(0);
 
-  await page.goto("/team/events");
-  await expect(page.getByTestId(`cycle-card-${month}`)).toHaveCount(0);
-  const past = page.getByTestId("past-cycles");
-  await expect(past.getByRole("link", { name: new RegExp(label) })).toBeHidden();
-  await past.locator("summary").click();
-  await expect(past.getByRole("link", { name: new RegExp(label) })).toContainText("Done");
+  await page.goto(`/team/events?month=${month.slice(0, 7)}`);
+  await expect(page.getByTestId("month-next")).toContainText("Every event is handed in");
+  await expect(page.getByLabel("Month", { exact: true }).locator(`option[value="${month.slice(0, 7)}"]`)).toHaveText(`${label} · done`);
 
   await page.goto("/");
   await expect(page.getByTestId("queue-events")).not.toContainText(label);

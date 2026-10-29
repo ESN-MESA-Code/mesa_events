@@ -33,6 +33,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
   await test.step("Events builds the month's schedule", async () => {
     await as(USERS.events);
     await page.goto("/team/events");
+    // "+ Plan a new month" sits in the month list (brief 2026-10-29, C).
+    await page.getByLabel("Month", { exact: true }).selectOption({ label: "+ Plan a new month" });
     await page.locator("#cycle-month").fill(month);
     await page.getByRole("button", { name: "Start planning" }).click();
     await page.waitForURL(/\/team\/events\/cycles\/[0-9a-f-]{36}$/);
@@ -129,8 +131,9 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("Comms requests changes; the OC fixes and resubmits", async () => {
     await as(USERS.comms);
-    await page.goto("/team/comms");
-    await page.getByTestId("awaiting-review").getByRole("link", { name: quiz }).click();
+    await page.goto(`/team/comms?month=${month}`);
+    // Needs Comms is the default filter; the review is the row's action.
+    await page.getByTestId("comms-rows").locator("li", { hasText: quiz }).getByRole("link", { name: "Review" }).click();
     await page.getByLabel("Review comment").fill("Please add the meeting point.");
     await page.getByRole("button", { name: "Request changes" }).click();
     await expect(page.getByTestId("description-status")).toHaveText("Changes requested");
