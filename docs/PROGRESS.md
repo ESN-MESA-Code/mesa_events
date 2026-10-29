@@ -1,5 +1,49 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-10-29: Staging with rich demo data
+
+Brief: `docs/BRIEF-2026-10-29-staging.md`. Status: **S1–S4 implemented and tested; all checks
+green.** Committed on local `main` (S1, S2, S3, the staging-mode build and E2E, the seed's
+extension for history and publishing, S4, docs); **nothing deployed or pushed, no cloud project
+created**, no real Google, Telegram or ESN call. Setup, presenting and resetting:
+`docs/STAGING.md`. Decisions: `docs/DECISIONS.md` ("2026-10-29 – Staging"). New migration
+`20261029005000_staging_demo.sql`; `supabase/seed.sql` marks the local stack as a demo database.
+
+| Item | What changed | Tests |
+|---|---|---|
+| S1 Environment | `APP_ENV` / `NEXT_PUBLIC_APP_ENV` (always inlined), `.env.example`, `.env.staging.example`; amber banner on every page and "[Staging]" titles; `X-Robots-Tag: noindex` and disallow-all `robots.txt`; fakes forced on staging; boot refuses real credentials, a non-fake Google mode, a short access code, mismatched build/runtime or a non-staging project; `/admin/demo-outbox` (staging and dev) lists Chat messages, DMs, spaces, Drive folders and Telegram posts | Unit: every gate combination, project refs, boot check, fakes, noindex, outbox helpers. E2E (staging): banner, title, noindex, robots, outbox; (production): none of it. Docker: the staging container exits with `GOOGLE_MODE=real` |
+| S2 Demo sign-in | `/staging`: access code (constant time, rate-limited, session cookie) → role picker with what each role sees; 404 unless all four gates hold; passwords derived from the service-role key; "Switch role" in the banner; Google sign-in unchanged | Unit: code, cookie, limiter, passwords, cast and personas. Bundle scan: no staging sign-in code or strings in a production build (and present in a staging build). E2E (staging): wrong code → right code → picker → role → banner, switching roles, 375 px |
+| S3 Demo data | `npm run seed:staging` / `staging:reset` (`--remote` only through the gates), Admin → "Reset demo data" (staging, typed confirmation, logged): 40 members, 35 events in six cycles relative to today with every status, ideas, answers, allocation with manual moves, drop-outs and claimed slots, descriptions in every stage (late, missed), attendance, Drive photos, reports, ESN Activities, claims in every status, batches, pre-approvals, trip budgets, an early payout, the outbox, publishing posts, bot-archive history, a natural activity log | DB: the seed twice, every status listed in the brief, sign-in only with the derived password, demo addresses only, service role only, the wipe (rolled back) and its refusal on an unmarked database, a decision for every table. E2E (staging): the reset needs RESET, admins only, same origin |
+| S4 Deployment | `docs/STAGING.md` (checklist, Supabase + Vercel, VPS with `docker-compose.staging.yml`, presenting with a 10-minute walkthrough, resetting, troubleshooting); Dockerfile build arg `NEXT_PUBLIC_APP_ENV` and a `tools` stage; CI builds and smoke-tests the staging image and runs the staging E2E | Staging image built and smoke-tested locally (banner, noindex, refusal); main image unchanged |
+
+### Checks (this round)
+
+| Check | Result |
+|---|---|
+| `npm test` (unit) | **443 passed** (incl. the staging gates, sign-in, outbox and plural scan) |
+| `npm run test:db` | **2,138 passed** (15 files), incl. `tests/db/staging.test.ts` |
+| `npm run test:e2e` (production build) | **58 passed**, 1 skipped (as before), incl. `staging-off.spec.ts` |
+| `npm run test:e2e:staging` (staging build) | **8 passed** (desktop and 375 px) |
+| `npm run build:local` + `npm run test:bundle` | build OK, **20 passed**: no staging sign-in code or strings in the production bundle, present in the staging one |
+| `npm run lint`, `npm run typecheck`, `npm run gen:actions -- --check` | clean |
+| `docker build` | main image `mesa-events:local` (317 MB): login without banner or noindex, `/staging` 404, job route 401. Staging image: banner, noindex, exits with `GOOGLE_MODE=real` |
+| Database after the suites | only the demo data (18 events, 4 cycles, 6 posts, no demo members; `clean:test-data` finds nothing) |
+
+One earlier full run failed in `chat.test.ts`, `publishing.test.ts` and `schedule.spec.ts` because the
+staging demo was loaded in the shared database at the time (see the limits below); on the demo
+state all pass. Once, `seed:staging` replaced the demo data while another round's DB suite was
+running – the sessions now take turns on the shared database.
+
+Not done / limits: nothing deployed – the hosted steps in `docs/STAGING.md` are unverified,
+in particular whether a hosted project's `postgres` role may write `auth.users` (the demo
+members; noted in the troubleshooting table). The access-code rate limit is per server instance.
+The in-app browser pane did not draw during this round, so the UI was checked through the
+staging E2E (screenshots at 375 px) and HTTP requests instead of a manual walkthrough. The
+other suites expect the normal local demo state: with `seed:staging` loaded, `chat.test.ts` and
+the jobs tests of `publishing.test.ts` see the extra team members and jobs – run
+`npm run seed:staging -- --remove && npm run seed:demo` before them (the staging tests restore
+whatever was there).
+
 ## Round 2026-10-29: Drive photos, ESN Activities, month pages, inspiration, publishing
 
 Briefs: `docs/BRIEF-2026-10-29-photos-esn-inspiration.md` (A–D) and
