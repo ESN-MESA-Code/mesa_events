@@ -206,7 +206,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   );
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div id="description" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] scroll-mt-4">
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={st.tone} data-testid="description-status">

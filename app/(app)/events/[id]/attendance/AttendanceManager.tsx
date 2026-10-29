@@ -72,7 +72,7 @@ export function AttendanceManager({
 
   return (
     <div className="space-y-6">
-      <Card className="p-5 space-y-3">
+      <Card id="sign-off" className="p-5 space-y-3 scroll-mt-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span
             data-testid="list-state"

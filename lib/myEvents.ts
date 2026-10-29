@@ -33,7 +33,7 @@ export interface HandInState {
 }
 
 /** A past event's label: is something of the hand-in still the person's to do? */
-export function handInState(status: string, step: NextStep): HandInState {
+export function handInState(status: string, step: Pick<NextStep, "kind">): HandInState {
   if (status === "cancelled" || status === "dropped") {
     if (step.kind === "action") return { label: "Hand-in open", tone: "amber" };
     return status === "cancelled" ? { label: "Cancelled", tone: "red" } : { label: "Dropped", tone: "gray" };

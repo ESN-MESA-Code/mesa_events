@@ -43,13 +43,13 @@ describe("groupEvents", () => {
 
 describe("handInState", () => {
   it("open while the person has something to do, else done", () => {
-    expect(handInState("completed", { label: "Sign off the attendance list", tab: "attendance", kind: "action" })).toEqual({ label: "Hand-in open", tone: "amber" });
-    expect(handInState("completed", { label: "Hand-in complete", tab: "hand-in", kind: "done" })).toEqual({ label: "Done", tone: "green" });
-    expect(handInState("confirmed", { label: "Paid for something? Register the receipt", tab: "hand-in", kind: "done" }).label).toBe("Done");
+    expect(handInState("completed", { kind: "action" })).toEqual({ label: "Hand-in open", tone: "amber" });
+    expect(handInState("completed", { kind: "done" })).toEqual({ label: "Done", tone: "green" });
+    expect(handInState("confirmed", { kind: "done" }).label).toBe("Done");
   });
 
   it("cancelled events: open only while Belege are missing", () => {
-    expect(handInState("cancelled", { label: "Hand the Belege to Finance", tab: "hand-in", kind: "action" }).label).toBe("Hand-in open");
-    expect(handInState("cancelled", { label: "Event cancelled – nothing left to do", tab: "", kind: "done" })).toEqual({ label: "Cancelled", tone: "red" });
+    expect(handInState("cancelled", { kind: "action" }).label).toBe("Hand-in open");
+    expect(handInState("cancelled", { kind: "done" })).toEqual({ label: "Cancelled", tone: "red" });
   });
 });

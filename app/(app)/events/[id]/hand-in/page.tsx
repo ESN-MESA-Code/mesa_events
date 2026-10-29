@@ -50,7 +50,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card id="hand-in-status" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Hand-in status</CardTitle>
           {!handInOpen && <Badge>Opens on {formatShortDate(event.starts_at)}</Badge>}
@@ -91,7 +91,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
         </Alert>
 
         {myAssignment && (
-          <Card>
+          <Card id="register-receipt" className="scroll-mt-4">
             <CardHeader>
               <CardTitle>Register a receipt</CardTitle>
             </CardHeader>
@@ -119,7 +119,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           </Card>
         )}
 
-        <Card>
+        <Card id="your-receipts" className="scroll-mt-4">
           <CardHeader>
             <CardTitle>Your receipts</CardTitle>
           </CardHeader>

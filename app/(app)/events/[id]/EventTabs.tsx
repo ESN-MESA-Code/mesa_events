@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { backLink, withFrom } from "@/lib/breadcrumbs";
+import { stepLink, type NextStep } from "@/lib/checklist";
 
 /** "← My events" etc.: back to where the member came from (?from=…). */
 export function EventBreadcrumb({ fallback }: { fallback: string }) {
@@ -48,5 +49,25 @@ export function EventTabs({ id, notes }: { id: string; notes: Partial<Record<str
         })}
       </ul>
     </nav>
+  );
+}
+
+/** "Your next step": to the tab where it is done, or down to it on that tab (review 2026-10-29 B4). */
+export function NextStepBanner({ id, step, due }: { id: string; step: NextStep; due: string | null }) {
+  const link = stepLink(id, step, usePathname());
+  return (
+    <Link
+      href={link.href}
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 hover:shadow-sm",
+        step.kind === "action" ? "border-esn/30 bg-esn/5" : "border-gray-200 bg-white"
+      )}
+      data-testid="next-step-banner"
+    >
+      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
+      <span className="font-semibold text-esn-dark">{step.label}</span>
+      {due && <span className="text-sm text-gray-600">{due}</span>}
+      <span className="ml-auto text-sm text-esn">{link.label}</span>
+    </Link>
   );
 }

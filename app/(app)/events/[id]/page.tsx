@@ -40,7 +40,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="space-y-6">
         {event.status === "understaffed" && (
-          <Alert tone="warning" data-testid="understaffed-banner">
+          <Alert tone="warning" id="decide" className="scroll-mt-4" data-testid="understaffed-banner">
             <p className="font-medium">This event is short of people.</p>
             <p className="mt-1">
               {slot?.open_oc ? "It has no OC. " : ""}
@@ -176,7 +176,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
 
       <div className="space-y-6">
         <EventChecklist eventId={id} />
-        <Card>
+        <Card id="chat-space" className="scroll-mt-4">
           <CardHeader>
             <CardTitle>Chat space</CardTitle>
           </CardHeader>

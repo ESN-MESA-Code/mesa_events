@@ -1,16 +1,12 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
 import { formatDateTime, formatDue, nowMs } from "@/lib/dates";
 import { EVENT_TYPE_LABELS } from "@/lib/labels";
-import { nextStep, type NextStep } from "@/lib/checklist";
+import { TAB_LABEL, nextStep } from "@/lib/checklist";
 import { checklistInput } from "@/lib/eventStatus";
 import { Badge } from "@/components/ui";
 import { EventStatusBadge } from "@/components/status";
-import { cn } from "@/lib/utils";
-import { EventBreadcrumb, EventTabs } from "./EventTabs";
-
-const TAB_LABEL: Record<NextStep["tab"], string> = { "": "Overview", description: "Description", attendance: "Attendance", "hand-in": "Hand-in" };
+import { EventBreadcrumb, EventTabs, NextStepBanner } from "./EventTabs";
 
 export default async function EventLayout({ params, children }: { params: Promise<{ id: string }>; children: React.ReactNode }) {
   const { id } = await params;
@@ -43,19 +39,9 @@ export default async function EventLayout({ params, children }: { params: Promis
         </p>
       </div>
       {step && step.kind !== "done" && (
-        <Link
-          href={`/events/${id}${step.tab ? `/${step.tab}` : ""}`}
-          className={cn(
-            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 hover:shadow-sm",
-            step.kind === "action" ? "border-esn/30 bg-esn/5" : "border-gray-200 bg-white"
-          )}
-          data-testid="next-step-banner"
-        >
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
-          <span className="font-semibold text-esn-dark">{step.label}</span>
-          {step.due && <span className="text-sm text-gray-600">{formatDue(step.due, nowMs())}</span>}
-          <span className="ml-auto text-sm text-esn">{TAB_LABEL[step.tab]} →</span>
-        </Link>
+        <Suspense>
+          <NextStepBanner id={id} step={step} due={step.due ? formatDue(step.due, nowMs()) : null} />
+        </Suspense>
       )}
       <Suspense>
         <EventTabs id={id} notes={notes} />

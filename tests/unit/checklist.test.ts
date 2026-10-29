@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checklistDone, eventChecklist, nextStep, type ChecklistInput } from "@/lib/checklist";
+import { checklistDone, eventChecklist, nextStep, stepLink, type ChecklistInput } from "@/lib/checklist";
 
 const now = Date.parse("2026-11-10T12:00:00Z");
 const base: ChecklistInput = {
@@ -61,7 +61,7 @@ describe("next step", () => {
 
   it("the OC: decide, write, wait for Comms, sign off, hand in", () => {
     expect(step({ status: "understaffed" })).toMatchObject({ label: "Decide: run under-staffed or cancel?", tab: "", kind: "action" });
-    expect(step({})).toEqual({ label: "Write the description", tab: "description", due: base.descriptionDeadline, kind: "action" });
+    expect(step({})).toEqual({ label: "Write the description", tab: "description", anchor: "description", due: base.descriptionDeadline, kind: "action" });
     expect(step({ description: "changes_requested" }).label).toMatch(/Fix the description/);
     expect(step({ description: "submitted" })).toMatchObject({ kind: "waiting" });
     expect(step({ description: "published" })).toMatchObject({ kind: "done", tab: "attendance" });
@@ -80,5 +80,17 @@ describe("next step", () => {
   it("cancelled events only need the money sorted out", () => {
     expect(step({ status: "cancelled", receipts: 1, belegeMissing: 1 })).toMatchObject({ kind: "action", tab: "hand-in" });
     expect(step({ status: "cancelled" })).toMatchObject({ kind: "done" });
+  });
+});
+
+describe("next-step banner link (review 2026-10-29 B4)", () => {
+  const id = "e1";
+  it("on another tab: to the tab and the section", () => {
+    expect(stepLink(id, { tab: "description", anchor: "description" }, "/events/e1")).toEqual({ href: "/events/e1/description#description", label: "Description →" });
+    expect(stepLink(id, { tab: "", anchor: "decide" }, "/events/e1/hand-in")).toEqual({ href: "/events/e1#decide", label: "Overview →" });
+  });
+  it("on the step's own tab: down to the section, not a link to itself", () => {
+    expect(stepLink(id, { tab: "", anchor: "decide" }, "/events/e1")).toEqual({ href: "#decide", label: "Go to it ↓" });
+    expect(stepLink(id, { tab: "hand-in", anchor: "hand-in-status" }, "/events/e1/hand-in")).toEqual({ href: "#hand-in-status", label: "Go to it ↓" });
   });
 });

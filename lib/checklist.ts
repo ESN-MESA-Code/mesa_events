@@ -7,6 +7,9 @@ import { plural } from "@/lib/plural";
 /** The event's tabs: "" is the overview. */
 export type EventTab = "" | "description" | "attendance" | "hand-in";
 
+/** Ids of the sections the next step points to (review 2026-10-29 B4). */
+export type StepAnchor = "decide" | "chat-space" | "description" | "sign-off" | "hand-in-status" | "register-receipt" | "your-receipts" | "event";
+
 export interface ChecklistInput {
   status: string;
   startsAt: string;
@@ -95,6 +98,8 @@ export function checklistDone(items: ChecklistItem[]): boolean {
 export interface NextStep {
   label: string;
   tab: EventTab;
+  /** The element on the tab where it is done (an id; the banner scrolls there on that tab). */
+  anchor: StepAnchor;
   /** Deadline (ISO). */
   due?: string;
   /** action: theirs to do · waiting: on someone else · done: nothing left. */
@@ -110,26 +115,37 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const handInOpen = i.photos === 0 || i.belegeMissing > 0;
   if (i.status === "cancelled" || i.status === "dropped") {
     return i.belegeMissing > 0
-      ? { label: "Hand the Belege to Finance", tab: "hand-in", kind: "action" }
-      : { label: "Event cancelled – nothing left to do", tab: "", kind: "done" };
+      ? { label: "Hand the Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" }
+      : { label: "Event cancelled – nothing left to do", tab: "", anchor: "event", kind: "done" };
   }
   if (role === "helper") {
-    if (!started) return { label: "Help at the event – see the Chat space", tab: "", kind: "waiting" };
-    if (i.belegeMissing > 0) return { label: "Hand the paper Belege to Finance", tab: "hand-in", kind: "action" };
-    return { label: "Paid for something? Register the receipt", tab: "hand-in", kind: "done" };
+    if (!started) return { label: "Help at the event – see the Chat space", tab: "", anchor: "chat-space", kind: "waiting" };
+    if (i.belegeMissing > 0) return { label: "Hand the paper Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
+    return { label: "Paid for something? Register the receipt", tab: "hand-in", anchor: "register-receipt", kind: "done" };
   }
-  if (i.status === "understaffed" && !started) return { label: "Decide: run under-staffed or cancel?", tab: "", kind: "action" };
+  if (i.status === "understaffed" && !started) return { label: "Decide: run under-staffed or cancel?", tab: "", anchor: "decide", kind: "action" };
   if (!started) {
     if (i.description === "missing" || i.description === "draft") {
-      return { label: "Write the description", tab: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };
+      return { label: "Write the description", tab: "description", anchor: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };
     }
     if (i.description === "changes_requested") {
-      return { label: "Fix the description (Comms asked for changes)", tab: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };
+      return { label: "Fix the description (Comms asked for changes)", tab: "description", anchor: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };
     }
-    if (i.description === "submitted" || i.description === "approved") return { label: "Description is with Comms", tab: "description", kind: "waiting" };
-    return { label: "All set – the attendance list opens on the day", tab: "attendance", kind: "done" };
+    if (i.description === "submitted" || i.description === "approved") return { label: "Description is with Comms", tab: "description", anchor: "description", kind: "waiting" };
+    return { label: "All set – the attendance list opens on the day", tab: "attendance", anchor: "sign-off", kind: "done" };
   }
-  if (!i.listSignedOff) return { label: "Sign off the attendance list", tab: "attendance", kind: "action" };
-  if (handInOpen) return { label: "Hand in photos and Belege", tab: "hand-in", kind: "action" };
-  return { label: "Hand-in complete", tab: "hand-in", kind: "done" };
+  if (!i.listSignedOff) return { label: "Sign off the attendance list", tab: "attendance", anchor: "sign-off", kind: "action" };
+  if (handInOpen) return { label: "Hand in photos and Belege", tab: "hand-in", anchor: "hand-in-status", kind: "action" };
+  return { label: "Hand-in complete", tab: "hand-in", anchor: "hand-in-status", kind: "done" };
+}
+
+export const TAB_LABEL: Record<EventTab, string> = { "": "Overview", description: "Description", attendance: "Attendance", "hand-in": "Hand-in" };
+
+/**
+ * Where the next-step banner leads (review 2026-10-29 B4): to the step's tab
+ * and section, or – on that tab already – just down to the section.
+ */
+export function stepLink(eventId: string, step: Pick<NextStep, "tab" | "anchor">, pathname: string): { href: string; label: string } {
+  const tabPath = `/events/${eventId}${step.tab ? `/${step.tab}` : ""}`;
+  return pathname === tabPath ? { href: `#${step.anchor}`, label: "Go to it ↓" } : { href: `${tabPath}#${step.anchor}`, label: `${TAB_LABEL[step.tab]} →` };
 }
