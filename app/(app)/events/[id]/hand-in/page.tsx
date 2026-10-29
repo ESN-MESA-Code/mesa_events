@@ -4,7 +4,6 @@ import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatDateTime, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
 import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { ClaimItem } from "@/components/ClaimItem";
-import { ClaimStatusBadge } from "@/components/status";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawReceipt } from "@/app/actions/handin";
@@ -147,8 +146,9 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                         rejectedReason: c.rejected_reason,
                       }}
                     >
+                      {/* The steps above show the status; no badge repeating it (review 2026-10-29 B5). */}
                       <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <ClaimStatusBadge status={c.status as ClaimStatus} />
+                        {c.status === "not_submitted" && <span className="text-amber-800">Beleg not handed in yet – bring the paper Beleg to Finance</span>}
                         {!c.payout_method && (
                           <Link href="/me#claims" className="text-amber-800 underline">
                             ⚠️ Add bank or PayPal details
