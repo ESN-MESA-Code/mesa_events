@@ -227,8 +227,11 @@ describe("planning cycle end to end", () => {
   it("the OC decides whether an under-staffed event runs", async () => {
     const asHelper = await (await as(USERS.helper)).from("events").update({ status: "cancelled" }, { count: "exact" }).eq("id", hikeId);
     expect(asHelper.count ?? 0).toBe(0);
-    const asOc = await (await as(USERS.oc)).from("events").update({ status: "confirmed" }).eq("id", hikeId);
-    expect(asOc.error).toBeNull();
+    // Not by writing the status (review 2026-10-29 A1): through the decision, which is stored.
+    expect((await (await as(USERS.oc)).from("events").update({ status: "confirmed" }).eq("id", hikeId)).error?.code).toBe("42501");
+    expect((await (await as(USERS.oc)).rpc("decide_understaffed", { event: hikeId, decision: "run" })).error).toBeNull();
+    const { data: decided } = await admin.from("events").select("status, understaffed_decision").eq("id", hikeId).single();
+    expect(decided).toEqual({ status: "confirmed", understaffed_decision: "run" });
     // But not the title (Events only).
     const title = await (await as(USERS.oc)).from("events").update({ title: "Renamed" }).eq("id", hikeId);
     expect(title.error?.code).toBe("42501");

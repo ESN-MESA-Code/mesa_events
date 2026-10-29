@@ -8,6 +8,7 @@ import { HANDLERS } from "@/lib/jobs/handlers";
 import { googleClients } from "@/lib/google";
 import { MemoryChatClient, MemoryDirectoryClient, MemoryDriveClient } from "@/lib/google/fakes";
 import * as R from "@/lib/actions/roster";
+import * as P from "@/lib/actions/planning";
 
 const deps: JobDeps = { admin, google: googleClients(admin, { GOOGLE_MODE: "fake" }), env: {}, baseUrl: "https://events.example" };
 const runJobs = () => runDueJobs(deps, HANDLERS, { worker: "chat-test" });
@@ -175,5 +176,63 @@ describe("job retries with a failing Chat API", () => {
     expect(chat.spaces.size).toBe(1);
     expect([...chat.messages.values()].filter((m) => m.text.startsWith("👋"))).toHaveLength(1);
     await admin.from("events").delete().eq("id", ev.id);
+  });
+});
+
+describe("the OC's decision on an under-staffed event (review 2026-10-29 A1)", () => {
+  let eventId: string;
+  const status = async () => (await admin.from("events").select("status, understaffed_decision, understaffed_decided_by").eq("id", eventId).single()).data!;
+  const assignmentOf = async (u: SeedUser) => (await admin.from("assignments").select("id").eq("event_id", eventId).eq("profile_id", u.id).eq("status", "active").single()).data!.id;
+
+  beforeAll(async () => {
+    const ev = await createEvent({ title: "Short-handed quiz", oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 3, starts_at: daysFromNow(12) });
+    eventId = ev.id;
+  });
+  afterAll(async () => {
+    await admin.from("events").delete().eq("id", eventId);
+  });
+
+  it("a short roster makes the event under-staffed; only the OC or Events decide, through the function", async () => {
+    expect(await status()).toMatchObject({ status: "understaffed", understaffed_decision: null });
+    expect((await (await as(USERS.helper)).rpc("decide_understaffed", { event: eventId, decision: "run" })).error?.code).toBe("42501");
+    // Neither the status nor the decision can be written directly.
+    await (await as(USERS.oc)).from("events").update({ status: "confirmed" }).eq("id", eventId);
+    await (await as(USERS.events)).from("events").update({ understaffed_decision: "run" }).eq("id", eventId);
+    expect(await status()).toMatchObject({ status: "understaffed", understaffed_decision: null });
+  });
+
+  it("decide run → a helper claims (still short) → stays confirmed, nobody is asked again", async () => {
+    expect((await R.decideUnderstaffed(await actionContext(USERS.oc), { event_id: eventId, decision: "run" })).ok).toBe(true);
+    expect(await status()).toEqual({ status: "confirmed", understaffed_decision: "run", understaffed_decided_by: USERS.oc.email });
+    // Still one helper short after the claim: before, this set it back to under-staffed.
+    expect((await R.claimSlot(await actionContext(USERS.member), { event_id: eventId, role: "helper" })).ok).toBe(true);
+    expect(await status()).toMatchObject({ status: "confirmed", understaffed_decision: "run" });
+    // A helper dropping out does not undo it either.
+    expect((await R.dropOut(await actionContext(USERS.member), { assignment_id: await assignmentOf(USERS.member) })).ok).toBe(true);
+    expect(await status()).toMatchObject({ status: "confirmed", understaffed_decision: "run" });
+    // Confirmed events need no decision.
+    expect(await R.decideUnderstaffed(await actionContext(USERS.oc), { event_id: eventId, decision: "cancel" })).toMatchObject({ ok: false });
+  });
+
+  it("the OC drops out → under-staffed again, the decision is cleared; the new OC decides again", async () => {
+    expect((await R.dropOut(await actionContext(USERS.oc), { assignment_id: await assignmentOf(USERS.oc) })).ok).toBe(true);
+    expect(await status()).toEqual({ status: "understaffed", understaffed_decision: null, understaffed_decided_by: null });
+    // Without an OC it cannot be "run"; the Events team can cancel it, or someone takes the OC slot.
+    expect((await (await as(USERS.events)).rpc("decide_understaffed", { event: eventId, decision: "run" })).error?.message).toMatch(/needs an OC/);
+    expect((await R.claimSlot(await actionContext(USERS.volunteer1), { event_id: eventId, role: "oc" })).ok).toBe(true);
+    expect(await status()).toMatchObject({ status: "understaffed", understaffed_decision: null });
+    expect((await R.decideUnderstaffed(await actionContext(USERS.volunteer1), { event_id: eventId, decision: "run" })).ok).toBe(true);
+    expect(await status()).toEqual({ status: "confirmed", understaffed_decision: "run", understaffed_decided_by: USERS.volunteer1.email });
+  });
+
+  it("the Events team swapping the OC on the roster clears the decision too", async () => {
+    const ctx = await actionContext(USERS.events);
+    const { data: ev } = await admin.from("events").select("cycle_id").eq("id", eventId).single();
+    expect(ev!.cycle_id).toBeNull();
+    // Events outside a cycle are adjustable on the roster board.
+    expect((await P.assign(ctx, { event_id: eventId, profile_id: USERS.volunteer2.id, role: "oc" })).ok).toBe(true);
+    expect(await status()).toMatchObject({ understaffed_decision: null });
+    // Vera is a helper now: 2 of 3, still short.
+    expect((await status()).status).toBe("understaffed");
   });
 });

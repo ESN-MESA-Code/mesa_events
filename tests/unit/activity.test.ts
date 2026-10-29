@@ -8,6 +8,10 @@ describe("activity in plain language", () => {
   it("events", () => {
     expect(say({ action: "insert" })).toBe("Event added to the schedule");
     expect(say({ details: { status: "understaffed" } })).toBe("Status: Under-staffed");
+    expect(say({ details: { status: "confirmed", understaffed_decision: "run", understaffed_decided_by: "oc@x" } })).toBe("Decided to run it with fewer helpers");
+    expect(say({ details: { understaffed_decision: null, understaffed_decided_at: null } })).toBe("The OC left – the run-with-fewer-helpers decision was reset");
+    expect(say({ details: { status: "cancelled", cancelled_at: "x" } })).toBe("Event cancelled");
+    expect(say({ details: { status: "understaffed", cancelled_at: null } })).toBe("Event reopened (Under-staffed)");
     expect(say({ details: { location: "Pub", price_cents: 500 } })).toBe("Changed the location, price");
     expect(say({ details: { chat_space_name: "spaces/x", chat_space_url: "https://chat" } })).toBe("Chat space created");
     expect(say({ details: { updated_by: "x" } })).toBeNull();

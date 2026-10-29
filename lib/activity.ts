@@ -35,7 +35,11 @@ export function describeActivity(e: LogEntry, nameOf: (profileId: string) => str
   const who = (id: unknown) => (typeof id === "string" && nameOf(id)) || "Someone";
   if (e.entity === "events") {
     if (e.action === "insert") return "Event added to the schedule";
+    if (d.understaffed_decision === "run") return "Decided to run it with fewer helpers";
+    if (d.status === "cancelled") return "Event cancelled";
+    if (d.status && d.cancelled_at === null) return `Event reopened (${EVENT_STATUS_LABELS[d.status as EventStatus] ?? d.status})`;
     if (typeof d.status === "string") return `Status: ${EVENT_STATUS_LABELS[d.status as EventStatus] ?? d.status}`;
+    if ("understaffed_decision" in d && d.understaffed_decision === null) return "The OC left – the run-with-fewer-helpers decision was reset";
     if (d.chat_space_url || d.chat_space_name) return "Chat space created";
     const fields = Object.keys(d).filter((k) => k in EVENT_FIELDS).map((k) => EVENT_FIELDS[k]);
     return fields.length ? `Changed the ${fields.join(", ")}` : null;

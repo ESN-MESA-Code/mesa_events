@@ -247,14 +247,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "capacity": number | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"updated_at": string,"visibility": string
+                    "capacity": number | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
+                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"updated_at"?: string,"visibility"?: string
+                    "capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -804,6 +804,9 @@ isOneToOne: false
                            },
 "decide_preapproval":
 { Args: { "approve": boolean,"decision_note"?: string,"preapproval": string }; Returns: undefined
+                           },
+"decide_understaffed":
+{ Args: { "decision": string,"event": string }; Returns: undefined
                            },
 "delete_expired_acknowledgements":
 { Args: Record<PropertyKey, never>; Returns: number

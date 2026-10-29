@@ -103,6 +103,11 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
           </CardHeader>
           <CardContent className="space-y-3">
             {!roster?.length && <EmptyState>The roster is not published yet.</EmptyState>}
+            {event.understaffed_decision === "run" && active.filter((a) => a.role === "helper").length < event.helpers_needed && (
+              <p className="text-xs text-gray-600" data-testid="runs-short">
+                Runs with fewer helpers – decided {event.understaffed_decided_at ? formatShortDate(event.understaffed_decided_at) : ""}. Open slots can still be claimed.
+              </p>
+            )}
             <ul className="space-y-1.5 text-sm" data-testid="roster">
               {active
                 .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))

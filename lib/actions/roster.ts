@@ -14,17 +14,17 @@ export const claimSlot = defineAction(z.object({ event_id: uuid, role: z.enum(["
   return { assignment_id: data as string };
 }, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam] });
 
-/** The OC (or Events) decides whether an under-staffed event runs. */
+/**
+ * The OC (or Events) decides whether an under-staffed event runs. "Run" is
+ * stored on the event and holds through later roster changes until the
+ * event loses its OC (decide_understaffed()).
+ */
 export const decideUnderstaffed = defineAction(z.object({ event_id: uuid, decision: z.enum(["run", "cancel"]) }), async (ctx, i) => {
   await requireEventOc(ctx, i.event_id);
   const { data: event } = await ctx.supabase.from("events").select("status").eq("id", i.event_id).single();
   if (!event) throw notFound();
   if (event.status !== "understaffed") throw forbidden("Only under-staffed events need this decision.");
-  const { error } = await ctx.supabase
-    .from("events")
-    .update({ status: i.decision === "run" ? "confirmed" : "cancelled" })
-    .eq("id", i.event_id);
-  dbError(error);
+  dbError((await ctx.supabase.rpc("decide_understaffed", { event: i.event_id, decision: i.decision })).error);
 }, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam] });
 
 export const requestChatSpace = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
