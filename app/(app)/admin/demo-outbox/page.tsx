@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/supabase/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { demoToolsEnabled } from "@/lib/staging";
@@ -34,20 +33,15 @@ export default async function DemoOutboxPage({ searchParams }: { searchParams: P
   const kind = parseOutboxKind((await searchParams).kind);
 
   const admin = supabaseAdmin();
-  const [spaces, members, messages, folders, files, people] = await Promise.all([
+  const [spaces, members, messages, folders, files, people, telegram] = await Promise.all([
     admin.from("fake_chat_spaces").select("name, display_name, description, created_at").order("created_at", { ascending: false }).limit(LIMIT),
     admin.from("fake_chat_members").select("space"),
     admin.from("fake_chat_messages").select("name, space, text, edits, created_at, updated_at").order("updated_at", { ascending: false }).limit(LIMIT),
     admin.from("fake_drive_folders").select("id, name, parent_id, created_at").order("created_at", { ascending: false }).limit(500),
     admin.from("fake_drive_files").select("folder_id"),
     admin.from("profiles").select("email, full_name"),
+    admin.from("fake_telegram_messages").select("chat_id, kind, text, photo, edits, deleted, updated_at").order("updated_at", { ascending: false }).limit(LIMIT),
   ]);
-  // Telegram arrives with the publishing channels; absent until then.
-  const telegram = await (admin as unknown as SupabaseClient)
-    .from("fake_telegram_messages")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(LIMIT);
 
   const names = new Map((people.data ?? []).map((p) => [p.email.toLowerCase(), p.full_name || p.email]));
   const spaceNames = new Map((spaces.data ?? []).map((s) => [s.name, s.display_name]));
@@ -93,17 +87,16 @@ export default async function DemoOutboxPage({ searchParams }: { searchParams: P
       meta: [plural(fileCount.get(f.id) ?? 0, "photo")],
     });
   }
-  if (!telegram.error) {
-    for (const t of (telegram.data ?? []) as Array<Record<string, unknown>>) {
-      entries.push({
-        kind: "telegram",
-        at: String(t.updated_at ?? t.created_at ?? ""),
-        where: String(t.chat_id ?? "Telegram channel"),
-        title: t.photo_url || t.photo ? "Photo post" : "Post",
-        body: String(t.text ?? t.caption ?? ""),
-        meta: Number(t.edits ?? 0) > 0 ? [`edited ${t.edits}×`] : [],
-      });
-    }
+  for (const t of telegram.data ?? []) {
+    entries.push({
+      kind: "telegram",
+      at: t.updated_at,
+      where: t.chat_id,
+      title: t.kind === "photo" ? "Photo post" : "Post",
+      // Telegram HTML, shown as text.
+      body: t.text.replace(/<\/?(b|i|u|s|a)[^>]*>/g, ""),
+      meta: [...(t.edits > 0 ? [`edited ${t.edits}×`] : []), ...(t.deleted ? ["deleted"] : [])],
+    });
   }
 
   const shown = sortOutbox(kind === "all" ? entries : entries.filter((e) => e.kind === kind));

@@ -152,6 +152,21 @@ describe("seed:staging", () => {
     expect(log.filter((l) => l.actor_email?.endsWith(".demo@esnmesa.org")).length).toBeGreaterThan(100);
   });
 
+  it("has a publishing schedule: published, skipped, planned and overdue posts, a bundle, Telegram in the fake", async () => {
+    const links = await rows(admin.from("publication_post_events").select("post_id, event_id").in("event_id", eventIds));
+    const posts = await rows(admin.from("publication_posts").select("id, channel, status, scheduled_for, link").in("id", [...new Set(links.map((l) => l.post_id))]));
+    for (const c of ["telegram", "instagram", "pretix"]) expect(posts.some((p) => p.channel === c), c).toBe(true);
+    for (const s of ["planned", "published", "skipped"]) expect(posts.some((p) => p.status === s), s).toBe(true);
+    expect(posts.some((p) => p.status === "planned" && Date.parse(p.scheduled_for) < Date.now())).toBe(true);
+    expect(posts.some((p) => links.filter((l) => l.post_id === p.id).length > 1)).toBe(true);
+    const published = posts.filter((p) => p.channel === "telegram" && p.status === "published");
+    const fake = await rows(admin.from("fake_telegram_messages").select("message_id").gte("message_id", 90_000).lte("message_id", 90_999));
+    expect(fake.length).toBe(published.length);
+    const planned = posts.filter((p) => p.channel === "telegram" && p.status === "planned").map((p) => `telegram.publish_post:${p.id}:1`);
+    const jobs = await rows(admin.from("jobs").select("status").in("idempotency_key", planned));
+    expect(jobs.length).toBe(planned.length);
+  });
+
   it("has history from the bot archive for \"Get inspired\"", async () => {
     expect(first.history).toBeGreaterThanOrEqual(10);
     const history = await rows(admin.from("events").select("title, status, cycle_id").eq("created_by", TAG).eq("source", "bot_archive"));

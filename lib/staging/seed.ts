@@ -40,6 +40,7 @@ import { NOTICE_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { DEMO_PEOPLE, demoEmail, person, type DemoPerson } from "@/lib/staging/people";
 import { demoPassword } from "@/lib/staging/password";
 import { importArchive } from "@/scripts/bot-archive.mjs";
+import { eventMessage } from "@/lib/telegram/messages";
 import { EVENTS, FIRST_NAMES, LAST_NAMES, NATIONALITIES, PROGRAMS, UNIVERSITIES, type EventKey, type EventType } from "@/lib/staging/content";
 
 type Db = SupabaseClient<Database>;
@@ -111,6 +112,9 @@ class Rng {
 const SEED = 20261029;
 /** The seed's event folders in the fake photo drive (semester folders are shared and stay). */
 const EVENT_FOLDER_PREFIX = "fakefolder-demoev-";
+/** The fake Telegram channel (lib/telegram, without TELEGRAM_CHAT_ID) and the seed's message ids in it. */
+const TELEGRAM_CHAT = "@mesa_fake_channel";
+const TELEGRAM_IDS = [90_000, 90_999] as const;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
@@ -1022,7 +1026,61 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
   check(await db.from("fake_chat_messages").upsert(messages, { onConflict: "name" }), "fake chat messages");
   check(await db.from("jobs").upsert(jobs, { onConflict: "idempotency_key" }), "jobs");
 
-  // 13. History from the description bot's Sheet ("Get inspired" on /ideas),
+  // 13. The publishing schedule: posts published, skipped, planned and overdue
+  // on Telegram, Instagram and pretix, one Telegram post bundling two events.
+  // Planned Telegram posts publish themselves (a job at their time, as the
+  // schedule board enqueues it); published ones are in the fake channel.
+  const tenAm = (date: string, hour = "10:00") => Date.parse(berlinInputToIso(`${date}T${hour}`));
+  const eventDay = (key: string, days: number) => plusDays(berlinDate(byKey.get(key)!.startsAt), days);
+  const posts: Database["public"]["Tables"]["publication_posts"]["Insert"][] = [];
+  const postEvents: Database["public"]["Tables"]["publication_post_events"]["Insert"][] = [];
+  const telegramMessages: Database["public"]["Tables"]["fake_telegram_messages"]["Insert"][] = [];
+  let telegramId = TELEGRAM_IDS[0];
+  const post = (channel: string, when: number, keys: string[], status: "planned" | "published" | "skipped", extra: Record<string, unknown> = {}) => {
+    const id = rng.uuid();
+    const by = comms[0]!;
+    const row: Database["public"]["Tables"]["publication_posts"]["Insert"] = {
+      id, channel, scheduled_for: iso(when), status, created_by: by, created_at: iso(Math.min(when, now) - 2 * DAY), updated_at: iso(Math.min(when, now)),
+      ...(status === "published" ? { published_at: iso(when), published_by: by } : {}),
+      ...extra,
+    };
+    if (channel === "telegram" && status === "published") {
+      const items = keys.map((k) => fieldsOf(byKey.get(k)!));
+      const html = eventMessage(items[0]!).html;
+      telegramId += 1;
+      telegramMessages.push({ chat_id: TELEGRAM_CHAT, message_id: telegramId, kind: "text", text: html, created_at: iso(when), updated_at: iso(when) });
+      Object.assign(row, { link: `https://t.me/${TELEGRAM_CHAT.slice(1)}/${telegramId}`, telegram: json({ chatId: TELEGRAM_CHAT, layout: "text", picture: null, textMessageId: telegramId, messageId: telegramId }) });
+    }
+    if (channel === "telegram" && status === "planned") {
+      jobs.push({ kind: "telegram.publish_post", payload: json({ post_id: id, version: 1 }), idempotency_key: `telegram.publish_post:${id}:1`, status: "pending", run_after: iso(when), created_at: row.created_at! });
+    }
+    posts.push(row);
+    keys.forEach((k, position) => postEvents.push({ post_id: id, event_id: byKey.get(k)!.id, position }));
+  };
+  const slug = (key: string) => byKey.get(key)!.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  post("pretix", tenAm(eventDay("pubQuiz", -8)), ["pubQuiz"], "published", { link: `https://pretix.eu/esnmesa/${slug("pubQuiz")}/` });
+  post("instagram", tenAm(eventDay("pubQuiz", -5)), ["pubQuiz"], "published", { link: "https://www.instagram.com/p/staging-pub-quiz/" });
+  post("telegram", tenAm(eventDay("pubQuiz", -4)), ["pubQuiz"], "published");
+  post("pretix", tenAm(eventDay("languageCafePast", -5)), ["languageCafePast"], "skipped", { skip_reason: "No pretix for free events" });
+  post("telegram", tenAm(eventDay("bouldering", -3)), ["bouldering"], "published");
+  post("instagram", tenAm(eventDay("brunchMarket", -6)), ["brunchMarket"], "published", { link: "https://www.instagram.com/p/staging-sunday-brunch/" });
+  post("telegram", Math.min(now - HOUR, tenAm(eventDay("movieNight", 0), "09:00")), ["movieNight"], "published");
+  post("instagram", Math.min(now - HOUR, tenAm(eventDay("movieNight", -1))), ["movieNight"], "published", { link: "https://www.instagram.com/p/staging-movie-night/" });
+  post("pretix", tenAm(eventDay("pubCrawl", -7)), ["pubCrawl"], "published", { link: `https://pretix.eu/esnmesa/${slug("pubCrawl")}/` });
+  // Overdue: planned for yesterday morning, not posted yet.
+  post("instagram", tenAm(plusDays(today, -1)), ["boardGames"], "planned");
+  // Planned this week, one of them a bundle.
+  post("instagram", tenAm(plusDays(today, 1), "12:00"), ["pubCrawl"], "planned", { note: "Costume ideas carousel" });
+  post("telegram", Math.max(now + 3 * HOUR, tenAm(plusDays(today, 1))), ["boardGames", "pubCrawl"], "planned", { note: "This week at ESN MESA" });
+  // Next month, planned before the description is approved (the board warns).
+  post("telegram", tenAm(eventDay("stammtisch", -3)), ["stammtisch"], "planned");
+  post("instagram", tenAm(eventDay("thanksgiving", -7)), ["thanksgiving"], "planned");
+  check(await db.from("publication_posts").insert(posts, { defaultToNull: false }), "publication posts");
+  check(await db.from("publication_post_events").insert(postEvents), "publication post events");
+  if (telegramMessages.length) check(await db.from("fake_telegram_messages").insert(telegramMessages), "fake Telegram messages");
+  check(await db.from("jobs").upsert(jobs.filter((j) => j.kind === "telegram.publish_post"), { onConflict: "idempotency_key" }), "Telegram jobs");
+
+  // 14. History from the description bot's Sheet ("Get inspired" on /ideas),
   // as `npm run import:bot-archive` brings it in: the same kinds of events
   // one and two years back.
   const history = HISTORY.map(([key, yearsBack, dayShift, intl, local], i) => {
@@ -1041,7 +1099,7 @@ We can’t wait to ${plan.closing}! ✨`;
   });
   const imported = await importArchive(db, history, { createdBy: TAG });
 
-  // 14. The activity log, as the people did it (the triggers wrote "now" and no one).
+  // 15. The activity log, as the people did it (the triggers wrote "now" and no one).
   await writeActivity(db, { built, cycleRows, ideaRows, descRows, reviews, claims, events, comms: comms[0]!, finance, email, keyOf, eventIds: built.map((b) => b.id), cycleIds: cycleRows.map((c) => c.id), now });
 
   const count = <T,>(rows: T[], key: (r: T) => string) => rows.reduce<Record<string, number>>((m, r) => ({ ...m, [key(r)]: (m[key(r)] ?? 0) + 1 }), {});
@@ -1171,6 +1229,9 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     }
     const folders = check(await db.from("event_photo_folders").select("folder_id").in("event_id", chunk).not("folder_id", "is", null), "old photo folders");
     if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id!)), "old drive folders");
+    const oldPosts = check(await db.from("publication_post_events").select("post_id").in("event_id", chunk), "old posts").map((p) => p.post_id);
+    for (const id of new Set(oldPosts)) check(await db.from("jobs").delete().like("idempotency_key", `telegram.publish_post:${id}:%`), "old post jobs");
+    if (oldPosts.length) check(await db.from("publication_posts").delete().in("id", [...new Set(oldPosts)]), "old posts");
     check(await db.from("reimbursements").delete().in("event_id", chunk), "old claims");
     check(await db.from("receipts").delete().in("event_id", chunk), "old receipts");
     check(await db.from("jobs").delete().in("event_id", chunk), "old jobs");
@@ -1178,6 +1239,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     check(await db.from("event_ideas").delete().in("event_id", chunk), "old linked ideas");
     check(await db.from("events").delete().in("id", chunk), "old events");
   }
+  // The seed's messages in the fake Telegram channel.
+  check(await db.from("fake_telegram_messages").delete().eq("chat_id", TELEGRAM_CHAT).gte("message_id", TELEGRAM_IDS[0]).lte("message_id", TELEGRAM_IDS[1]), "old Telegram messages");
   // Event folders of an earlier run that stopped half-way.
   check(await db.from("fake_drive_folders").delete().like("id", `${EVENT_FOLDER_PREFIX}%`), "old event folders");
   // Direct messages to demo members, their ideas, their ESN tokens.
