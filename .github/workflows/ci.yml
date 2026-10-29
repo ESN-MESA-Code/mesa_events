@@ -79,12 +79,17 @@ jobs:
         env:
           CI: "true"
           E2E_SKIP_BUILD: "1"
+      - name: Playwright against a staging build (banner, demo sign-in, outbox)
+        run: npm run test:e2e:staging
+        env:
+          CI: "true"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
           path: |
             playwright-report/
+            playwright-report-staging/
             test-results/
           retention-days: 7
 
@@ -106,3 +111,22 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://localhost:3000/login > /dev/null && break; sleep 1; done
           curl -fsS http://localhost:3000/login | grep -q "MESA"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/jobs/run)" = "401"
+      - name: Build the staging image (not pushed)
+        run: >
+          docker build
+          --build-arg NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54421
+          --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=local-anon-key
+          --build-arg NEXT_PUBLIC_APP_ENV=staging
+          -t mesa-events:staging-ci .
+      - name: The staging container shows the banner, and refuses real credentials
+        run: |
+          STAGING="-e APP_ENV=staging -e GOOGLE_MODE=fake -e STAGING_SUPABASE_PROJECT_REF=127.0.0.1:54421 -e STAGING_ACCESS_CODE=ci-only-staging-access-code -e APP_BASE_URL=http://localhost:3001 -e JOBS_SECRET=ci-only"
+          docker run -d --name mesa-staging -p 3001:3000 $STAGING mesa-events:staging-ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:3001/login > /dev/null && break; sleep 1; done
+          curl -fsS http://localhost:3001/login | grep -q "Staging – demo data only"
+          curl -fsSI http://localhost:3001/login | grep -qi "x-robots-tag: noindex"
+          set +e
+          timeout 60 docker run --rm $STAGING -e GOOGLE_MODE=real mesa-events:staging-ci
+          code=$?
+          set -e
+          test "$code" = "1"

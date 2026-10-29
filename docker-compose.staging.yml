@@ -1,0 +1,46 @@
+# The STAGING app on a VPS (docs/STAGING.md, "Target B"): a staging build
+# (NEXT_PUBLIC_APP_ENV=staging) with test data only, next to – never sharing –
+# production. Supabase is either a hosted staging project or a self-hosted
+# stack (Supabase's own docker-compose, https://supabase.com/docs/guides/self-hosting/docker,
+# in its own directory); point .env.staging at it. Put a TLS reverse proxy
+# (Caddy, nginx) in front for the staging domain.
+#
+#   cp .env.staging.example .env.staging   # fill it in
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm tools npm run staging:reset -- --remote
+services:
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_GOOGLE_WORKSPACE_DOMAIN: ${NEXT_PUBLIC_GOOGLE_WORKSPACE_DOMAIN:-esnmesa.org}
+        NEXT_PUBLIC_APP_ENV: staging
+    image: mesa-events:staging
+    env_file: .env.staging
+    environment:
+      # Whatever .env.staging says: staging runs on the fakes.
+      APP_ENV: staging
+      GOOGLE_MODE: fake
+      TELEGRAM_MODE: fake
+    ports:
+      # Next to a production container on 3000.
+      - "127.0.0.1:3001:3000"
+    restart: unless-stopped
+
+  # Seed scripts (not started by `up`): `run --rm tools npm run seed:staging -- --remote`.
+  tools:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: tools
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_APP_ENV: staging
+    image: mesa-events:staging-tools
+    env_file: .env.staging
+    environment:
+      APP_ENV: staging
+      NEXT_PUBLIC_APP_ENV: staging

@@ -139,7 +139,8 @@ export function stagingConfigProblems(env: Record<string, string | undefined>, b
 
 /** Throws (refusing to start) when staging is misconfigured. */
 export function assertStagingConfig(env: Record<string, string | undefined> = process.env): void {
-  const problems = stagingConfigProblems(env);
+  // The Supabase URL the build baked in is the one the app talks to.
+  const problems = stagingConfigProblems({ ...env, NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL });
   if (problems.length) {
     throw new Error(`Refusing to start: the staging configuration is unsafe.\n${problems.map((p) => `  - ${p}`).join("\n")}\nSee docs/STAGING.md.`);
   }

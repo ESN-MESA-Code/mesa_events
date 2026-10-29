@@ -119,6 +119,16 @@ on conflict (key) do update set value = excluded.value;
 3. Set `private.config` (above), the role groups, and the Google service account; check
    **Admin → Background jobs** after the first roster confirmation.
 
+## Staging (demo site)
+
+A staging deployment presents the platform with made-up data only: a banner on every page, a demo
+sign-in behind a shared access code (a role picker), fakes for every external service and a demo
+outbox. `npm run seed:staging` puts the same rich demo (40 fictional members, six months around
+today, every status) into the local stack; `npm run build:staging && npm run start:staging` runs
+a staging build on http://localhost:3200; `npm run test:e2e:staging` tests it. Setting it up on
+Supabase + Vercel or a VPS (`docker-compose.staging.yml`), presenting and resetting:
+**docs/STAGING.md**.
+
 ## Project layout
 
 ```
