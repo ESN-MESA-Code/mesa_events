@@ -53,10 +53,22 @@ Locally, seed users per role.
 8. **Description editor**: structured fields in the house template, live preview of the rendered Chat post, 4,096-char counter, TBA time/price, templates from past events, autosave, editor presence. **One description deadline per cycle**, set by Events, for all events.
 9. **Comms hand-off**: submit → Comms approves or requests changes (comments) → publish to the event's Chat space (+ @all), idempotent; editing after publish edits the message.
 10. **Attendance**: all MESAttendance features, attached to `events`.
-11. **Hand-in**: photo upload (to Drive via job), close attendance list, register each receipt (expense kind, amount, vendor, date, note). **No receipt photos are stored**: the **paper Beleg is mandatory** (German law) — the platform only tracks it.
+11. **Hand-in**: photos uploaded by the team straight into the event's **Drive folder** (`<semester>/<yyyy-MM-dd Title>`, created by a job; Chat reminders at the start and the next morning; the file count read from Drive, or the OC's tick), close attendance list, the **event report** (participants and results, for ESN Activities), register each receipt (expense kind, amount, vendor, date, note). **No receipt photos are stored**: the **paper Beleg is mandatory** (German law) — the platform only tracks it. (Brief 2026-10-29.)
 12. **Reimbursement**: statuses not submitted → Beleg received (who/when) → checked → paid / rejected. Category: team costs or ancillary costs. Payout by bank transfer or PayPal (store IBAN/PayPal only until paid). Approved claims go into a **monthly payout batch**; claims > €100 can be flagged for early payout.
 
-Dashboards per team: Events (schedule, unstaffed events, form status), Comms (descriptions due/late/awaiting review), Finance (open receipts, reimbursements, batches), plus a per-event checklist.
+Dashboards per team: Events (one month at a time: the cycle's steps and that month's events), Comms (one month at a time, each event by stage from the description to ESN Activities, with the action inline), Finance (open receipts, reimbursements, batches), plus a per-event checklist.
+
+Added by the brief of 2026-10-29 (docs/BRIEF-2026-10-29-photos-esn-inspiration.md and
+docs/BRIEF-2026-10-29-publishing.md):
+
+13. **ESN Activities**: the bot's "ESN form data" built from the description and the report; Comms
+    uploads with a browser script (personal access tokens; no API) or pastes the link; status
+    not ready → ready → uploaded per event.
+14. **Get inspired** on /ideas: search over previous events (also history imported from the bot's
+    Sheet), "Propose this again".
+15. **Publishing**: status per event and channel (Chat, Telegram, Instagram, pretix, ESN
+    Activities; channels as data); Telegram posts by the platform at their planned time
+    (re-publishing edits them); a drag-and-drop schedule board per month for Comms.
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 

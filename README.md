@@ -46,15 +46,24 @@ compile it out (tested).
 `seed:demo` prints links to a realistic month: confirmed events around today with Chat spaces
 (each in the cycle of the month it takes place in), an under-staffed hike, a weekend trip, an
 event happening now (attendance open, with the public form link), a past event with receipts for
-Finance, the following month's open volunteer form and ideas for the month after. Run it again
-to start over (it also removes what was added to its cycles by hand).
+Finance, Drive photos and an event report (ready for ESN Activities), an event uploaded to ESN
+Activities, a publishing schedule (one Telegram post publishes itself tomorrow at 10:00), history
+from the bot for "Get inspired", the following month's open volunteer form and ideas for the month
+after. Run it again to start over (it also removes what was added to its cycles by hand).
 
 Good to know:
 
 - The local Supabase uses ports **544xx** (API 54421, DB 54422) so it can run next to
   MESAttendance's stack.
-- **Google services run on fakes** without a service account: spaces, members, messages and Drive
-  files are recorded in the `fake_*` tables (Admin page shows "fake mode").
+- **Google services and Telegram run on fakes** without a service account / bot token: spaces,
+  members, messages, Drive folders and files and Telegram posts are recorded in the `fake_*` tables
+  (Admin page shows "fake mode"). `npm run fake:drive -- <event id> [n]` puts files into an event's
+  photo folder, as members would in Drive.
+- **History from the description bot:** export the bot's database Sheet (each semester tab as CSV,
+  or one JSON file) and run `npm run import:bot-archive -- <files…>` (`--dry-run` first); see
+  docs/DECISIONS.md ("D – Get inspired").
+- **ESN Activities:** Comms installs the browser script from Team → Comms → ESN Activities script
+  (Tampermonkey, personal access token).
 - **Background jobs** (Chat, Drive, role sync): pg_cron calls `POST /api/jobs/run` every 30 s
   while `dev:local` runs; `npm run jobs:run` runs them at once. Failed jobs retry with backoff;
   admins see and retry them under **Admin**.

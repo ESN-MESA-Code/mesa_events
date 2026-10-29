@@ -450,3 +450,159 @@ Implemented autonomously; the user was not available. How to set it up and prese
   the production project: the database, keys and domain must differ anyway). The VPS path builds the
   same image with `NEXT_PUBLIC_APP_ENV=staging` next to production (port 3001) and runs the seed from
   the Dockerfile's `tools` stage.
+
+## 2026-10-29 – Drive photos, ESN Activities, month pages, inspiration, publishing (docs/BRIEF-2026-10-29-photos-esn-inspiration.md, docs/BRIEF-2026-10-29-publishing.md)
+
+Implemented autonomously; the user was not available.
+
+**A – Event photos in Google Drive**
+- **The folder is a 1:1 table, `event_photo_folders`, not columns on `events`.** Only jobs and
+  definer functions write it, so the event guard needed no new columns; it is read like the
+  hand-in (the event's OC and helpers and the teams). It also holds the cached count
+  (`photo_count`, `counted_at`, `count_error`) and the OC's tick (`marked_uploaded_*`).
+- **`event_photos` is dropped**: it held one row per uploaded file, and the count now comes from
+  Drive. The `event-photos` bucket, its policies, `add_event_photo()`, `lib/uploads.ts` and the
+  upload job are gone (migration `20261029002000`). The privacy texts never mentioned hand-in
+  photos, so they needed no change.
+- **Folder path as the bot:** `<DRIVE_PHOTOS_FOLDER_ID>/<SoSe_26 | WiSe_26-27>/<yyyy-MM-dd Title>`
+  (Berlin date of the start, slashes in titles become "-"). The name is fixed once created: a
+  later title change does not rename it. The bot's `semesterFolderName_` gave "WiSe_-1-00" for
+  January 2000; years wrap here. Existing folders of the same name are reused.
+- **When:** `private.schedule_photo_jobs()` runs every 5 minutes (pg_cron) and enqueues, per
+  running event: the folder from the morning of the event's day (the hand-in opens then);
+  "📸 … starts now" within 12 hours of the start; "📤 … upload here" at **10:00 Berlin the day
+  after the event ended** (multi-day trips: after the end, not mid-trip), for two days; and the
+  count hourly for two weeks. Reminders only with a Chat space, each once per event (idempotency
+  key and a fixed message id). The upload reminder asks for the event report (B) until it is in.
+- **"Check again" goes through the jobs queue** like all Drive work (coalescing
+  `drive.count_photos:<event>`); the page refreshes for up to a minute until the new count
+  arrives. **Photos count as handed in** with at least one file (subfolders included, three
+  levels) or the tick "Photos are uploaded" by the OC or the Events team, for when Drive cannot
+  be read.
+- **Drive scope is the full `drive` scope** (was `drive.file`): counting files that members
+  uploaded needs it. The service account (or `GOOGLE_DRIVE_SUBJECT`) must be a member of the
+  shared photo drive; members open the folders through their own access to that shared drive, so
+  there is no per-file sharing.
+- Locally the fake Drive has folders and files (`fake_drive_folders`, `fake_drive_files`);
+  `npm run fake:drive -- <event id> [n]` "uploads" files to try the count.
+
+**B – ESN Activities**
+- **The event report is its own table** (`event_reports`), written by the OC or the Events team
+  after the start and read by the event's people and the teams. The form is prefilled from the
+  attendance list (headcount minus German nationality answers = international, German = local,
+  from the anonymous counts) and the roster (active OC and helpers = organizers).
+- **The builder is the bot's `esnFormData_`** with its ratings per type, funding from the price,
+  the goal (hook and two intro sentences), the description HTML from the *published* (approved)
+  fields and type/objectives from the current fields. Missing: published description, type,
+  street/postal code, report, TBA price. **A TBA price is listed but does not block "ready"**
+  (the fee can be typed into the ESN form). End date = the Berlin date of `ends_at`.
+- **Personal access tokens** (`mesa_esn_` + 43 base64url characters, 256 bits): shown once,
+  stored as SHA-256, valid 30/90/180/365 days (default 180), at most 5 active per person,
+  revocable; creation and revocation are logged (label and prefix only). A token works only while
+  its owner is in the Comms team (checked on every call). The API resolves it with the service
+  role (`esn_token_owner`), returns event data only (no names, emails or claims) and links as the
+  token's owner (`esn_api_link`).
+- **CORS** allows `https://activities.esn.org` only; requests carrying another `Origin` get 403
+  (Tampermonkey's requests carry none). **Rate limits** are kept in the server process (one app
+  server on the VPS): 60 calls a minute per token, 20 failed attempts per 10 minutes per address.
+- **The script** asks for the token on first use and keeps it in Tampermonkey's storage; right
+  after creating a token the page offers the script with the token filled in (inserted in the
+  browser, never sent back). The script file ships next to the server like `legal/`.
+- **Who sees the status:** Comms, Events and executives (`esn_uploads`); only Comms pastes the
+  link or takes it back. The first link posts "📢 Comms has uploaded … on ESN Activities" to the
+  space, once per event. The cycle's Hand-in step and the OC's next step include the report.
+
+**C – One month at a time**
+- **The default month is the first one with work for that page's team**: Comms – something to
+  review, publish or upload, or a late description; Events – a cycle that is not done and not
+  just waiting for its events to happen. The viewer's last choice is remembered in
+  `localStorage` (per page, try/catch) and wins when the URL names no month and the month is still
+  offered. Comms offers months from six months back; the Events list offers every cycle.
+- **Comms stages** (current = where the event is): To write → In review → Approved → Published →
+  Event happened → Report → ESN Activities uploaded. A missed event (started without a published
+  description) moves on to Report/ESN with its description stages left open and a grey mark.
+  **"Needs Comms"** = in review, approved, ESN ready, or a late description (chasing). Filters are
+  links (`?show=`), so they work without JavaScript.
+- **"Remind OC"** is a new action (`remind_oc`, Comms or Events): a Chat message in the event's
+  space mentioning the OC (a direct message without a space), at most once per event, topic and
+  Berlin day; logged. Publishing from the Comms row shows "Publishing…" until the job ran.
+- **Events page:** the cycle page stays the detail view (schedule, form, roster); merging would
+  put three large boards on one page, and the month view links there in one click. The old
+  cross-month "Coming up", "Short of people" and "Past cycles" lists are gone (staffing is on each
+  event row; past cycles are in the month list, marked "done").
+- **Phones:** the stage track shows the current stage and "n of 7".
+
+**D – Get inspired**
+- **History has `events.source = 'bot_archive'`** (and `archive_ref` = the bot's Event ID,
+  unique): completed, no cycle, no roster, `helpers_needed` 0, and left out of the Comms
+  overview, the photo scheduler and the calendar, so it never touches workflows, staffing or
+  reimbursements.
+- **What members see** comes from `inspiration_events()` (definer, accepted members only): the
+  published title, hook, intro, venue and price, the date and type, the headcount (signed-off
+  list, else the report's international + local) and the Drive folder link. Never names,
+  rosters, claims or notes.
+- **"Big turnout" = 30 people or more.** Seasons are meteorological (December–February …).
+- **"Propose this again"**: the title without "#2" or years, the pitch from the hook and first
+  intro sentence plus "Ran before: …", helpers (2 for history), the type as a suggestion
+  (`event_ideas.type_suggestion`, preselected when Events accepts the idea), and a **fresh
+  date**: the same day of the year, at least two weeks ahead, moved to the same weekday.
+- **The import reads an export, no Google API:** one CSV per semester tab (File → Download →
+  Comma-separated values, once per tab) or one JSON file (`{ "<tab>": [[header…], [row…]] }`),
+  columns found by their header names (the bot's `DB_COLUMNS`). Rows still ahead are skipped; a
+  second run updates (by Event ID). The description fields are read back from the rendered text
+  (hook, intro, program, bring, closing); the report and the ESN link come from "ESN form data"
+  and "ESN Activities link". It writes with the service role: the local stack, or the project in
+  `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
+
+**E – Publishing channels and the schedule** (docs/BRIEF-2026-10-29-publishing.md)
+- **Channels are data** (`publication_channels`): chat (auto), telegram (auto), instagram and
+  pretix (manual), esn (manual, through B). Chat and ESN Activities follow their own flows and have
+  no lane on the board (`schedulable = false`). Admins switch channels on and off.
+- **The status per event and channel is derived**, not stored (`publication_status()`): Chat from
+  the description (approved = planned, published), ESN from `esn_uploads`, the others from the
+  posts (published before planned (the earliest) before skipped). Staff and teams read it.
+- **Posts** (`publication_posts` + ordered `publication_post_events`) are written only through
+  Comms' definer functions; every change bumps `version`. A planned Telegram post has one job
+  `telegram.publish_post:<post>:<version>` with `run_after` = its time; an older version's job
+  skips itself. A change to a published Telegram post (edit, publish again) runs at once and edits
+  the same messages. Published posts cannot be deleted (they are the record); a post without
+  events is removed.
+- **Telegram as in the bot:** bold title + the rendered description (HTML), or for a bundle a
+  heading and a short block per event (title, date, price, and the pretix link once a pretix post
+  is published). Pictures: one photo post when the text fits 1,024 characters, else the photo
+  (caption: the title) followed by the text; a layout change deletes and reposts. **Refused**
+  (the reason on the card, no retry): an unapproved description, a TBA price, more than 4,096
+  characters, an unusable picture.
+- **No HEIC conversion.** The bot used Drive's thumbnail rendition (Apps Script); here that would
+  need a native image library (sharp/libheif) in the image. Drive pictures must be JPG/PNG/WebP up
+  to 10 MB (refused with a clear message otherwise); image URLs are passed to Telegram as they are.
+- **Telegram client:** the Bot API with `TELEGRAM_BOT_TOKEN` (+ `TELEGRAM_CHAT_ID`, optional
+  `TELEGRAM_TOPIC_ID`); without a token, on staging or with `TELEGRAM_MODE=fake` the
+  `fake_telegram_messages` table. No real Telegram call was made.
+- **The first publication of an event on a channel** (Telegram by the job, a manual channel by
+  "Mark published") posts "📢 Comms has published *Event* on <channel>" to its space, once.
+- **Board layout:** lanes are rows and the month's days are columns; the board scrolls sideways
+  inside its frame (the page does not), which works at 375 px. A dropped post gets 10:00 Berlin;
+  "Plan…" and "Move to…" set day and time. Realtime (`postgres_changes` on both tables) refreshes
+  the board for everyone on it; presence shows who else is there.
+- **Migration order:** the staging session added `20261029005000` meanwhile, so the publishing
+  migration is `20261029005100` (after it).
+
+**The event's address (user request during the round)**
+- **Four fields on the event**, as ESN Activities asks: `address_country` (ISO code, default
+  `DE`), `address_street`, `address_postal_code`, `address_city`; `location` stays the venue's
+  name ("Shamrock"). The OC (or the Events team) enters them under **Edit details**; the form
+  starts on Germany and München.
+- **The location finder is offline** (no external API, as everywhere in this round): postal code
+  formats for 14 countries; for Germany every Munich code (80331–81929 → München) and the
+  towns around Munich and of the usual trips fill in the city; another valid code keeps the city
+  as typed ("Not in the list – check the city"). A known code with a different city is refused
+  ("80802 is München, not Augsburg"; München = Munich = Muenchen). A full German postal code
+  list (or a geocoding service) can replace `lib/address.ts`'s tables later without changing
+  the form.
+- **The street needs a house number**; a German postal code has five digits. The action checks
+  like the form and the database keeps the shapes (constraints). The address is required as soon
+  as a venue is entered; while the place is open, details (price, capacity) can still be saved.
+- **Where it goes:** the description's venue is prefilled as "Venue (Street 4, 81671 München)",
+  and the ESN form data takes the entered address (with its country) before anything parsed from
+  the venue text, so "street address / postal code" leaves the missing list once it is entered.

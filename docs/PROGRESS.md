@@ -1,5 +1,93 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-10-29: Drive photos, ESN Activities, month pages, inspiration, publishing
+
+Briefs: `docs/BRIEF-2026-10-29-photos-esn-inspiration.md` (A–D) and
+`docs/BRIEF-2026-10-29-publishing.md` (E), plus the user's request for a structured event
+address. Status: **A–E and the address implemented and tested.** Committed on local `main`
+(A, B, C, D, then E with the address, then docs); nothing deployed or pushed, no real Google,
+ESN or Telegram call. Decisions: `docs/DECISIONS.md` ("2026-10-29 – Drive photos, …").
+New migrations `20261029002000`–`20261029002300`, `20261029005100`, `20261029005200`
+(`20261029005000` belongs to the staging session); existing ones unchanged.
+
+### A – Event photos in Google Drive
+
+| Item | What changed | Tests |
+|---|---|---|
+| Folders | `<root>/<SoSe_26 \| WiSe_26-27>/<yyyy-MM-dd Title>` by a job on the event's day (`drive.ensure_folder`), reused when it exists; `event_photo_folders` (id, URL, path) | Unit: names (bot's cases), client, fakes. DB: scheduler, folder path in the fake |
+| Reminders | "📸 … starts now" at the start, "📤 … upload here 📁" at 10:00 the morning after the end (with the report link until it is in), once each; pg_cron every 5 min | DB: once each, texts |
+| Count | Drive count hourly and on "Check again" (job), cached; "Photos are uploaded" tick (OC/Events) | DB: count incl. subfolders, permissions, Drive error kept, tick logged |
+| Hand-in | "Open the photo folder in Drive" button, count, tick; checklist "Photos in Drive", next step, cycle hand-in | Unit: checklist; E2E: cycle hand-in, no file input |
+| Removed | `event-photos` bucket and policies, `add_event_photo`, `event_photos`, `lib/uploads.ts`, upload job | DB: bucket and function gone |
+
+### B – ESN Activities
+
+| Item | What changed | Tests |
+|---|---|---|
+| Event report | `event_reports`, OC/Events after the start, prefilled from the list (headcount, German = local) and roster; Hand-in tab, checklist, next step, cycle Hand-in | DB: who writes/reads, log, prefill. E2E |
+| Form data | `lib/esn`: address parser and builder ported from the bot, missing list, status not ready → ready → uploaded | Unit: bot's cases, status |
+| Script + tokens | `tools/esn-activities/mesa-esn.user.js`; `GET /api/esn/events/[id]`, `POST …/linked` with personal access tokens (hashed, once, expiring, revocable, logged); CORS for activities.esn.org only; rate limits; ESN Activities page with install steps | DB/API: bad, revoked, expired, ex-Comms tokens, CORS, rate limits, no foreign data. E2E: token shown once, revoked |
+| Manual link | Comms pastes the activity link (or takes it back); first link told in the space once | DB, E2E |
+
+### C – One month at a time
+
+| Item | What changed | Tests |
+|---|---|---|
+| Month selector | `?month=YYYY-MM`, ← →, list; first month with work by default; remembered per viewer; "+ Plan a new month" | Unit; E2E: switching, remembered |
+| Comms by stage | One row per event with the stage track and the inline action (Review, Publish, Remind OC, Open ESN form, Paste link), filters with counts, "Needs Comms" default, late/missed marks, month progress, phone track | Unit: stages; DB: Remind OC; E2E: filters, actions, 375 px |
+| Events month | Cycle stepper + main action, the month's events with status, staffing, description, hand-in | E2E |
+| Home | Queues link to the right month | E2E (review) |
+
+### D – Get inspired
+
+| Item | What changed | Tests |
+|---|---|---|
+| Search | "Get inspired" on /ideas with the bot's search, filters (type, season/month, big turnout), results with headcount, runs, photo folder | Unit; E2E |
+| Propose again | Prefilled idea form with a fresh date and a type suggestion | Unit; DB; E2E |
+| Visibility | `inspiration_events()` for members: published descriptions, headcounts, folders only | DB |
+| Import | `npm run import:bot-archive -- <csv\|json…>`: history (`source = 'bot_archive'`), idempotent, out of the workflows; fixture | Unit; DB |
+
+### E – Publishing channels and schedule
+
+| Item | What changed | Tests |
+|---|---|---|
+| Channels and status | `publication_channels` (admin switches), `publication_status()` per event and channel; chips on the Comms rows, "Not yet on" filter, "Published on" on the event page | DB; E2E |
+| Telegram | Bot API client and fake; message builder (single, bundle, caption, 4,096); scheduled job per post version; re-publish edits; refusals (unapproved, TBA, length, picture); "📢 … on Telegram" once | Unit; DB; E2E (scheduled post published by the runner) |
+| Board | `/team/comms/schedule`: lanes per channel × days, tray, drag to plan/bundle/move/remove, keyboard "Plan…"/"Move to…", warnings, Publish now/Edit/Mark published/Skip, Realtime + presence; Home "Posts planned this week" / "Overdue posts" | E2E: drag, keyboard, bundle, Instagram by hand |
+
+### The event's address (user request)
+
+| Item | What changed | Tests |
+|---|---|---|
+| Fields | Country (default Germany), street and house number, postal code, city (default München) on the event's Edit details; checks per country; city from the postal code (Munich and region, offline) | Unit; DB (action and constraints); E2E |
+| Use | Description venue prefill, ESN form data (with the country) | Unit; DB |
+
+### Checks (this round)
+
+Run on a freshly reset local database (`supabase db reset` + `seed:demo`, with the user's
+approval: the staging session's seed had been running in the same database).
+
+| Check | Result |
+|---|---|
+| `npm run lint`, `npm run typecheck`, `npm run gen:actions -- --check` | clean |
+| `npm test` (unit) | **443 tests, 442 passed**; the one failure is the plural scan hitting `placed(s)` in the staging session's then-uncommitted `lib/staging/seed.ts` (not this round's code) |
+| `npm run test:db` | **2,138 passed** (15 files), incl. the RLS matrix with the new tables |
+| `npm run test:e2e` (production build) | **57 passed**, 1 skipped (as before: the organiser part of the live-list test on the phone project), 1 failed with `ERR_CONNECTION_REFUSED` (the test server was briefly unreachable); that spec (`ideas.spec.ts`) passed on its own right after |
+| `npm run test:bundle` | **20 passed** |
+| `supabase db reset` + `gen:types` | all migrations apply; types unchanged |
+| `docker build` (with the `NEXT_PUBLIC_*` build args) | image `mesa-events:local` (317 MB); the container serves `/login` and `/impressum`, the job route and the ESN API answer 401 without credentials, `tools/esn-activities/` is in the image |
+| Database after the suites | only the demo data (`clean:test-data` before and after both suites; `seed:demo` after the reset) |
+
+Found and fixed during the runs: the publish action needs the description's approved text (test
+data), two buttons named "Mark published" on a post card (the form's is now "Save link"), the
+importer's top-level `await` (Playwright loads scripts through CommonJS), and the action count
+test now includes the ESN and publishing modules.
+
+Not done / limits: no real Google, ESN Activities or Telegram call (fakes only, as required); the
+postal code lookup covers Munich and the region offline (other codes keep the typed city); HEIC
+pictures are refused for Telegram instead of converted; no browser walkthrough beyond the E2E
+tests.
+
 ## Review round 2026-10-29 (docs/REVIEW-2026-10-29.md)
 
 Status: **every item of A and B implemented and tested; all checks green.** Committed on local
