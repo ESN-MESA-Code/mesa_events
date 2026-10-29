@@ -24,7 +24,8 @@
     "clean:test-data": "node scripts/clean-test-data.mjs",
     "fake:drive": "node scripts/fake-drive.mjs",
     "import:bot-archive": "node scripts/bot-archive.mjs",
-    "jobs:run": "node scripts/run-jobs.mjs"
+    "jobs:run": "node scripts/run-jobs.mjs",
+    "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

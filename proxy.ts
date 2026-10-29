@@ -81,6 +81,6 @@ function redirectTo(request: NextRequest, pathname: string, next: string) {
 export const config = {
   matcher: [
     // Everything but static files (they get headers from next.config.ts).
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|esn-mesa-logo.*\\.png).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|pretzel.svg|esn-mesa-logo.*\\.png).*)",
   ],
 };
