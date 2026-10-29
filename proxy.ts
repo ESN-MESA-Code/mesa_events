@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isWorkspaceUser } from "@/lib/auth";
 import { isPublicPath, securityHeaders } from "@/lib/securityHeaders";
+import { isStaging } from "@/lib/staging";
 
 // Every request: a CSP nonce and the security headers, a refreshed Supabase
 // session, and the member area behind the Google Workspace login and the
@@ -14,6 +15,7 @@ export async function proxy(request: NextRequest) {
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
     dev: process.env.NODE_ENV !== "production",
     https: (process.env.APP_BASE_URL ?? "").startsWith("https://"),
+    noindex: isStaging(),
   });
 
   // Next.js reads the nonce from the request's CSP header for its own scripts.

@@ -1,6 +1,7 @@
 // Picks the Google clients: the real ones when a service account is
 // configured (GOOGLE_MODE=real or unset with GOOGLE_SERVICE_ACCOUNT_*), the
 // database-backed fakes otherwise (GOOGLE_MODE=fake, the default locally).
+// Staging (APP_ENV=staging) always gets the fakes, whatever else is set.
 // Server only.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { GoogleChatClient } from "@/lib/google/chat";
@@ -19,7 +20,7 @@ export interface GoogleClients {
 }
 
 export function googleMode(env: Record<string, string | undefined> = process.env): "real" | "fake" {
-  if (env.GOOGLE_MODE === "fake") return "fake";
+  if (env.APP_ENV === "staging" || env.GOOGLE_MODE === "fake") return "fake";
   if (env.GOOGLE_MODE === "real") return "real";
   return serviceAccountFromEnv(env) ? "real" : "fake";
 }

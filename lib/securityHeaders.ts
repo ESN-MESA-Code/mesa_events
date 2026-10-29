@@ -6,7 +6,8 @@
 
 // Pages open without login (proxy.ts); everything else needs a member.
 // /api/esn: the ESN Activities script, with a personal access token instead of a session.
-const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs", "/api/esn"];
+// /staging: the staging demo sign-in (behind its access code; 404 elsewhere).
+const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs", "/api/esn", "/robots.txt", "/staging"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -43,7 +44,7 @@ export function contentSecurityPolicy(nonce: string, opts: { supabaseUrl?: strin
     .join("; ");
 }
 
-export function securityHeaders(nonce: string, opts: { supabaseUrl?: string; dev?: boolean; https?: boolean } = {}) {
+export function securityHeaders(nonce: string, opts: { supabaseUrl?: string; dev?: boolean; https?: boolean; noindex?: boolean } = {}) {
   return {
     "Content-Security-Policy": contentSecurityPolicy(nonce, opts),
     "X-Frame-Options": "DENY",
@@ -53,5 +54,7 @@ export function securityHeaders(nonce: string, opts: { supabaseUrl?: string; dev
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Cross-Origin-Opener-Policy": "same-origin",
     ...(opts.https ? { "Strict-Transport-Security": "max-age=63072000; includeSubDomains" } : {}),
+    // Staging: search engines must not list the demo site.
+    ...(opts.noindex ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
   } as Record<string, string>;
 }
