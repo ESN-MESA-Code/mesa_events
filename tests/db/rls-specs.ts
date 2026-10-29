@@ -342,3 +342,40 @@ export async function cleanupExtra() {
   await admin.from("payout_batches").delete().gte("month", "3000-01-01");
   await admin.from("esn_access_tokens").delete().eq("label", "RLS");
 }
+
+// Publishing (brief 2026-10-29, E): channels for every member; posts for
+// Comms, Events and executives; written only through Comms' functions.
+const postOf = async (eventId: string): Promise<Match> => {
+  const { data } = await admin.from("publication_posts").insert({ channel: "instagram", scheduled_for: "2999-01-01T10:00:00Z", note: "RLS" }).select("id").single();
+  await admin.from("publication_post_events").insert({ post_id: data!.id, event_id: eventId });
+  return { id: data!.id };
+};
+const postEventOf = async (eventId: string): Promise<Match> => ({ post_id: (await postOf(eventId)).id as string, event_id: eventId });
+
+SPECS_EXTRA.push(
+  {
+    table: "publication_channels",
+    select: [{ name: "Telegram", make: async () => ({ key: "telegram" }), allowed: MEMBERS }],
+    insert: [{ payload: () => ({ key: "rlschannel", name: "x", kind: "manual" }), allowed: NOBODY, match: (p) => ({ key: p.key as string }) }],
+    update: [{ name: "Telegram", make: async () => ({ key: "telegram" }), patch: () => ({ enabled: true }), allowed: NOBODY }],
+    delete: [{ name: "pretix", make: async () => ({ key: "pretix" }), allowed: NOBODY }],
+  },
+  {
+    table: "publication_posts",
+    select: [{ name: "a post of A", make: (w) => postOf(w.eventA.id), allowed: ESN_READERS }],
+    insert: [{ payload: () => ({ id: uid(), channel: "instagram", scheduled_for: "2999-01-01T10:00:00Z", note: "RLS" }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "a post of A", make: (w) => postOf(w.eventA.id), patch: () => ({ status: "published" }), allowed: NOBODY }],
+    delete: [{ name: "a post of A", make: (w) => postOf(w.eventA.id), allowed: NOBODY }],
+  },
+  {
+    table: "publication_post_events",
+    select: [{ name: "A in a post", make: (w) => postEventOf(w.eventA.id), allowed: ESN_READERS }],
+    insert: [{ payload: async (w) => ({ post_id: (await postOf(w.eventB.id)).id, event_id: w.eventA.id }), allowed: NOBODY, match: (p) => ({ post_id: p.post_id as string, event_id: p.event_id as string }) }],
+    update: [{ name: "A in a post", make: (w) => postEventOf(w.eventA.id), patch: () => ({ position: 9 }), allowed: NOBODY }],
+    delete: [{ name: "A in a post", make: (w) => postEventOf(w.eventA.id), allowed: NOBODY }],
+  }
+);
+
+export async function cleanupPublishing() {
+  await admin.from("publication_posts").delete().eq("note", "RLS");
+}

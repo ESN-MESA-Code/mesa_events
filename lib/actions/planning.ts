@@ -6,6 +6,7 @@ import { allocate, type AllocationChoice, type Rank } from "@/lib/allocation";
 import { berlinInputToIso, monthLabel, monthOf } from "@/lib/dates";
 import { EVENT_TYPES } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
+import { validateAddress } from "@/lib/address";
 
 export const localDateTime = z
   .string()
@@ -134,7 +135,15 @@ export const createEvent = defineAction(z.object({ cycle_id: uuid, ...eventField
   return { id: data!.id };
 }, { revalidate: [PAGES.eventsTeam, PAGES.calendar, PAGES.home] });
 
-/** Event details: Events changes everything, the OC location, price and capacity. */
+/** The address as ESN Activities wants it, checked as the form does (lib/address.ts). */
+const address = z
+  .object({ country: z.string().regex(/^[A-Z]{2}$/), street: z.string().trim().max(200), postal_code: z.string().trim().max(10), city: z.string().trim().max(100) })
+  .superRefine((a, ctx) => {
+    const errors = validateAddress({ country: a.country, street: a.street, postalCode: a.postal_code, city: a.city });
+    for (const [field, message] of Object.entries(errors)) ctx.addIssue({ code: "custom", path: [field === "postalCode" ? "postal_code" : field], message });
+  });
+
+/** Event details: Events changes everything, the OC the place (venue and address), price and capacity. */
 export const updateEvent = defineAction(
   z.object({
     id: uuid,
@@ -146,8 +155,17 @@ export const updateEvent = defineAction(
     location: z.string().trim().max(300).nullable().optional(),
     price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
     capacity: z.number().int().min(1).max(100_000).nullable().optional(),
+    address: address.nullable().optional(),
   }),
-  async (ctx, { id, ...patch }) => {
+  async (ctx, { id, address: a, ...rest }) => {
+    const patch = {
+      ...rest,
+      ...(a === undefined
+        ? {}
+        : a === null
+          ? { address_street: null, address_postal_code: null, address_city: null }
+          : { address_country: a.country, address_street: a.street, address_postal_code: a.postal_code, address_city: a.city }),
+    };
     if (!hasRole(ctx.viewer.roles, "events")) {
       await requireEventOc(ctx, id);
       if (patch.title !== undefined || patch.type !== undefined || patch.helpers_needed !== undefined) {

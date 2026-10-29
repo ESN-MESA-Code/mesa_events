@@ -57,6 +57,19 @@ export class GoogleDriveClient implements DriveClient {
     return { id, url: driveFolderUrl(id) };
   }
 
+  async fileInfo(fileId: string) {
+    const res = await this.fetchFn(`${API}/files/${encodeURIComponent(fileId)}?fields=mimeType,size,name&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${await this.token()}` } });
+    if (!res.ok) throw new Error(`Drive file not readable (${res.status})`);
+    const f = (await res.json()) as { mimeType: string; size?: string; name: string };
+    return { mimeType: f.mimeType, size: Number(f.size ?? 0), name: f.name };
+  }
+
+  async download(fileId: string) {
+    const res = await this.fetchFn(`${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${await this.token()}` } });
+    if (!res.ok) throw new Error(`Drive download failed (${res.status})`);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
   async countFiles(folderId: string, depth = 0): Promise<number> {
     let n = 0;
     let pageToken: string | undefined;

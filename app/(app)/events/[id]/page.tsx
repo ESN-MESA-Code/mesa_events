@@ -10,6 +10,8 @@ import { CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient"
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { EventChecklist } from "./EventChecklist";
 import { isAre, plural } from "@/lib/plural";
+import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
+import { eventAddress, formatVenue, hasAddress } from "@/lib/address";
 
 export const metadata: Metadata = { title: "Event" };
 
@@ -17,13 +19,17 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam } = await loadEventForPage(id);
 
-  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }] = await Promise.all([
+  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }] = await Promise.all([
     supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
     supabase.rpc("open_slots"),
     supabase.from("activity_log").select("id, at, actor_email, entity, action, details").eq("event_id", id).order("at", { ascending: false }).limit(20),
     // Drop-out reasons: the OC and the Events team only (RLS).
     canManage ? supabase.from("assignment_drop_reasons").select("assignment_id, reason").eq("event_id", id) : Promise.resolve({ data: [] }),
+    // Where the event is published (brief 2026-10-29, E1): staff and teams, read-only.
+    isStaff || isTeam ? supabase.rpc("publication_status", { events: [id] }) : Promise.resolve({ data: [] }),
   ]);
+  const { data: channelNames } = (published ?? []).length ? await supabase.from("publication_channels").select("key, name") : { data: [] };
+  const channelName = new Map((channelNames ?? []).map((c) => [c.key, c.name]));
   const reasonOf = new Map((reasons ?? []).map((r) => [r.assignment_id, r.reason]));
   const active = (roster ?? []).filter((a) => a.status === "active");
   const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
@@ -93,7 +99,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               <dt className="text-gray-500">Ends</dt>
               <dd>{event.ends_at ? formatDateTime(event.ends_at) : "–"}</dd>
               <dt className="text-gray-500">Location</dt>
-              <dd>{event.location || "–"}</dd>
+              <dd data-testid="event-location">{formatVenue(event.location, eventAddress(event)) || "–"}</dd>
               <dt className="text-gray-500">Price</dt>
               <dd>{event.price_cents === null ? "TBA" : event.price_cents === 0 ? "Free" : formatCents(event.price_cents)}</dd>
               <dt className="text-gray-500">Capacity</dt>
@@ -109,6 +115,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                   startsAt: isoToBerlinInput(event.starts_at),
                   endsAt: event.ends_at ? isoToBerlinInput(event.ends_at) : "",
                   location: event.location ?? "",
+                  address: hasAddress(eventAddress(event)) ? eventAddress(event) : null,
                   price: event.price_cents === null ? "" : (event.price_cents / 100).toFixed(2),
                   capacity: event.capacity ? String(event.capacity) : "",
                 }}
@@ -202,6 +209,34 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             )}
           </CardContent>
         </Card>
+        {(published ?? []).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Published on</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1 text-sm" data-testid="published-on">
+                {(published ?? []).map((p) => {
+                  const state = p.state as ChannelState;
+                  return (
+                    <li key={p.channel} className="flex flex-wrap items-center gap-2">
+                      <span className="w-28 text-gray-600">{channelName.get(p.channel) ?? p.channel}</span>
+                      <span className={state === "published" ? "text-emerald-700" : state === "planned" ? "text-esn" : "text-gray-500"}>
+                        {STATE_MARK[state]} {STATE_LABEL[state]}
+                        {p.at && state !== "not_planned" ? ` ${formatShortDate(p.at)}` : ""}
+                      </span>
+                      {state === "published" && p.link && (
+                        <a href={p.link} target="_blank" rel="noopener noreferrer" className="text-xs text-esn hover:underline">
+                          Open
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
         {myAssignment && !upcoming && <p className="text-xs text-gray-500">The event has started; dropping out is no longer possible here.</p>}
         {(activity.length > 0 || (rawLog && (log ?? []).length > 0)) && (
           <Card>

@@ -307,14 +307,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
+                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"location": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -429,6 +429,20 @@ isOneToOne: false
                   }
                   Update: {
                     "created_at"?: string,"id"?: string,"name"?: string,"parent_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"fake_telegram_messages": {
+                  Row: {
+                    "chat_id": string,"created_at": string,"deleted": boolean,"edits": number,"id": number,"kind": string,"message_id": number,"photo": string | null,"text": string,"thread_id": number | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chat_id": string,"created_at"?: string,"deleted"?: boolean,"edits"?: number,"id"?: never,"kind": string,"message_id": number,"photo"?: string | null,"text"?: string,"thread_id"?: number | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "chat_id"?: string,"created_at"?: string,"deleted"?: boolean,"edits"?: number,"id"?: never,"kind"?: string,"message_id"?: number,"photo"?: string | null,"text"?: string,"thread_id"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -574,6 +588,66 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"publication_channels": {
+                  Row: {
+                    "enabled": boolean,"key": string,"kind": string,"name": string,"position": number,"schedulable": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "enabled"?: boolean,"key": string,"kind": string,"name": string,"position"?: number,"schedulable"?: boolean
+                  }
+                  Update: {
+                    "enabled"?: boolean,"key"?: string,"kind"?: string,"name"?: string,"position"?: number,"schedulable"?: boolean
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"publication_post_events": {
+                  Row: {
+                    "event_id": string,"position": number,"post_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "event_id": string,"position"?: number,"post_id": string
+                  }
+                  Update: {
+                    "event_id"?: string,"position"?: number,"post_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "publication_post_events_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "publication_post_events_post_id_fkey"
+      columns: ["post_id"]
+isOneToOne: false
+      referencedRelation: "publication_posts"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"publication_posts": {
+                  Row: {
+                    "channel": string,"created_at": string,"created_by": string | null,"id": string,"last_error": string | null,"link": string | null,"note": string,"picture": string | null,"published_at": string | null,"published_by": string | null,"scheduled_for": string,"skip_reason": string | null,"status": string,"telegram": Json | null,"updated_at": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "channel": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for": string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                  }
+                  Update: {
+                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for"?: string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "publication_posts_channel_fkey"
+      columns: ["channel"]
+isOneToOne: false
+      referencedRelation: "publication_channels"
+      referencedColumns: ["key"]
+    }
                   ]
                 },"receipts": {
                   Row: {
@@ -809,6 +883,9 @@ isOneToOne: false
 "acknowledge_confidentiality":
 { Args: { "accepted_version": string }; Returns: undefined
                            },
+"add_to_post":
+{ Args: { "event": string,"post": string }; Returns: undefined
+                           },
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -878,6 +955,9 @@ isOneToOne: false
 "create_esn_token":
 { Args: { "label": string,"valid_days"?: number }; Returns: string
                            },
+"create_post":
+{ Args: { "channel": string,"events": (string)[],"scheduled_for": string }; Returns: string
+                           },
 "cycle_deadline_limits":
 { Args: { "cycle": string }; Returns: {
               "description_latest": string,"form_latest": string
@@ -913,6 +993,9 @@ isOneToOne: false
 "delete_expired_lists":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"delete_post":
+{ Args: { "post": string }; Returns: undefined
+                           },
 "description_overview":
 { Args: Record<PropertyKey, never>; Returns: {
               "cycle_id": string,"cycle_month": string,"deadline": string,"event_id": string,"late": boolean,"missed": boolean,"published_at": string,"starts_at": string,"status": string,"submitted_at": string,"title": string
@@ -920,6 +1003,9 @@ isOneToOne: false
                            },
 "drop_out":
 { Args: { "assignment": string,"reason"?: string }; Returns: undefined
+                           },
+"edit_post":
+{ Args: { "note": string,"picture": string,"post": string }; Returns: undefined
                            },
 "enqueue_job":
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
@@ -1006,6 +1092,12 @@ isOneToOne: false
 "mark_photos_uploaded":
 { Args: { "event": string,"uploaded": boolean }; Returns: undefined
                            },
+"mark_post_published":
+{ Args: { "link": string,"post": string }; Returns: undefined
+                           },
+"move_post":
+{ Args: { "post": string,"scheduled_for": string }; Returns: undefined
+                           },
 "my_context":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -1032,11 +1124,22 @@ isOneToOne: false
 "policy_for":
 { Args: { "day": string }; Returns: string
                            },
+"post_published":
+{ Args: { "by_whom": string,"link": string,"post": string,"telegram": Json,"version": number }; Returns: boolean
+                           },
+"publication_status":
+{ Args: { "events": (string)[] }; Returns: {
+              "at": string,"by_whom": string,"channel": string,"event_id": string,"link": string,"reason": string,"state": string
+            }[]
+                           },
 "publish_description":
 { Args: { "event": string }; Returns: undefined
                            },
 "publish_policy":
 { Args: { "effective_from": string,"notes"?: string,"rules": Json }; Returns: number
+                           },
+"publish_post_now":
+{ Args: { "post": string }; Returns: undefined
                            },
 "purge_auth_ip_addresses":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -1050,8 +1153,14 @@ isOneToOne: false
 "remind_oc":
 { Args: { "about": string,"event": string }; Returns: boolean
                            },
+"remove_from_post":
+{ Args: { "event": string,"post": string }; Returns: undefined
+                           },
 "reopen_event":
 { Args: { "event": string }; Returns: string
+                           },
+"reorder_post":
+{ Args: { "events": (string)[],"post": string }; Returns: undefined
                            },
 "replace_group_role":
 { Args: { "emails": (string)[],"member_role": Database["public"]['Enums']["app_role"] }; Returns: number
@@ -1091,6 +1200,9 @@ isOneToOne: false
 "schedule_photo_jobs":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"set_channel_enabled":
+{ Args: { "channel": string,"enabled": boolean }; Returns: undefined
+                           },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
                            },
@@ -1108,6 +1220,20 @@ isOneToOne: false
                            },
 "signins_open_at":
 { Args: { "event_date": string }; Returns: string
+                           },
+"skip_post":
+{ Args: { "post": string,"reason": string }; Returns: undefined
+                           },
+"staging_upsert_demo_user":
+{ Args: { "user_email": string,"user_id": string,"user_name": string,"user_password": string }; Returns: undefined
+                           },
+"staging_wipe":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"staging_wipe_plan":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "action": string,"table_name": string
+            }[]
                            },
 "submit_description":
 { Args: { "event": string,"rendered": string }; Returns: undefined

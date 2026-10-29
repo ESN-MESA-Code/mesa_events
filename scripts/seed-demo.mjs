@@ -51,6 +51,9 @@ async function wipe() {
   const inCycles = cycles.length ? check(await db.from("events").select("id").in("cycle_id", cycles), "cycle events").map((e) => e.id) : [];
   const ids = [...new Set([...own, ...inCycles])];
   if (ids.length) {
+    // Their posts on the publishing schedule (the posts would outlive the events).
+    const linked = check(await db.from("publication_post_events").select("post_id").in("event_id", ids), "posts");
+    if (linked.length) check(await db.from("publication_posts").delete().in("id", [...new Set(linked.map((p) => p.post_id))]), "delete posts");
     // Their folders in the fake photo drive (with the "uploaded" files).
     const folders = check(await db.from("event_photo_folders").select("folder_id").in("event_id", ids).not("folder_id", "is", null), "photo folders");
     if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id)), "delete drive folders");
@@ -143,6 +146,11 @@ async function main() {
   // Last week: done, list signed off, receipts in Finance's queue.
   const crawl = await ev({ title: "Pub Crawl Maxvorstadt", type: "standard", status: "confirmed", starts_at: at(-6, 20), helpers_needed: 1, price_cents: 0 }, [[U.oc, "oc"], [U.helper, "helper"]]);
   check(await db.from("attendance_lists").update({ signed_off_at: at(-5, 12), signed_off_by: "oc@esnmesa.org", headcount: 23 }).eq("event_id", crawl), "sign-off");
+  // Venues with their address (as ESN Activities needs it).
+  const place = async (id, location, street, postal) =>
+    check(await db.from("events").update({ location, address_country: "DE", address_street: street, address_postal_code: postal, address_city: "München" }).eq("id", id), "address");
+  await place(quiz, "Shamrock", "Trautenwolfstraße 6", "80802");
+  await place(crawl, "Schelling-Salon", "Schellingstraße 54", "80799");
   // The team uploaded 14 photos to its Drive folder (fake), counted since.
   await photoFolder(crawl, at(-6, 20), "Pub Crawl Maxvorstadt", 14, at(-4, 10));
   // Published, and the OC wrote the event report: ready for ESN Activities.
@@ -154,6 +162,7 @@ async function main() {
   const games = await ev({ title: "Board Game Night", type: "standard", status: "completed", starts_at: at(-20, 19), helpers_needed: 1, price_cents: 0 }, [[U.volunteer1, "oc"], [U.member, "helper"]]);
   check(await db.from("attendance_lists").update({ signed_off_at: at(-19, 10), signed_off_by: "volunteer1@esnmesa.org", headcount: 31 }).eq("event_id", games), "games sign-off");
   await photoFolder(games, at(-20, 19), "Board Game Night", 22, at(-18, 10));
+  await place(games, "Café Gans am Wasser", "Siegfriedstraße 24", "80803");
   const gamesFields = { title: "Board Game Night", dateIso: at(-20, 19).slice(0, 10), time: "19:00", venue: "Café Gans am Wasser, Siegfriedstraße 24, 80803 München", price: "free", hook: "an evening of board games", intro: "Bring your favourite game or learn a new one. Snacks are on us!", program: "Games for everyone\nSnacks", bring: "A game if you like", closing: "play with you", esnType: "10", esnObjectives: "413,426" };
   check(await db.from("descriptions").upsert({ event_id: games, status: "published", published_at: at(-24, 12), published_by: "comms@esnmesa.org", fields: gamesFields, approved_fields: gamesFields }), "games description");
   check(await db.from("event_reports").upsert({ event_id: games, intl_participants: 27, local_participants: 4, organizers: 2, goals_reached: true, went_well: "Full house, many new faces.", created_by: "volunteer1@esnmesa.org", updated_by: "volunteer1@esnmesa.org" }), "games report");
@@ -192,6 +201,26 @@ async function main() {
     }),
     "description"
   );
+
+  // The publishing schedule: published posts of the past events, a Telegram
+  // post for the museum night that publishes itself tomorrow at 10:00 (the
+  // job is queued like the board does it), an Instagram bundle, and a
+  // Telegram post for the quiz that is warned about (description not in).
+  const tenAm = (days) => new Date(Date.parse(at(days, 10).slice(0, 10) + "T09:00:00Z")).toISOString();
+  const demoPost = async (channel, scheduled_for, events, extra = {}) => {
+    const p = check(await db.from("publication_posts").insert({ channel, scheduled_for, created_by: "comms@esnmesa.org", ...extra }).select("id, version").single(), "post");
+    check(await db.from("publication_post_events").insert(events.map((event_id, position) => ({ post_id: p.id, event_id, position }))), "post events");
+    if (channel === "telegram" && (extra.status ?? "planned") === "planned") {
+      check(await db.from("jobs").insert({ kind: "telegram.publish_post", payload: { post_id: p.id, version: p.version }, idempotency_key: `telegram.publish_post:${p.id}:${p.version}`, run_after: scheduled_for }), "post job");
+    }
+    return p.id;
+  };
+  await demoPost("instagram", tenAm(-21), [games], { status: "published", link: "https://www.instagram.com/p/demo-board-games/", published_at: tenAm(-21), published_by: "comms@esnmesa.org" });
+  await demoPost("pretix", tenAm(-9), [crawl], { status: "skipped", skip_reason: "No pretix for free events" });
+  await demoPost("instagram", tenAm(-8), [crawl], { status: "published", link: "https://www.instagram.com/p/demo-pub-crawl/", published_at: tenAm(-8), published_by: "comms@esnmesa.org" });
+  await demoPost("telegram", tenAm(1), [museum]);
+  await demoPost("instagram", tenAm(2), [quiz, museum], { note: "This week at ESN MESA" });
+  await demoPost("telegram", tenAm(3), [quiz]);
 
   // History from the description bot's Sheet, for "Get inspired" on /ideas
   // (as `npm run import:bot-archive` would bring it in).

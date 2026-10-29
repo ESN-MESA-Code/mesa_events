@@ -131,14 +131,27 @@ async function removeOrphans(db) {
   const emptySemesters = folders.filter((f) => /^(SoSe|WiSe)_/.test(f.name) && !parents.has(f.id)).map((f) => f.id);
   for (const part of chunks(emptySemesters)) check(await db.from("fake_drive_folders").delete().in("id", part), "empty semester folders");
 
-  return orphanJobs.length + orphanSpaces.length + orphanDms.length + orphanFolders.length;
+  // Posts whose events are all gone, then fake Telegram messages no post points to.
+  const posts = check(await db.from("publication_posts").select("id, telegram, publication_post_events(event_id)"), "posts");
+  const emptyPosts = posts.filter((p) => !p.publication_post_events.length).map((p) => p.id);
+  for (const part of chunks(emptyPosts)) check(await db.from("publication_posts").delete().in("id", part), "empty posts");
+  const kept = new Set(
+    posts
+      .filter((p) => p.publication_post_events.length && p.telegram)
+      .flatMap((p) => [p.telegram.photoMessageId, p.telegram.textMessageId].filter(Boolean).map((id) => `${p.telegram.chatId}|${id}`))
+  );
+  const messages = check(await db.from("fake_telegram_messages").select("id, chat_id, message_id"), "fake Telegram messages");
+  const orphanMessages = messages.filter((m) => !kept.has(`${m.chat_id}|${m.message_id}`)).map((m) => m.id);
+  for (const part of chunks(orphanMessages)) check(await db.from("fake_telegram_messages").delete().in("id", part), "orphan Telegram messages");
+
+  return orphanJobs.length + orphanSpaces.length + orphanDms.length + orphanFolders.length + emptyPosts.length + orphanMessages.length;
 }
 
 // Run directly (no import.meta: Playwright loads this file through its CommonJS transform).
 if (/clean-test-data\.mjs$/.test(process.argv[1] ?? "")) {
   const db = createClient(LOCAL_ENV.NEXT_PUBLIC_SUPABASE_URL, LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   removeTestData(db)
-    .then((n) => console.log(`Removed test data: ${n.cycles} cycles, ${n.events} events, ${n.ideas} ideas, ${n.orphans} orphaned jobs and fake Chat/Drive rows, ${n.batches} empty payout batches.`))
+    .then((n) => console.log(`Removed test data: ${n.cycles} cycles, ${n.events} events, ${n.ideas} ideas, ${n.orphans} orphaned jobs, posts and fake Chat/Drive/Telegram rows, ${n.batches} empty payout batches.`))
     .catch((err) => {
       console.error(err.message ?? err);
       console.error("Is the local stack running? npm run supabase:start");

@@ -5,6 +5,7 @@
 // Server only; called by POST /api/jobs/run (pg_cron) and `npm run jobs:run`.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GoogleClients } from "@/lib/google";
+import type { TelegramSetup } from "@/lib/telegram";
 import type { Database, Json } from "@/types/database";
 
 export type Job = Database["public"]["Tables"]["jobs"]["Row"];
@@ -15,6 +16,8 @@ export interface JobDeps {
   env: Record<string, string | undefined>;
   /** Public base URL of the app (links in Chat messages). */
   baseUrl: string;
+  /** Telegram client and chat; picked from the environment when not given (tests pass a fake). */
+  telegram?: TelegramSetup;
 }
 
 export type JobHandler = (job: Job, deps: JobDeps) => Promise<Json | void>;

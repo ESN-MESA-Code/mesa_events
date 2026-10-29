@@ -99,3 +99,30 @@ test("ESN Activities page: a token is shown once and can be revoked; others are 
   expect(res.status).toBe(401);
   await admin.from("esn_access_tokens").delete().eq("label", label);
 });
+
+test("the OC enters the address: Germany and München by default, the city from the postal code", async ({ page, context, baseURL }) => {
+  const event = await createEvent({ title: `Address ${Math.random().toString(36).slice(2, 7)}`, starts_at: hoursFromNow(72), oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 1 });
+  await signInAs(context, baseURL!, USERS.oc);
+  await page.goto(`/events/${event.id}`);
+  await page.getByRole("button", { name: "Edit details" }).click();
+  const fields = page.getByTestId("address-fields");
+  await expect(fields.getByLabel("Country")).toHaveValue("DE");
+  await expect(fields.getByLabel("City")).toHaveValue("München");
+  await page.getByLabel("Venue").fill("Boulderwelt Ost");
+
+  // Not yet complete: the save is refused field by field.
+  await fields.getByLabel("Street and house number").fill("Hanne-Hiob-Straße");
+  await fields.getByLabel("Postal code").fill("8167");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(fields).toContainText("Add the house number");
+  await expect(fields).toContainText("Not a postal code of Germany");
+
+  // The postal code fills in the city.
+  await fields.getByLabel("City").fill("");
+  await fields.getByLabel("Street and house number").fill("Hanne-Hiob-Straße 4");
+  await fields.getByLabel("Postal code").fill("81671");
+  await expect(fields.getByLabel("City")).toHaveValue("München");
+  await expect(fields).toContainText("✓ München");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("event-location")).toHaveText("Boulderwelt Ost (Hanne-Hiob-Straße 4, 81671 München)");
+});

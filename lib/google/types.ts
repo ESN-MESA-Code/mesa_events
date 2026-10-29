@@ -38,6 +38,10 @@ export interface DriveClient {
   ensureFolder(path: string[]): Promise<{ id: string; url: string }>;
   /** Files in the folder and its subfolders (not the folders themselves, nothing trashed). */
   countFiles(folderId: string): Promise<number>;
+  /** Type and size of a file (a Telegram picture given as a Drive link). */
+  fileInfo(fileId: string): Promise<{ mimeType: string; size: number; name: string }>;
+  /** The file's content. */
+  download(fileId: string): Promise<Uint8Array>;
 }
 
 /** Mentions in Chat message text. */

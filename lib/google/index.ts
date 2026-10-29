@@ -39,6 +39,8 @@ class NotConfigured implements ChatClient, DriveClient {
   notify = async () => this.fail();
   ensureFolder = async () => this.fail();
   countFiles = async () => this.fail();
+  fileInfo = async () => this.fail();
+  download = async () => this.fail();
 }
 
 export function googleClients(admin: SupabaseClient<Database>, env: Record<string, string | undefined> = process.env): GoogleClients {

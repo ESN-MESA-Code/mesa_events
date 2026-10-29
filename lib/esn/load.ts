@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { coerceFields } from "@/lib/description/template";
+import { eventAddress } from "@/lib/address";
 import { buildEsnFormData, esnStatus, type EsnFormData, type EsnStatus, type EsnUpload, type EventReport } from "@/lib/esn/formData";
 
 export interface EsnEntry {
@@ -18,7 +19,7 @@ export async function loadEsn(db: SupabaseClient<Database>, eventIds: string[]):
   const out = new Map<string, EsnEntry>();
   if (!eventIds.length) return out;
   const [{ data: events, error }, { data: descriptions }, { data: reports }, { data: uploads }] = await Promise.all([
-    db.from("events").select("id, title, starts_at, ends_at, location, price_cents").in("id", eventIds),
+    db.from("events").select("id, title, starts_at, ends_at, location, price_cents, address_country, address_street, address_postal_code, address_city").in("id", eventIds),
     db.from("descriptions").select("event_id, status, fields, approved_fields, published_at").in("event_id", eventIds),
     db.from("event_reports").select("*").in("event_id", eventIds),
     db.from("esn_uploads").select("event_id, activity_url, uploaded_at, uploaded_by, via").in("event_id", eventIds),
@@ -37,6 +38,7 @@ export async function loadEsn(db: SupabaseClient<Database>, eventIds: string[]):
     const data = buildEsnFormData({
       eventId: e.id,
       event: e,
+      address: eventAddress({ address_country: e.address_country, address_street: e.address_street, address_postal_code: e.address_postal_code, address_city: e.address_city }),
       published,
       classification: d ? coerceFields(d.fields) : null,
       report,

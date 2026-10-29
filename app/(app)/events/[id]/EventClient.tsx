@@ -7,6 +7,8 @@ import { cancelEvent, dropOut } from "@/app/actions/roster";
 import { updateEvent } from "@/app/actions/planning";
 import { parseEuroToCents } from "@/lib/dates";
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
+import { AddressFields } from "@/components/AddressFields";
+import { DEFAULT_ADDRESS, validateAddress, type EventAddress } from "@/lib/address";
 
 export function DropOutButton({ assignmentId, role }: { assignmentId: string; role: "oc" | "helper" }) {
   const { run, pending, error } = useAction();
@@ -81,12 +83,14 @@ export function EventDetailsForm({
   event,
   eventsTeam,
 }: {
-  event: { id: string; startsAt: string; endsAt: string; location: string; price: string; capacity: string };
+  event: { id: string; startsAt: string; endsAt: string; location: string; price: string; capacity: string; address: EventAddress | null };
   eventsTeam: boolean;
 }) {
   const { run, pending, error, setError } = useAction();
   const [open, setOpen] = useState(false);
   const [v, setV] = useState(event);
+  const [address, setAddress] = useState<EventAddress>(event.address ?? DEFAULT_ADDRESS);
+  const [checked, setChecked] = useState(false);
   const [saved, setSaved] = useState(false);
   if (!open) {
     return (
@@ -106,12 +110,20 @@ export function EventDetailsForm({
           setError("The price is not a valid amount.");
           return;
         }
+        // With a venue, the address is needed (ESN Activities); an empty one is fine while the place is open.
+        const withAddress = !!(v.location.trim() || address.street.trim() || address.postalCode.trim());
+        setChecked(withAddress);
+        if (withAddress && Object.keys(validateAddress(address)).length) {
+          setError("Please check the address.");
+          return;
+        }
         run(
           updateEvent,
           {
             id: event.id,
             ...(eventsTeam ? { starts_at: v.startsAt, ends_at: v.endsAt || null } : {}),
             location: v.location || null,
+            address: withAddress ? { country: address.country, street: address.street.trim(), postal_code: address.postalCode.trim(), city: address.city.trim() } : null,
             price_cents: price,
             capacity: v.capacity ? Number(v.capacity) : null,
           },
@@ -132,9 +144,10 @@ export function EventDetailsForm({
           </Field>
         </>
       )}
-      <Field label="Location" htmlFor="d-location">
+      <Field label="Venue" htmlFor="d-location" hint="The place's name, e.g. Shamrock">
         <Input id="d-location" value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
       </Field>
+      <AddressFields value={address} onChange={setAddress} showErrors={checked} idPrefix="d-addr" />
       <Field label="Price in € (empty = TBA)" htmlFor="d-price">
         <Input id="d-price" inputMode="decimal" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} />
       </Field>

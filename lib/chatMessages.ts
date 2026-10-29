@@ -104,3 +104,8 @@ export function remindOcMessage(about: "description" | "report", title: string, 
   }
   return `📝 ${who}A reminder from Comms: please fill in the short event report of *${title}* (for ESN Activities): ${eventUrl}/hand-in#event-report`;
 }
+
+/** Comms published the event on a channel (the bot's "📢 PR has uploaded … on Telegram"), once per event and channel. */
+export function channelPublishedMessage(title: string, channel: string, link: string | null): string {
+  return `${MENTION_ALL} 📢 Comms has published *${title}* on ${channel}.${link ? ` <${link}|Open>` : ""}`;
+}

@@ -10,9 +10,10 @@ import * as descriptions from "@/lib/actions/descriptions";
 import * as esn from "@/lib/actions/esn";
 import * as handin from "@/lib/actions/handin";
 import * as planning from "@/lib/actions/planning";
+import * as publishing from "@/lib/actions/publishing";
 import * as roster from "@/lib/actions/roster";
 
-const modules = { admin, attendance, descriptions, esn, handin, planning, roster };
+const modules = { admin, attendance, descriptions, esn, handin, planning, publishing, roster };
 const actions = Object.entries(modules).flatMap(([mod, m]) =>
   Object.entries(m)
     .filter(([, v]) => typeof v === "function" && "revalidate" in v)
@@ -27,7 +28,7 @@ describe("generated actions", () => {
 
 describe("revalidation", () => {
   it("finds every action", () => {
-    expect(actions.length).toBe(58);
+    expect(actions.length).toBe(69);
   });
 
   it("autosave revalidates nothing", () => {

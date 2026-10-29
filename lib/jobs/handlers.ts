@@ -6,6 +6,7 @@ import { createSpace, eventStatusChange, remindOc, rosterChange, syncSpaceMember
 import { publishDescription } from "@/lib/jobs/descriptions";
 import { countPhotos, ensureFolder, photoReminder } from "@/lib/jobs/photos";
 import { esnUploaded } from "@/lib/jobs/esn";
+import { channelPublished, publishTelegramPost } from "@/lib/jobs/publishing";
 
 /** Mirrors the configured Google groups into public.role_members ('group' rows). */
 export const syncRoles: JobHandler = async (_job, { admin, google, env }) => {
@@ -37,4 +38,6 @@ export const HANDLERS: Record<string, JobHandler> = {
   "chat.photo_reminder": photoReminder,
   "chat.esn_uploaded": esnUploaded,
   "chat.remind_oc": remindOc,
+  "telegram.publish_post": publishTelegramPost,
+  "chat.channel_published": channelPublished,
 };

@@ -15,6 +15,7 @@ import { FILTERS, eventStage, parseFilter, stageCounts, type FilterId } from "@/
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { cn } from "@/lib/utils";
 import { RemindButton } from "./RemindButton";
+import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -38,7 +39,7 @@ type Row = {
 // action of that stage right there. Filters by stage ("Needs Comms" first);
 // late and missed are marks on the row. Months: those with events from half
 // a year back on; the page opens on the first one with work for Comms.
-export default async function CommsPage({ searchParams }: { searchParams: Promise<{ month?: string; show?: string }> }) {
+export default async function CommsPage({ searchParams }: { searchParams: Promise<{ month?: string; show?: string; missing?: string }> }) {
   const viewer = await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const isComms = hasRole(viewer.roles, "comms");
   const sp = await searchParams;
@@ -82,7 +83,16 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const monthViews = inMonth.map((r) => views.get(r.event_id)!);
   const counts = stageCounts(monthViews);
   const filter = parseFilter(sp.show);
+  // Per channel: published, planned, skipped or not planned (brief 2026-10-29, E1).
+  const [{ data: statusRows }, { data: channelRows }] = await Promise.all([
+    supabase.rpc("publication_status", { events: inMonth.map((r) => r.event_id) }),
+    supabase.from("publication_channels").select("key, name").eq("enabled", true).order("position"),
+  ]);
+  const channels = channelRows ?? [];
+  const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
+  const missing = channels.find((c) => c.key === sp.missing)?.key ?? null;
   const shown = inMonth.filter((r) => {
+    if (missing) return statusOf.get(`${r.event_id}|${missing}`)?.state !== "published";
     const v = views.get(r.event_id)!;
     return filter === "all" || (filter === "needs" ? v.needsComms : v.filter === filter);
   });
@@ -91,11 +101,15 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const uploaded = happened.filter((r) => esn.get(r.event_id)?.status.state === "uploaded").length;
   const deadline = inMonth.find((r) => r.deadline)?.deadline ?? null;
   const showHref = (show: FilterId) => `/team/comms?month=${monthParam(month!)}${show === "needs" ? "" : `&show=${show}`}`;
+  const missingHref = (channel: string) => `/team/comms?month=${monthParam(month!)}&show=all&missing=${channel}`;
 
   return (
     <>
       <PageHeader title="Comms" description="Each event of the month from its description to ESN Activities – what is next, and the action right there.">
         <div className="flex flex-wrap items-center gap-3">
+          <Link href={`/team/comms/schedule${month ? `?month=${monthParam(month)}` : ""}`} className="text-sm text-esn hover:underline">
+            Publishing schedule →
+          </Link>
           {isComms && (
             <Link href="/team/comms/esn-activities" className="text-sm text-esn hover:underline">
               ESN Activities script →
@@ -174,6 +188,20 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
               })}
             </nav>
 
+            <p className="flex flex-wrap items-center gap-2 text-xs text-gray-600" data-testid="channel-filters">
+              Not yet on:
+              {channels.map((c) => (
+                <Link
+                  key={c.key}
+                  href={missing === c.key ? showHref("needs") : missingHref(c.key)}
+                  aria-current={missing === c.key ? "page" : undefined}
+                  className={cn("rounded-full border px-2 py-0.5", missing === c.key ? "border-esn bg-esn text-white" : "border-gray-300 hover:border-esn hover:text-esn")}
+                >
+                  {c.name}
+                </Link>
+              ))}
+            </p>
+
             {!shown.length ? (
               <EmptyState>
                 {filter === "needs" ? (
@@ -228,6 +256,18 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                         </span>
                       </div>
                       <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
+                      <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600" data-testid="channel-chips">
+                        {channels.map((c) => {
+                          const st = statusOf.get(`${r.event_id}|${c.key}`);
+                          const state = (st?.state ?? "not_planned") as ChannelState;
+                          return (
+                            <span key={c.key} title={`${c.name}: ${STATE_LABEL[state]}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`} className={cn(state === "published" && "text-emerald-700", state === "planned" && "text-esn")}>
+                              {c.name} {STATE_MARK[state]}
+                              {state === "planned" && st?.at ? ` ${formatShortDate(st.at)}` : ""}
+                            </span>
+                          );
+                        })}
+                      </p>
                       {v.current === "esn" && e && <EsnUpload eventId={r.event_id} status={e.status} canSet={isComms} compact />}
                     </li>
                   );

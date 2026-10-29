@@ -1,0 +1,195 @@
+// Publishing (brief 2026-10-29, E): only Comms plans and publishes; a
+// Telegram post's job runs at its time, once per version; publishing
+// against the fake Telegram, re-publishing edits the same message, refusals
+// (unapproved, TBA); manual channels; the status per event and channel.
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { USERS, admin, as, createEvent, hoursFromNow } from "../helpers/local";
+import { actionContext } from "./actionContext";
+import * as P from "@/lib/actions/publishing";
+import { runDueJobs, type JobDeps } from "@/lib/jobs/runner";
+import { HANDLERS } from "@/lib/jobs/handlers";
+import { googleClients } from "@/lib/google";
+import { berlinDate } from "@/lib/dates";
+
+const deps: JobDeps = { admin, google: googleClients(admin, { GOOGLE_MODE: "fake" }), env: {}, baseUrl: "http://mesa.test" };
+// Until the queue is empty (other suites may have left due jobs ahead of ours).
+async function runJobs() {
+  const all: Awaited<ReturnType<typeof runDueJobs>>["results"] = [];
+  for (let i = 0; i < 10; i++) {
+    const r = await runDueJobs(deps, HANDLERS, { worker: "publishing-test" });
+    all.push(...r.results);
+    if (!r.claimed) break;
+  }
+  return { results: all };
+}
+const space = `spaces/FAKEPUB${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+const fields = (title: string, price = "5") => ({ title, dateIso: "2026-11-05", time: "19:00", venue: "Shamrock", price, hook: "a test", intro: "A test event.", program: "Testing", bring: "Nothing", closing: "see you" });
+const day = (h: number) => berlinDate(hoursFromNow(h));
+let approved: string;
+let unapproved: string;
+let tba: string;
+let free: string;
+const created: string[] = [];
+const posts: string[] = [];
+
+async function post(channel: string, events: string[], h = 48) {
+  const r = await P.createPost(await actionContext(USERS.comms), { channel, day: day(h), time: "10:00", event_ids: events });
+  if (!r.ok) throw new Error(r.message);
+  posts.push(r.data.id);
+  return r.data.id;
+}
+const row = async (id: string) => (await admin.from("publication_posts").select("*").eq("id", id).single()).data!;
+const tgMessages = async (id: string) => {
+  const t = (await row(id)).telegram as { chatId: string; textMessageId?: number } | null;
+  if (!t?.textMessageId) return [];
+  return (await admin.from("fake_telegram_messages").select("text, edits, deleted").eq("chat_id", t.chatId).eq("message_id", t.textMessageId)).data ?? [];
+};
+
+beforeAll(async () => {
+  const make = async (title: string, status: string, price = "5") => {
+    const e = await createEvent({ title, starts_at: hoursFromNow(24 * 6), oc: USERS.oc, helpers: [USERS.helper] });
+    created.push(e.id);
+    await admin.from("descriptions").upsert({ event_id: e.id, status, fields: fields(title, price), approved_fields: ["approved", "published"].includes(status) ? fields(title, price) : null });
+    return e.id;
+  };
+  approved = await make("Pub approved", "approved");
+  unapproved = await make("Pub submitted", "submitted");
+  tba = await make("Pub TBA", "approved", "TBA");
+  free = await make("Pub free", "approved", "free");
+  await admin.from("events").update({ chat_space_name: space }).eq("id", approved);
+});
+afterAll(async () => {
+  const { data } = await admin.from("publication_posts").select("telegram").in("id", posts);
+  for (const t of (data ?? []).map((d) => d.telegram as { chatId: string; textMessageId?: number; photoMessageId?: number } | null).filter(Boolean)) {
+    await admin.from("fake_telegram_messages").delete().eq("chat_id", t!.chatId).in("message_id", [t!.textMessageId ?? -1, t!.photoMessageId ?? -1]);
+  }
+  await admin.from("publication_posts").delete().in("id", posts);
+  await admin.from("fake_chat_messages").delete().eq("space", space);
+  await admin.from("jobs").delete().in("event_id", created);
+  for (const id of posts) await admin.from("jobs").delete().like("idempotency_key", `telegram.publish_post:${id}:%`);
+  await admin.from("events").delete().in("id", created);
+});
+
+describe("who plans", () => {
+  it("only Comms creates and changes posts; Comms, Events and executives read them", async () => {
+    for (const u of [USERS.events, USERS.oc, USERS.member, USERS.executive]) {
+      expect(await P.createPost(await actionContext(u), { channel: "telegram", day: day(48), event_ids: [approved] }), u.email).toMatchObject({ ok: false, error: "forbidden" });
+      expect((await (await as(u)).rpc("create_post", { channel: "telegram", scheduled_for: hoursFromNow(48), events: [approved] })).error?.code, u.email).toBe("42501");
+    }
+    const id = await post("instagram", [approved]);
+    for (const u of [USERS.comms, USERS.events, USERS.executive]) expect((await (await as(u)).from("publication_posts").select("id").eq("id", id)).data, u.email).toHaveLength(1);
+    for (const u of [USERS.oc, USERS.helper, USERS.member, USERS.finance, USERS.admin]) expect((await (await as(u)).from("publication_posts").select("id").eq("id", id)).data, u.email).toEqual([]);
+    expect(await P.createPost(await actionContext(USERS.comms), { channel: "chat", day: day(48), event_ids: [approved] })).toMatchObject({ ok: false, message: "This channel is not on the schedule" });
+  });
+});
+
+describe("Telegram", () => {
+  let tg: string;
+
+  it("a planned post has one job at its time; a move makes a new version, the old job skips itself", async () => {
+    tg = await post("telegram", [approved], 48);
+    const jobs = async () => (await admin.from("jobs").select("idempotency_key, run_after, status").like("idempotency_key", `telegram.publish_post:${tg}:%`).order("id")).data!;
+    let j = await jobs();
+    expect(j).toHaveLength(1);
+    expect(Math.abs(Date.parse(j[0].run_after) - Date.parse((await row(tg)).scheduled_for))).toBeLessThan(1000);
+    await runJobs();
+    expect((await row(tg)).status).toBe("planned");
+    expect((await P.movePost(await actionContext(USERS.comms), { post_id: tg, day: day(72), time: "11:00" })).ok).toBe(true);
+    j = await jobs();
+    expect(j).toHaveLength(2);
+    // The old version's job, run anyway: nothing happens.
+    await admin.from("jobs").update({ run_after: new Date().toISOString() }).eq("idempotency_key", j[0].idempotency_key);
+    const r = await runJobs();
+    expect(r.results.find((x) => x.kind === "telegram.publish_post")?.ok).toBe(true);
+    expect((await row(tg)).status).toBe("planned");
+  });
+
+  it("publishes at its time (here: now), tells the space once; re-publishing edits the same message", async () => {
+    expect((await P.publishPostNow(await actionContext(USERS.comms), { post_id: tg })).ok).toBe(true);
+    await runJobs();
+    const p = await row(tg);
+    expect(p).toMatchObject({ status: "published", published_by: "schedule", last_error: null });
+    expect(p.link).toMatch(/^https:\/\/t\.me\/mesa_fake_channel\/\d+$/);
+    let msgs = await tgMessages(tg);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].text.startsWith("<b>Pub approved</b>\n\n🗓️")).toBe(true);
+    const { data: chat } = await admin.from("fake_chat_messages").select("text").eq("space", space).like("text", "%on Telegram%");
+    expect(chat).toEqual([{ text: `<users/all> 📢 Comms has published *Pub approved* on Telegram. <${p.link}|Open>` }]);
+
+    // The description changes after approval and is approved again: publish again → the message is edited.
+    await admin.from("descriptions").update({ approved_fields: { ...fields("Pub approved"), hook: "a changed test" } }).eq("event_id", approved);
+    expect((await P.publishPostNow(await actionContext(USERS.comms), { post_id: tg })).ok).toBe(true);
+    await runJobs();
+    msgs = await tgMessages(tg);
+    expect(msgs).toEqual([expect.objectContaining({ edits: 1, deleted: false })]);
+    expect(msgs[0].text).toContain("Are you ready for a changed test?");
+    expect((await admin.from("fake_chat_messages").select("name").eq("space", space).like("text", "%on Telegram%")).data).toHaveLength(1);
+  });
+
+  it("refuses an unapproved description or a TBA price – the reason on the post, no retry", async () => {
+    for (const [ev, reason] of [
+      [unapproved, "The description of “Pub submitted” is not approved yet."],
+      [tba, "The price of “Pub TBA” is still TBA."],
+    ]) {
+      const id = await post("telegram", [ev]);
+      await P.publishPostNow(await actionContext(USERS.comms), { post_id: id });
+      await runJobs();
+      expect(await row(id)).toMatchObject({ status: "planned", last_error: reason, telegram: null });
+    }
+  });
+
+  it("a bundle posts a short block per event, in its order, under its heading", async () => {
+    const id = await post("telegram", [free]);
+    expect((await P.addToPost(await actionContext(USERS.comms), { post_id: id, event_id: approved })).ok).toBe(true);
+    expect((await P.editPost(await actionContext(USERS.comms), { post_id: id, picture: "", note: "This week" })).ok).toBe(true);
+    expect((await P.reorderPost(await actionContext(USERS.comms), { post_id: id, event_ids: [approved, free] })).ok).toBe(true);
+    await P.publishPostNow(await actionContext(USERS.comms), { post_id: id });
+    await runJobs();
+    const [m] = await tgMessages(id);
+    expect(m.text).toMatch(/^<b>📅 This week<\/b>\n\n<b>Pub approved<\/b>\n🗓️ .*\n💸 € 5.00\n\n<b>Pub free<\/b>\n🗓️ .*\n💸 FREE$/);
+  });
+});
+
+describe("manual channels and the status", () => {
+  it("Instagram is marked published with a link (once told in the space); Telegram cannot be marked by hand", async () => {
+    const ig = (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel)").eq("event_id", approved).eq("publication_posts.channel", "instagram").single()).data!.post_id;
+    expect(await P.markPostPublished(await actionContext(USERS.comms), { post_id: ig, link: "not a link" })).toMatchObject({ ok: false, error: "invalid_input" });
+    expect((await P.markPostPublished(await actionContext(USERS.comms), { post_id: ig, link: "https://www.instagram.com/p/abc/" })).ok).toBe(true);
+    await runJobs();
+    expect((await admin.from("fake_chat_messages").select("text").eq("space", space).like("text", "%on Instagram%")).data).toEqual([
+      { text: "<users/all> 📢 Comms has published *Pub approved* on Instagram. <https://www.instagram.com/p/abc/|Open>" },
+    ]);
+    const tgPost = posts[1];
+    expect(await P.markPostPublished(await actionContext(USERS.comms), { post_id: tgPost, link: "https://t.me/x/1" })).toMatchObject({ ok: false, message: "The platform publishes this channel itself" });
+  });
+
+  it("skip needs a reason; published posts stay; each change is logged for the event's staff", async () => {
+    const id = await post("pretix", [free]);
+    expect(await P.skipPost(await actionContext(USERS.comms), { post_id: id, reason: " " })).toMatchObject({ ok: false, error: "invalid_input" });
+    expect((await P.skipPost(await actionContext(USERS.comms), { post_id: id, reason: "no pretix for free events" })).ok).toBe(true);
+    expect(await P.deletePost(await actionContext(USERS.comms), { post_id: posts[1] })).toMatchObject({ ok: false, message: "Published posts stay (they are the record)" });
+    const { data: log } = await (await as(USERS.oc)).from("activity_log").select("details").eq("event_id", free).eq("entity", "publication_posts");
+    expect(log!.some((l) => (l.details as { skipped?: string }).skipped === "no pretix for free events")).toBe(true);
+  });
+
+  it("status per event and channel; staff and teams read it, others nothing", async () => {
+    const status = async (u: (typeof USERS)[keyof typeof USERS], ev: string) =>
+      Object.fromEntries(((await (await as(u)).rpc("publication_status", { events: [ev] })).data ?? []).map((s) => [s.channel, s.state]));
+    expect(await status(USERS.oc, approved)).toEqual({ chat: "planned", telegram: "published", instagram: "published", pretix: "not_planned", esn: "not_planned" });
+    expect(await status(USERS.comms, free)).toMatchObject({ telegram: "published", pretix: "skipped" });
+    expect(await status(USERS.comms, unapproved)).toMatchObject({ telegram: "planned" });
+    expect(await status(USERS.member, approved)).toEqual({});
+  });
+
+  it("an admin switches a channel off: it leaves the status and the board", async () => {
+    expect((await P.setChannelEnabled(await actionContext(USERS.comms), { channel: "pretix", enabled: false })).ok).toBe(false);
+    expect((await P.setChannelEnabled(await actionContext(USERS.admin), { channel: "pretix", enabled: false })).ok).toBe(true);
+    try {
+      const { data } = await (await as(USERS.comms)).rpc("publication_status", { events: [free] });
+      expect((data ?? []).map((s) => s.channel)).not.toContain("pretix");
+      expect(await P.createPost(await actionContext(USERS.comms), { channel: "pretix", day: day(48), event_ids: [free] })).toMatchObject({ ok: false });
+    } finally {
+      await P.setChannelEnabled(await actionContext(USERS.admin), { channel: "pretix", enabled: true });
+    }
+  });
+});

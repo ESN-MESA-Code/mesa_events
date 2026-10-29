@@ -13,6 +13,7 @@
 import { esnObjectiveIds, esnType, formatPrice, isTbaPrice, normalizeHook, oneLine, paragraph, renderDescription, type DescriptionFields } from "@/lib/description/template";
 import { berlinDate } from "@/lib/dates";
 import { parseAddress } from "@/lib/esn/address";
+import { hasAddress, type EventAddress } from "@/lib/address";
 
 export const ESN_ADD_URL = "https://activities.esn.org/add/physical-activity";
 
@@ -56,6 +57,8 @@ export interface EsnFormInput {
   eventId: string;
   /** The event as planned (fallbacks while there is no published description). */
   event: { title: string; starts_at: string; ends_at: string | null; location: string | null; price_cents: number | null };
+  /** The event's address (country, street, postal code, city) – used before anything parsed from the venue text. */
+  address?: EventAddress | null;
   /** The published description (what Comms approved), or null. */
   published: DescriptionFields | null;
   /** The current classification (type and objectives can change without a new publication). */
@@ -71,7 +74,7 @@ export interface EsnFormData {
   title: string;
   start: string;
   end: string;
-  country: "DE";
+  country: string;
   street: string;
   postal: string;
   city: string;
@@ -101,7 +104,7 @@ export interface EsnFormData {
 export const MISSING = {
   published: "published description (Comms approves and publishes it first)",
   type: "activity type + objectives (Details step of the description)",
-  address: "street address / postal code (put the full address into the venue)",
+  address: "street address / postal code (the address on the event's Details: country, street, postal code, city)",
   report: "event report (participants, results) – Hand-in tab, after the event",
   price: "price (still TBA) – fee / funding",
 } as const;
@@ -122,7 +125,9 @@ export function buildEsnFormData(i: EsnFormInput): EsnFormData {
   const cls = i.classification?.esnType ? i.classification : d;
   const type = esnType(cls?.esnType ?? "");
   const venue = d ? d.venue : (i.event.location ?? "");
-  const address = parseAddress(venue);
+  // The address entered on the event wins; else what the venue text says (the bot's way).
+  const structured = hasAddress(i.address) ? i.address : null;
+  const address = structured ? { street: structured.street.trim(), postal: structured.postalCode.trim(), city: structured.city.trim() } : parseAddress(venue);
   const priceRaw = d ? d.price : i.event.price_cents === null ? "TBA" : (i.event.price_cents / 100).toFixed(2);
   const price = formatPrice(priceRaw, d?.priceNote ?? "").value ?? "";
   const fee = (price.match(/€ (\d+\.\d{2})/) ?? [])[1] ?? "";
@@ -142,7 +147,7 @@ export function buildEsnFormData(i: EsnFormInput): EsnFormData {
     title: oneLine(d?.title || i.event.title),
     start: berlinDate(i.event.starts_at),
     end: berlinDate(i.event.ends_at ?? i.event.starts_at),
-    country: "DE",
+    country: structured?.country ?? "DE",
     street: address.street,
     postal: address.postal,
     city: address.city || "München",

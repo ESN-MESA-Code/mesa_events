@@ -280,7 +280,14 @@ async function EventsQueue() {
 
 async function CommsQueue() {
   const supabase = await createSessionClient();
-  const { data } = await supabase.rpc("description_overview");
+  const now = nowMs();
+  const [{ data }, { data: posts }] = await Promise.all([
+    supabase.rpc("description_overview"),
+    // The publishing schedule (brief 2026-10-29, E3): planned posts until a week ahead.
+    supabase.from("publication_posts").select("scheduled_for").eq("status", "planned").lte("scheduled_for", new Date(now + 7 * 86_400_000).toISOString()),
+  ]);
+  const overdue = (posts ?? []).filter((p) => Date.parse(p.scheduled_for) < now).length;
+  const thisWeek = (posts ?? []).length - overdue;
   // Only what can still be done: no missed events, Late only while the event is ahead (review 2026-10-29 A6).
   const rows = (data ?? []).filter((r) => !r.missed).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   // Each figure leads to the month of its first event, filtered to that stage (brief 2026-10-29, C).
@@ -293,6 +300,8 @@ async function CommsQueue() {
       <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
       <Figure label="Approved – ready to publish" value={ready.length} href={link(ready, "publish")} />
       <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
+      <Figure label="Posts planned this week" value={thisWeek} href="/team/comms/schedule" />
+      <Figure label="Overdue posts" value={overdue} tone="red" href="/team/comms/schedule" />
     </QueueCard>
   );
 }

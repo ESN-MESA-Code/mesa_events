@@ -325,8 +325,11 @@ export async function importArchive(db, records, { today, dryRun = false, create
   return result;
 }
 
-// Run directly (no import.meta, like clean-test-data.mjs).
-if (/bot-archive\.mjs$/.test(process.argv[1] ?? "")) {
+// Run directly (no import.meta and no top-level await: Playwright loads this
+// file through its CommonJS transform, like clean-test-data.mjs).
+if (/bot-archive\.mjs$/.test(process.argv[1] ?? "")) main();
+
+async function main() {
   const args = process.argv.slice(2);
   const files = args.filter((a) => !a.startsWith("--"));
   if (!files.length) {

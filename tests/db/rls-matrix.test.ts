@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin } from "../helpers/local";
 import { MEMBERS, NOBODY, ROLES, TEAM, buildWorld, clientFor, destroyWorld, type Role, type World } from "./world";
-import { SPECS_EXTRA, cleanupExtra } from "./rls-specs";
+import { SPECS_EXTRA, cleanupExtra, cleanupPublishing } from "./rls-specs";
 import type { Database } from "@/types/database";
 
 export type Table = keyof Database["public"]["Tables"];
@@ -213,7 +213,7 @@ const FOUNDATION: Spec[] = [
     update: [{ name: "member's acceptance", make: async () => ({ email: USERS.member.email }), patch: () => ({ version: "2000-01-01" }), allowed: NOBODY }],
     delete: [{ name: "member's acceptance", make: async () => ({ email: USERS.signout.email }), allowed: NOBODY }],
   },
-  ...(["fake_directory_members", "fake_chat_spaces", "fake_chat_members", "fake_chat_messages", "fake_drive_folders", "fake_drive_files"] as const).map(
+  ...(["fake_directory_members", "fake_chat_spaces", "fake_chat_members", "fake_chat_messages", "fake_drive_folders", "fake_drive_files", "fake_telegram_messages"] as const).map(
     (table): Spec => ({
       table,
       select: [],
@@ -232,6 +232,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await cleanupExtra();
+  await cleanupPublishing();
   await admin.from("role_members").delete().like("email", "rlstest-%");
   await admin.from("activity_log").delete().in("action", ["test", "t", "changed", "forged"]);
   await admin.from("jobs").delete().like("idempotency_key", "rls.%");

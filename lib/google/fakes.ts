@@ -79,6 +79,9 @@ export class MemoryChatClient implements ChatClient {
   }
 }
 
+/** A 1×1 PNG: what the fake Drive "downloads". */
+const FAKE_PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137]);
+
 /** The fake photo drive's root when DRIVE_PHOTOS_FOLDER_ID is not set. */
 export const FAKE_DRIVE_ROOT = "fake-photos-root";
 const newFolderId = () => `fakefolder-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -117,6 +120,19 @@ export class MemoryDriveClient implements DriveClient {
   /** A member puts a file into a folder (tests). */
   addFile(folderId: string, name: string) {
     this.files.set(folderId, [...(this.files.get(folderId) ?? []), name]);
+  }
+
+  /** Pictures for Telegram (tests): file id → type and size. */
+  images = new Map<string, { mimeType: string; size: number; name: string }>();
+
+  async fileInfo(fileId: string) {
+    const f = this.images.get(fileId);
+    if (!f) throw new Error("Fake Drive: no such file");
+    return f;
+  }
+
+  async download(fileId: string) {
+    return FAKE_PNG.slice(0, Math.min(FAKE_PNG.length, (await this.fileInfo(fileId)).size));
   }
 
   async countFiles(folderId: string): Promise<number> {
@@ -217,6 +233,17 @@ export class DbDriveClient implements DriveClient {
       id = check(await this.db.from("fake_drive_folders").select("id").eq("parent_id", id).eq("name", name).single())!.id;
     }
     return { id, url: driveFolderUrl(id) };
+  }
+
+  async fileInfo(fileId: string) {
+    const f = check(await this.db.from("fake_drive_files").select("file_name, mime_type, size").eq("id", fileId).maybeSingle());
+    if (!f) throw new Error("Fake Drive: no such file");
+    return { mimeType: f.mime_type, size: f.size, name: f.file_name };
+  }
+
+  async download(fileId: string) {
+    await this.fileInfo(fileId);
+    return FAKE_PNG;
   }
 
   async countFiles(folderId: string, depth = 0): Promise<number> {

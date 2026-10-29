@@ -8,6 +8,8 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } fr
 import { ActionButton } from "@/components/ActionButton";
 import { AddRoleForm, SettingsForm } from "./forms";
 import { removeManualRole, retryJob, syncRolesNow } from "@/app/actions/admin";
+import { setChannelEnabled } from "@/app/actions/publishing";
+import { telegramMode } from "@/lib/telegram";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -16,10 +18,11 @@ export const metadata: Metadata = { title: "Admin" };
 export default async function AdminPage() {
   await requirePageRole(["admin"], { page: "Admin" });
   const supabase = await createSessionClient();
-  const [{ data: members }, { data: jobs }, { data: settings }] = await Promise.all([
+  const [{ data: members }, { data: jobs }, { data: settings }, { data: channels }] = await Promise.all([
     supabase.from("role_members").select("*").order("role").order("email"),
     supabase.from("jobs").select("id, kind, status, attempts, max_attempts, last_error, run_after, updated_at, idempotency_key").order("id", { ascending: false }).limit(50),
     supabase.from("app_settings").select("key, value").order("key"),
+    supabase.from("publication_channels").select("key, name, kind, enabled").order("position"),
   ]);
   const groups = roleGroups();
   const mode = googleMode();
@@ -83,6 +86,30 @@ export default async function AdminPage() {
                       Remove
                     </ActionButton>
                   )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Publishing channels</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-gray-500">
+              Where Comms publishes events. Telegram runs {telegramMode() === "fake" ? <strong>on the fake (no token configured)</strong> : "on the configured bot"}; the manual channels are marked by hand.
+            </p>
+            <ul className="divide-y divide-gray-100 text-sm" data-testid="channels">
+              {(channels ?? []).map((c) => (
+                <li key={c.key} className="flex items-center gap-2 py-2">
+                  <span className="font-medium text-gray-900">{c.name}</span>
+                  <Badge tone={c.kind === "auto" ? "blue" : "gray"}>{c.kind === "auto" ? "by the platform" : "by hand"}</Badge>
+                  <span className="ml-auto">
+                    <ActionButton action={setChannelEnabled} input={{ channel: c.key, enabled: !c.enabled }} variant={c.enabled ? "outline" : "default"}>
+                      {c.enabled ? "Switch off" : "Switch on"}
+                    </ActionButton>
+                  </span>
                 </li>
               ))}
             </ul>
