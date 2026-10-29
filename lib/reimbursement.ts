@@ -9,6 +9,7 @@
 //   – further expenses on weekend trips need the Treasurer's pre-approval
 //   – social ancillary costs on weekend trips stay within the trip budget
 // Finance confirms or overrides the suggestion.
+import { plural } from "@/lib/plural";
 
 export type PolicyEventType = "standard" | "special" | "day_trip" | "weekend_trip" | "any";
 export type ExpenseKind = "ticket" | "food_allowance" | "ancillary" | "travel_accommodation" | "further_expenses" | "social_ancillary";
@@ -168,6 +169,39 @@ export function isValidIban(raw: string): boolean {
 export function maskIban(iban: string): string {
   const s = iban.replace(/\s+/g, "");
   return s.length <= 8 ? s : `${s.slice(0, 4)} •••• ${s.slice(-4)}`;
+}
+
+/** "olga@…": enough to recognise one's own PayPal address. */
+export function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  return at < 0 ? email : `${email.slice(0, at)}@…`;
+}
+
+/**
+ * Where a claim's money goes (review 2026-10-29 B1): "Payout: …" until it is
+ * paid, "Paid to …" afterwards (the details are deleted then, so only the
+ * method is left). null: no details yet.
+ */
+export function payoutLine(c: { status: ClaimStatus; payoutMethod: string | null; iban: string | null; paypalEmail: string | null }): string | null {
+  if (c.status === "paid") return c.payoutMethod === "paypal" ? "Paid to your PayPal account" : c.payoutMethod === "bank" ? "Paid to your bank account" : "Paid";
+  if (c.iban) return `Payout: bank transfer (${maskIban(c.iban)})`;
+  if (c.paypalEmail) return `Payout: PayPal (${maskEmail(c.paypalEmail)})`;
+  return null;
+}
+
+/**
+ * The hand-in's receipt line (review 2026-10-29 B2): the member's own
+ * receipts and the rest of the team's apart, so they see whose Beleg is
+ * missing – counts only, never others' amounts.
+ */
+export function receiptsStatus(r: { mine: number; myMissing: number; all: number; allMissing: number; onTeam: boolean }): string {
+  const belege = (n: number) => plural(n, "Beleg", "Belege");
+  const state = (count: number, missingCount: number, outstanding: string) =>
+    count === 0 ? "no receipts" : missingCount ? `${plural(count, "receipt")}, ${belege(missingCount)} ${outstanding}` : `${plural(count, "receipt")}, all Belege in`;
+  if (!r.onTeam) return `Receipts registered: ${state(r.all, r.allMissing, "outstanding")}`;
+  const others = Math.max(0, r.all - r.mine);
+  const othersMissing = Math.max(0, r.allMissing - r.myMissing);
+  return `Yours: ${state(r.mine, r.myMissing, "to hand in")} · Rest of the team: ${state(others, othersMissing, "outstanding")}`;
 }
 
 export interface ClaimProgressInput {

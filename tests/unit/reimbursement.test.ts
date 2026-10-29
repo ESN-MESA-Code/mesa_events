@@ -7,7 +7,10 @@ import {
   findRule,
   isValidIban,
   kindsFor,
+  maskEmail,
   maskIban,
+  payoutLine,
+  receiptsStatus,
   mayPayEarly,
   suggestAmount,
   type ClaimRole,
@@ -201,5 +204,24 @@ describe("claim progress (review C7)", () => {
   it("a rejected claim fails where it stopped", () => {
     expect(states({ status: "rejected", belegReceivedAt: "x" })).toBe("Registered:done Beleg received:done Rejected:failed Paid:todo");
     expect(states({ status: "rejected" })).toBe("Registered:done Rejected:failed Checked:todo Paid:todo");
+  });
+});
+
+describe("payout line and receipt status (review 2026-10-29 B1, B2)", () => {
+  it("says where the money goes until paid, and that it was paid afterwards", () => {
+    expect(maskEmail("olga@example.com")).toBe("olga@…");
+    expect(payoutLine({ status: "beleg_received", payoutMethod: "paypal", iban: null, paypalEmail: "olga@example.com" })).toBe("Payout: PayPal (olga@…)");
+    expect(payoutLine({ status: "checked", payoutMethod: "bank", iban: "DE89 3704 0044 0532 0130 00", paypalEmail: null })).toBe("Payout: bank transfer (DE89 •••• 3000)");
+    expect(payoutLine({ status: "not_submitted", payoutMethod: null, iban: null, paypalEmail: null })).toBeNull();
+    expect(payoutLine({ status: "paid", payoutMethod: "paypal", iban: null, paypalEmail: null })).toBe("Paid to your PayPal account");
+    expect(payoutLine({ status: "paid", payoutMethod: "bank", iban: null, paypalEmail: null })).toBe("Paid to your bank account");
+  });
+
+  it("shows one's own receipts and the rest of the team's apart, as counts", () => {
+    expect(receiptsStatus({ mine: 2, myMissing: 0, all: 3, allMissing: 1, onTeam: true })).toBe("Yours: 2 receipts, all Belege in · Rest of the team: 1 receipt, 1 Beleg outstanding");
+    expect(receiptsStatus({ mine: 1, myMissing: 1, all: 4, allMissing: 3, onTeam: true })).toBe("Yours: 1 receipt, 1 Beleg to hand in · Rest of the team: 3 receipts, 2 Belege outstanding");
+    expect(receiptsStatus({ mine: 0, myMissing: 0, all: 0, allMissing: 0, onTeam: true })).toBe("Yours: no receipts · Rest of the team: no receipts");
+    // Team members who are not on the event see the event's counts.
+    expect(receiptsStatus({ mine: 0, myMissing: 0, all: 3, allMissing: 2, onTeam: false })).toBe("Receipts registered: 3 receipts, 2 Belege outstanding");
   });
 });

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
 import { formatDateTime, formatShortDate, nowMs } from "@/lib/dates";
 import type { EventStatus } from "@/lib/labels";
-import { maskIban, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
+import { payoutLine, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
 import { nextStep } from "@/lib/checklist";
 import { checklistInput } from "@/lib/eventStatus";
 import { groupEvents, handInState, type HandInState } from "@/lib/myEvents";
@@ -159,13 +159,21 @@ export default async function MePage() {
                             rejectedReason: c.rejected_reason,
                           }}
                         >
-                          {!settled && (
+                          {!settled ? (
                             <div className="text-xs text-gray-600 space-y-1">
-                              <p>
-                                {d?.iban ? `Paid to ${maskIban(d.iban)}` : d?.paypal_email ? `Paid to PayPal ${d.paypal_email}` : <span className="text-amber-800">⚠️ No bank or PayPal details yet</span>}
+                              <p data-testid="payout-line">
+                                {payoutLine({ status: c.status as ClaimStatus, payoutMethod: c.payout_method, iban: d?.iban ?? null, paypalEmail: d?.paypal_email ?? null }) ?? (
+                                  <span className="text-amber-800">⚠️ No bank or PayPal details yet</span>
+                                )}
                               </p>
                               <PayoutDetailsForm claimId={c.id} hasDetails={!!d} />
                             </div>
+                          ) : (
+                            c.status === "paid" && (
+                              <p className="text-xs text-gray-600" data-testid="payout-line">
+                                {payoutLine({ status: "paid", payoutMethod: c.payout_method, iban: null, paypalEmail: null })}
+                              </p>
+                            )
                           )}
                         </ClaimItem>
                       </li>

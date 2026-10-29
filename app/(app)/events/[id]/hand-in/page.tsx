@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatDateTime, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
-import { kindsFor, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
+import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { ClaimItem } from "@/components/ClaimItem";
 import { ClaimStatusBadge } from "@/components/status";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
@@ -71,9 +71,15 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           <p>
             {(photos ?? []).length ? "✅" : "⬜"} Photos: {(photos ?? []).length}
           </p>
-          <p>
-            {s.receipts ? "✅" : "⬜"} Receipts registered: {s.receipts ?? 0}
-            {s.belege_missing ? ` · ${s.belege_missing} Beleg(e) not handed in yet` : ""}
+          <p data-testid="receipts-status">
+            {s.receipts && !s.belege_missing ? "✅" : "⬜"}{" "}
+            {receiptsStatus({
+              mine: (claims ?? []).length,
+              myMissing: (claims ?? []).filter((c) => c.status === "not_submitted").length,
+              all: s.receipts ?? 0,
+              allMissing: s.belege_missing ?? 0,
+              onTeam: !!myAssignment,
+            })}
           </p>
         </CardContent>
       </Card>
