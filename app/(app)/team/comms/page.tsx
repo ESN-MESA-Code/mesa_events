@@ -8,6 +8,7 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, Pag
 import { ActionButton } from "@/components/ActionButton";
 import { noteCancellation } from "@/app/actions/descriptions";
 import { hasRole } from "@/lib/roles";
+import { cyclesWithProgress } from "@/lib/cycleFacts";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -67,7 +68,13 @@ export default async function CommsPage() {
   const published = rows.filter((r) => r.status === "published");
   // Progress per cycle, over all its running events (also those already past).
   const all = (data ?? []) as Row[];
-  const cycles = [...new Set(all.filter((r) => r.cycle_month && Date.parse(r.starts_at) > now - 7 * 86_400_000).map((r) => r.cycle_month!))].sort();
+  // Done cycles (every event happened and is handed in) drop out (review 2026-10-29 A4).
+  const recentIds = [...new Set(all.filter((r) => r.cycle_id && Date.parse(r.starts_at) > now - 7 * 86_400_000).map((r) => r.cycle_id!))];
+  const { data: cycleRows } = recentIds.length
+    ? await supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").in("id", recentIds)
+    : { data: [] };
+  const running = (await cyclesWithProgress(supabase, cycleRows ?? [])).filter((c) => !c.progress.done);
+  const cycles = running.map((c) => c.month).sort();
   const progress = cycles.map((month) => {
     const list = all.filter((r) => r.cycle_month === month);
     const done = list.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;

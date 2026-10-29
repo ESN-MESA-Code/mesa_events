@@ -8,7 +8,8 @@ const base: CycleFacts = {
   responses: 0,
   formClosesAt: null,
   descriptionDeadline: null,
-  descriptions: { total: 0, in: 0, published: 0 },
+  descriptions: { total: 0, in: 0, published: 0, upcomingMissing: 0 },
+  handIn: { total: 0, happened: 0, done: 0 },
 };
 const states = (f: CycleFacts) => cycleProgress(f).steps.map((s) => `${s.id}:${s.state}`).join(" ");
 
@@ -17,7 +18,7 @@ describe("cycle steps", () => {
     const p = cycleProgress({ ...base, openIdeas: 2 });
     expect(p.current).toBe("ideas");
     expect(p.action).toBe("Accept or reject the 2 ideas, or add events");
-    expect(states({ ...base })).toBe("ideas:current schedule:todo form:todo allocation:todo roster:todo descriptions:todo");
+    expect(states({ ...base })).toBe("ideas:current schedule:todo form:todo allocation:todo roster:todo descriptions:todo handin:todo done:todo");
   });
 
   it("planning with events: the schedule, then the form", () => {
@@ -27,15 +28,39 @@ describe("cycle steps", () => {
 
   it("closed form → allocation; allocated → confirm the roster", () => {
     expect(cycleProgress({ ...base, status: "form_closed" })).toMatchObject({ current: "allocation", action: "Run the allocation" });
-    expect(states({ ...base, status: "allocated" })).toBe("ideas:done schedule:done form:done allocation:done roster:current descriptions:todo");
+    expect(states({ ...base, status: "allocated" })).toBe("ideas:done schedule:done form:done allocation:done roster:current descriptions:todo handin:todo done:todo");
   });
 
-  it("confirmed: descriptions until all are in", () => {
-    const p = cycleProgress({ ...base, status: "confirmed", descriptions: { total: 8, in: 5, published: 3 } });
-    expect(p).toMatchObject({ current: "descriptions", summary: "roster confirmed · 5 of 8 descriptions in", action: "Set the description deadline" });
-    expect(cycleProgress({ ...base, status: "confirmed", descriptionDeadline: "2026-11-30T23:00:00Z", descriptions: { total: 8, in: 5, published: 3 } }).action).toMatch(/Remind/);
-    const done = cycleProgress({ ...base, status: "confirmed", descriptions: { total: 2, in: 2, published: 2 } });
-    expect(done.current).toBeNull();
+  const confirmed: CycleFacts = { ...base, status: "confirmed", handIn: { total: 8, happened: 0, done: 0 } };
+
+  it("confirmed: descriptions while upcoming events miss theirs", () => {
+    const p = cycleProgress({ ...confirmed, descriptions: { total: 8, in: 5, published: 3, upcomingMissing: 3 } });
+    expect(p).toMatchObject({ current: "descriptions", summary: "roster confirmed · 5 of 8 descriptions in", action: "Set the description deadline", done: false });
+    expect(cycleProgress({ ...confirmed, descriptionDeadline: "2026-11-30T23:00:00Z", descriptions: { total: 8, in: 5, published: 3, upcomingMissing: 3 } }).action).toMatch(/Remind/);
+  });
+
+  it("all descriptions in: the hand-in, opening on each event's day", () => {
+    const p = cycleProgress({ ...confirmed, descriptions: { total: 8, in: 8, published: 8, upcomingMissing: 0 } });
+    expect(p).toMatchObject({ current: "handin", action: "Hand-in opens on each event's day", summary: "hand-in · 0 of 8 events handed in" });
+  });
+
+  it("no more reminders for descriptions once the events have happened (review 2026-10-29 A4)", () => {
+    // Two events happened without a description: nothing to remind any more.
+    const p = cycleProgress({ ...confirmed, descriptionDeadline: "2026-10-03T19:00:00Z", descriptions: { total: 5, in: 3, published: 3, upcomingMissing: 0 }, handIn: { total: 5, happened: 5, done: 3 } });
+    expect(p.current).toBe("handin");
+    expect(p.action).toBe("Remind the OCs of 2 events that are not handed in yet");
+    expect(p.summary).toBe("hand-in · 3 of 5 events handed in");
+    expect(cycleProgress({ ...confirmed, handIn: { total: 5, happened: 2, done: 1 } }).action).toBe("Remind the OCs of 1 event that is not handed in yet");
+    expect(p.steps.map((s) => `${s.id}:${s.state}`).join(" ")).toBe("ideas:done schedule:done form:done allocation:done roster:done descriptions:done handin:current done:todo");
+  });
+
+  it("every event happened and is handed in: done", () => {
+    const done = cycleProgress({ ...confirmed, descriptions: { total: 2, in: 1, published: 1, upcomingMissing: 0 }, handIn: { total: 2, happened: 2, done: 2 } });
+    expect(done).toMatchObject({ current: null, done: true, summary: "done · 2 of 2 events handed in" });
     expect(done.steps.every((s) => s.state === "done")).toBe(true);
+    // Handed in early but an event is still ahead: not done.
+    expect(cycleProgress({ ...confirmed, handIn: { total: 2, happened: 1, done: 1 } }).done).toBe(false);
+    // Every event dropped or cancelled: nothing left.
+    expect(cycleProgress({ ...confirmed, handIn: { total: 0, happened: 0, done: 0 } })).toMatchObject({ done: true, summary: "done · no events ran" });
   });
 });

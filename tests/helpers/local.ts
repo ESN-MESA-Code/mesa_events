@@ -101,9 +101,24 @@ export async function passwordSession(user: SeedUser) {
 export const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString();
 export const daysFromNow = (days: number) => hoursFromNow(days * 24);
 
-/** First day of a month `offset` months from now (UTC), unused by other tests: random far-future year. */
+/**
+ * Test data lives in test months: cycles before 2020 or from 2040 on, which
+ * no real or demo cycle uses. The global teardown (tests/helpers/cleanup.ts)
+ * removes every cycle there with everything in it.
+ */
+export const TEST_MONTHS = { before: "2020-01-01", from: "2040-01-01" } as const;
+export const isTestMonth = (month: string) => month < TEST_MONTHS.before || month >= TEST_MONTHS.from;
+
+/** A random far-future test month unused by other tests, as "YYYY-MM-01". */
 export function testMonth(): string {
   const year = 2100 + Math.floor(Math.random() * 800);
+  const month = 1 + Math.floor(Math.random() * 12);
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+/** A random past test month (2000–2019), for cycles whose events really happened, as "YYYY-MM-01". */
+export function pastTestMonth(): string {
+  const year = 2000 + Math.floor(Math.random() * 20);
   const month = 1 + Math.floor(Math.random() * 12);
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }

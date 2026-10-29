@@ -1,10 +1,12 @@
 // A planning cycle as steps (review C9): Ideas → Schedule → Volunteer form →
-// Allocation → Roster confirmed → Descriptions. Pure, so the rules are
-// tested (tests/unit/cycle.test.ts); the cycle page and the Events
-// dashboard show it as a stepper with the current step's main action.
+// Allocation → Roster confirmed → Descriptions → Hand-in → Done (review
+// 2026-10-29 A4). Pure, so the rules are tested (tests/unit/cycle.test.ts);
+// the cycle page and the Events dashboard show it as a stepper with the
+// current step's main action.
 import type { CycleStatus } from "@/lib/labels";
+import { isAre, plural } from "@/lib/plural";
 
-export type StepId = "ideas" | "schedule" | "form" | "allocation" | "roster" | "descriptions";
+export type StepId = "ideas" | "schedule" | "form" | "allocation" | "roster" | "descriptions" | "handin" | "done";
 
 export interface CycleFacts {
   status: CycleStatus;
@@ -15,8 +17,17 @@ export interface CycleFacts {
   responses: number;
   formClosesAt: string | null;
   descriptionDeadline: string | null;
-  /** Running events of the confirmed roster and how many descriptions are in (submitted or further). */
-  descriptions: { total: number; in: number; published: number };
+  /**
+   * Running events of the confirmed roster and how many descriptions are in
+   * (submitted or further); upcomingMissing: events not started yet whose
+   * description is not in (the only ones worth a reminder).
+   */
+  descriptions: { total: number; in: number; published: number; upcomingMissing: number };
+  /**
+   * Running events (not cancelled), how many have started, and how many are
+   * handed in: attendance list signed off, photos, every Beleg with Finance.
+   */
+  handIn: { total: number; happened: number; done: number };
 }
 
 export interface Step {
@@ -32,6 +43,8 @@ export interface CycleProgress {
   action: string;
   /** One line for the dashboard. */
   summary: string;
+  /** Every step is behind the cycle: it moves to "Past cycles". */
+  done: boolean;
 }
 
 const LABELS: Record<StepId, string> = {
@@ -41,11 +54,13 @@ const LABELS: Record<StepId, string> = {
   allocation: "Allocation",
   roster: "Roster confirmed",
   descriptions: "Descriptions",
+  handin: "Hand-in",
+  done: "Done",
 };
-export const STEP_ORDER: StepId[] = ["ideas", "schedule", "form", "allocation", "roster", "descriptions"];
+export const STEP_ORDER: StepId[] = ["ideas", "schedule", "form", "allocation", "roster", "descriptions", "handin", "done"];
 
 export function cycleProgress(f: CycleFacts): CycleProgress {
-  let current: StepId | null;
+  let current: StepId;
   let action: string;
   let summary: string;
   switch (f.status) {
@@ -76,20 +91,28 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
       summary = "allocated · check and confirm the roster";
       break;
     case "confirmed": {
-      const { total, in: done } = f.descriptions;
-      if (total > 0 && done >= total) {
-        current = null;
-        action = "All descriptions are in";
-        summary = `roster confirmed · ${done} of ${total} descriptions in`;
-      } else {
+      const { total, in: done, upcomingMissing } = f.descriptions;
+      const h = f.handIn;
+      const handedIn = `${h.done} of ${plural(h.total, "event")} handed in`;
+      if (h.total === 0 || (h.happened >= h.total && h.done >= h.total)) {
+        current = "done";
+        action = "Every event is handed in – the cycle is done";
+        summary = h.total ? `done · ${handedIn}` : "done · no events ran";
+      } else if (upcomingMissing > 0) {
         current = "descriptions";
         action = f.descriptionDeadline ? "Remind OCs whose descriptions are missing" : "Set the description deadline";
         summary = `roster confirmed · ${done} of ${total} descriptions in`;
+      } else {
+        current = "handin";
+        const open = h.happened - h.done;
+        action = open > 0 ? `Remind the OCs of ${plural(open, "event")} that ${isAre(open)} not handed in yet` : "Hand-in opens on each event's day";
+        summary = `hand-in · ${handedIn}`;
       }
       break;
     }
   }
-  const at = current === null ? STEP_ORDER.length : STEP_ORDER.indexOf(current);
+  const finished = current === "done";
+  const at = finished ? STEP_ORDER.length : STEP_ORDER.indexOf(current);
   const steps = STEP_ORDER.map((id, i) => ({ id, label: LABELS[id], state: i < at ? "done" : i === at ? "current" : "todo" }) as Step);
-  return { steps, current, action, summary };
+  return { steps, current: finished ? null : current, action, summary, done: finished };
 }

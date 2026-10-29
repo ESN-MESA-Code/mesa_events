@@ -72,6 +72,12 @@ export function monthOf(iso: string): string {
   return `${berlinDate(iso).slice(0, 7)}-01`;
 }
 
+/** `month` ("2026-11-01") moved by `n` months: addMonths("2026-11-01", -3) = "2026-08-01". */
+export function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10);
+}
+
 /** The start of `month` ("2026-11-01") at 00:00 in Berlin, as ISO. */
 export function monthStartIso(month: string): string {
   return berlinInputToIso(`${month}T00:00`);

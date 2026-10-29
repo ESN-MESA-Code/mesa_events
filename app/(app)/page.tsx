@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { cycleLabel, formatCents, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { cycleLabel, formatCents, formatDateTime, formatDue, formatShortDate, nowMs } from "@/lib/dates";
 import { nextStep, type NextStep } from "@/lib/checklist";
 import { checklistInput, volunteerForms } from "@/lib/eventStatus";
 import { cyclesWithProgress } from "@/lib/cycleFacts";
@@ -246,12 +246,12 @@ function Figure({ label, value, tone }: { label: string; value: number; tone?: "
 
 async function EventsQueue() {
   const supabase = await createSessionClient();
-  const thisMonth = monthOf(new Date(nowMs()).toISOString());
   const [{ data: cycles }, { data: slots }] = await Promise.all([
-    supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").gte("month", thisMonth).order("month"),
+    supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").order("month"),
     supabase.rpc("open_slots"),
   ]);
-  const progress = await cyclesWithProgress(supabase, cycles ?? []);
+  // Done cycles drop out (review 2026-10-29 A4).
+  const progress = (await cyclesWithProgress(supabase, cycles ?? [])).filter((c) => !c.progress.done);
   return (
     <QueueCard title="Events team" href="/team/events" testId="queue-events">
       {!progress.length && <p className="text-gray-500">No cycle running – start the next month.</p>}

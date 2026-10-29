@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { cycleLabel, cyclePlannedIn, formatDateTime, isoToBerlinInput } from "@/lib/dates";
+import { cycleLabel, cyclePlannedIn, formatDateTime, formatShortDate, isoToBerlinInput } from "@/lib/dates";
+import { plural } from "@/lib/plural";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
@@ -44,7 +45,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const signupCount = new Map<string, number>();
   for (const s of signups ?? []) signupCount.set(s.event_id, (signupCount.get(s.event_id) ?? 0) + 1);
   const people = (responses ?? []).length;
-  const [{ progress }] = await cyclesWithProgress(supabase, [cycle]);
+  const [{ progress, handInOpen }] = await cyclesWithProgress(supabase, [cycle]);
   const planned = (events ?? []).filter((e) => e.status !== "dropped");
   const editableSchedule = canEdit && ["planning", "form_open"].includes(cycle.status);
 
@@ -64,6 +65,24 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
               {progress.action}
               <span className="text-gray-500"> · {progress.summary}</span>
             </p>
+            {progress.current === "handin" && handInOpen.length > 0 && (
+              <ul className="text-sm space-y-1" data-testid="hand-in-open">
+                {handInOpen.map((h) => {
+                  const e = (events ?? []).find((x) => x.id === h.event_id);
+                  const missing = [!h.signed_off && "attendance list", h.photos === 0 && "photos", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean);
+                  return (
+                    <li key={h.event_id} className="flex flex-wrap gap-x-2">
+                      <Link href={`/events/${h.event_id}/hand-in?from=cycle:${cycle.id}`} className="font-medium text-esn hover:underline">
+                        {e?.title ?? "Event"}
+                      </Link>
+                      <span className="text-gray-500">
+                        {formatShortDate(h.starts_at)} · missing: {missing.join(", ")}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <CycleControls
               cycle={{
                 id: cycle.id,
