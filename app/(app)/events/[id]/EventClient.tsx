@@ -144,10 +144,7 @@ export function EventDetailsForm({
           </Field>
         </>
       )}
-      <Field label="Venue" htmlFor="d-location" hint="The place's name, e.g. Shamrock">
-        <Input id="d-location" value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
-      </Field>
-      <AddressFields value={address} onChange={setAddress} showErrors={checked} idPrefix="d-addr" />
+      <AddressFields value={address} onChange={setAddress} showErrors={checked} idPrefix="d-addr" venue={{ value: v.location, onChange: (location) => setV((x) => ({ ...x, location })) }} />
       <Field label="Price in € (empty = TBA)" htmlFor="d-price">
         <Input id="d-price" inputMode="decimal" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} />
       </Field>

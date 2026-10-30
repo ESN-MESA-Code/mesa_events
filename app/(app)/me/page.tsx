@@ -3,11 +3,11 @@ import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
 import { formatDateTime, formatShortDate, nowMs } from "@/lib/dates";
 import type { EventStatus } from "@/lib/labels";
-import { payoutLine, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
+import { maskEmail, maskIban, payoutLine, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
 import { nextStep } from "@/lib/checklist";
 import { checklistInput } from "@/lib/eventStatus";
 import { groupEvents, handInState, type HandInState } from "@/lib/myEvents";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { EventStatusBadge } from "@/components/status";
 import { ClaimItem } from "@/components/ClaimItem";
 import { PayoutDetailsForm } from "./PayoutDetailsForm";
@@ -57,7 +57,7 @@ function EventList({ list, testId }: { list: MyEvent[]; testId: string }) {
 export default async function MePage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
-  const [{ data: assignments }, { data: claims }] = await Promise.all([
+  const [{ data: assignments }, { data: claims }, { data: payout }] = await Promise.all([
     supabase
       .from("assignments")
       .select("id, role, status, events(id, title, starts_at, ends_at, status, helpers_needed, chat_space_name, chat_space_requested_at, planning_cycles(description_deadline))")
@@ -71,6 +71,7 @@ export default async function MePage() {
       )
       .eq("claimant_id", viewer.id)
       .order("created_at"),
+    supabase.from("profile_payout_details").select("iban, paypal_email").eq("profile_id", viewer.id).maybeSingle(),
   ]);
   const now = nowMs();
   const events: MyEvent[] = (assignments ?? [])
@@ -126,6 +127,21 @@ export default async function MePage() {
             <CardTitle>My reimbursements</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5" data-testid="my-reimbursements">
+            {payout ? (
+              <p className="text-sm text-gray-600" data-testid="profile-payout">
+                Paid to {payout.iban ? `your bank account ${maskIban(payout.iban)}` : `your PayPal ${maskEmail(payout.paypal_email ?? "")}`} ·{" "}
+                <Link href="/me/payout" className="text-esn hover:underline">
+                  change
+                </Link>
+              </p>
+            ) : (
+              <Alert tone="warning" data-testid="profile-payout-missing">
+                No IBAN or PayPal on your profile – Finance cannot pay your reimbursements.{" "}
+                <Link href="/me/payout" className="font-medium underline">
+                  Add payout details
+                </Link>
+              </Alert>
+            )}
             {!groups.length && <EmptyState>No receipts registered. Register them on the event&apos;s Hand-in tab.</EmptyState>}
             {groups.map(({ event, claims: list }) => (
               <section key={event.id} aria-label={`Claims for ${event.title}`} className="space-y-3">

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { addMonths, cycleLabel, monthOf, nowMs } from "@/lib/dates";
+import { addMonths, berlinDate, cycleLabel, monthOf, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { postWarnings, type PostEventFacts } from "@/lib/publishing";
 import { coerceFields } from "@/lib/description/template";
 import { Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
-import { ScheduleBoard, type BoardChannel, type BoardPost } from "./ScheduleBoard";
+import { CommsTabs } from "@/components/CommsTabs";
+import { bundleMessage, bundlePrice, eventMessage, plainText } from "@/lib/telegram/messages";
+import { ScheduleBoard, type BoardChannel, type BoardPost, type Coverage } from "./ScheduleBoard";
 
 export const metadata: Metadata = { title: "Publishing schedule" };
 
@@ -33,10 +34,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   const [{ data: overview }, { data: channelRows }, { data: postRows }] = await Promise.all([
     supabase.rpc("description_overview"),
-    supabase.from("publication_channels").select("key, name, kind, schedulable, enabled").order("position"),
+    supabase.from("publication_channels").select("key, name, kind, schedulable, enabled, required").order("position"),
     supabase
       .from("publication_posts")
-      .select("id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, publication_post_events(event_id, position)")
+      .select("id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, confirmed_at, publication_post_events(event_id, position)")
       .gte("scheduled_for", new Date(Date.parse(`${from}T00:00:00Z`) - 86_400_000).toISOString())
       .order("scheduled_for"),
   ]);
@@ -50,7 +51,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     posts.some((p) => monthOf(p.scheduled_for) === m && p.status === "planned");
   const month = pickMonth(months.map((m) => ({ month: m, hasWork: hasWork(m) })), parseMonthParam(sp.month), thisMonth) ?? thisMonth;
 
-  const channels: BoardChannel[] = (channelRows ?? []).filter((c) => c.enabled && c.schedulable).map((c) => ({ key: c.key, name: c.name, kind: c.kind as BoardChannel["kind"] }));
+  const channels: BoardChannel[] = (channelRows ?? []).filter((c) => c.enabled && c.schedulable).map((c) => ({ key: c.key, name: c.name, kind: c.kind as BoardChannel["kind"], required: c.required }));
   const monthPosts = posts.filter((p) => monthOf(p.scheduled_for) === month);
   const monthEvents = rows.filter((r) => monthOf(r.starts_at) === month);
   // Events on a post of this month that take place in another month are shown too.
@@ -62,6 +63,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       ])
     : [{ data: [] }, { data: [] }];
   const desc = new Map((descriptions ?? []).map((d) => [d.event_id, d]));
+  const fieldsOf = (id: string) => coerceFields(desc.get(id)?.approved_fields ?? desc.get(id)?.fields ?? {});
+  const titleOf = (id: string) => (eventRows ?? []).find((e) => e.id === id)?.title ?? "";
+  // The Telegram text Comms looks at before confirming (what the job posts; sign-up links are added then).
+  const telegramPreview = (ids: string[], note: string) =>
+    plainText(
+      ids.length === 1
+        ? eventMessage({ ...fieldsOf(ids[0]), title: fieldsOf(ids[0]).title || titleOf(ids[0]) }).html
+        : bundleMessage(note, ids.map((id) => ({ title: fieldsOf(id).title || titleOf(id), startsAt: facts.get(id)?.startsAt ?? "", price: bundlePrice(fieldsOf(id)) }))).html
+    );
   const facts = new Map<string, PostEventFacts>(
     (eventRows ?? []).map((e) => {
       const d = desc.get(e.id);
@@ -74,6 +84,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     return n;
   };
   const counts = new Map(channels.map((c) => [c.key, onChannel(c.key)]));
+  // Per event and channel, over all months: published, else the first planned post.
+  const coverage: Coverage = {};
+  for (const p of posts) {
+    if (p.status === "skipped") continue;
+    for (const x of p.publication_post_events) {
+      const cur = (coverage[x.event_id] ??= {})[p.channel];
+      if (!cur || (cur.status === "planned" && (p.status === "published" || p.scheduled_for < cur.at))) {
+        coverage[x.event_id][p.channel] = { status: p.status as "planned" | "published", at: p.scheduled_for };
+      }
+    }
+  }
   const boardPosts: BoardPost[] = monthPosts.map((p) => {
     const evs = [...p.publication_post_events].sort((a, b) => a.position - b.position).map((x) => x.event_id);
     return {
@@ -81,6 +102,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       channel: p.channel,
       scheduledFor: p.scheduled_for,
       status: p.status as BoardPost["status"],
+      confirmed: !!p.confirmed_at,
       link: p.link,
       picture: p.picture,
       note: p.note,
@@ -89,6 +111,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       publishedAt: p.published_at,
       events: evs,
       warnings: postWarnings({ channel: p.channel, scheduledFor: p.scheduled_for, status: p.status }, evs.map((id) => facts.get(id)!).filter(Boolean), counts.get(p.channel) ?? new Map()),
+      preview: p.channel === "telegram" && evs.length ? telegramPreview(evs, p.note) : null,
     };
   });
   const boardEvents = monthEvents
@@ -104,11 +127,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Publishing schedule" description="Plan the month's posts per channel – drag events onto days, bundle them, publish. Telegram posts go out by themselves at their time.">
+      <PageHeader title="Comms" description="Every event goes out on Telegram, Instagram and pretix: plan the posts around the event's date, bundle them, publish. Telegram posts go out by themselves once confirmed.">
         <div className="flex flex-wrap items-center gap-3">
-          <Link href={`/team/comms?month=${monthParam(month)}`} className="text-sm text-esn hover:underline">
-            ← Comms
-          </Link>
           <MonthSelector
             options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
             current={monthParam(month)}
@@ -118,6 +138,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           />
         </div>
       </PageHeader>
+      <CommsTabs current="schedule" month={monthParam(month)} executive={viewer.roles.includes("executive")} />
       {!channels.length ? (
         <Card>
           <EmptyState>No channel is switched on for the schedule (Admin → Publishing channels).</EmptyState>
@@ -132,6 +153,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               posts={boardPosts}
               editable={editable}
               viewer={{ email: viewer.email, name: viewer.name }}
+              today={berlinDate(new Date(now).toISOString())}
+              coverage={coverage}
             />
           </CardContent>
         </Card>

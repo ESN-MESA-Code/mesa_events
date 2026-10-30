@@ -19,7 +19,8 @@ test("dropout and replacement", async ({ page, context, baseURL }) => {
 
   // Any member sees the open slot on the calendar and claims it.
   await signInAs(context, baseURL!, USERS.member);
-  await page.goto("/calendar");
+  // The list view of the event's month (the calendar is one month at a time).
+  await page.goto(`/calendar?view=list&month=${new Date(Date.parse(ev.starts_at) + 2 * 3_600_000).toISOString().slice(0, 7)}`);
   await expect(page.getByRole("link", { name: new RegExp(title) })).toContainText("1 helper slot open");
   await page.getByRole("link", { name: new RegExp(title) }).click();
   await page.getByRole("button", { name: "Claim a helper slot (1 open)" }).click();

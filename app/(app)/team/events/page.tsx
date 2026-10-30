@@ -5,6 +5,7 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { cycleLabel, cyclePlannedIn, formatDateTime, monthOf, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { cyclesWithProgress } from "@/lib/cycleFacts";
+import { stepHref } from "@/lib/cycle";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { plural } from "@/lib/plural";
 import { photosIn } from "@/lib/photos";
@@ -96,16 +97,16 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
                   </Link>
                   <span className="text-xs text-gray-500">{cyclePlannedIn(cycle.month)}</span>
                   <Link href={`/team/events/cycles/${cycle.id}`} className="ml-auto text-sm text-esn hover:underline">
-                    Schedule, form and roster →
+                    Schedule →
                   </Link>
                 </div>
-                <Stepper steps={cycle.progress.steps} label={`Steps of ${cycleLabel(cycle.month)}`} testId="month-stepper" />
+                <Stepper steps={cycle.progress.steps.map((s) => ({ ...s, href: stepHref(cycle.id, s.id) }))} label={`Steps of ${cycleLabel(cycle.month)} – each opens its page`} testId="month-stepper" />
                 <p className="text-sm text-gray-600" data-testid="month-summary">
                   {cycle.progress.summary}
                   {cycle.status === "form_open" && cycle.form_closes_at && ` · closes ${formatDateTime(cycle.form_closes_at)}`}
                 </p>
                 <Link
-                  href={`/team/events/cycles/${cycle.id}`}
+                  href={stepHref(cycle.id, cycle.progress.current ?? "done")}
                   className={
                     cycle.progress.current
                       ? "block rounded-md bg-esn/5 border border-esn/30 px-3 py-2 text-sm font-medium text-esn-dark hover:underline"

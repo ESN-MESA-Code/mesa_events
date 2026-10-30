@@ -189,6 +189,11 @@ async function payoutOf(eventId: string): Promise<Match> {
   await admin.from("payout_details").insert({ reimbursement_id: claim.id as string, iban: "DE89370400440532013000", account_holder: "RLS" });
   return { reimbursement_id: claim.id };
 }
+/** The member's IBAN saved on their profile (round 2026-10-30): the member alone reads it. */
+async function profilePayout(): Promise<Match> {
+  await admin.from("profile_payout_details").upsert({ profile_id: USERS.member.id, iban: "DE89370400440532013000", account_holder: "RLS" });
+  return { profile_id: USERS.member.id };
+}
 const preapprovalOf = (eventId: string) => insertRow("preapprovals", { event_id: eventId, requester_id: USERS.helper.id, description: "RLS", estimated_cents: 100 });
 async function budgetOf(eventId: string): Promise<Match> {
   await admin.from("trip_budgets").upsert({ event_id: eventId, amount_cents: 1000 });
@@ -245,6 +250,13 @@ SPECS_EXTRA.push(
     [{ name: "helper's IBAN", make: (w) => payoutOf(w.eventA.id), allowed: CLAIMANT_A }],
     (w) => payoutOf(w.eventA.id),
     () => ({ reimbursement_id: "00000000-0000-0000-0000-000000000000", iban: "DE89370400440532013000" }),
+    { iban: "DE02120300000000202051" }
+  ),
+  readOnly(
+    "profile_payout_details",
+    [{ name: "member's saved IBAN", make: () => profilePayout(), allowed: ["member"] }],
+    () => profilePayout(),
+    () => ({ profile_id: USERS.member.id, iban: "DE02120300000000202051", account_holder: "x" }),
     { iban: "DE02120300000000202051" }
   ),
   readOnly(

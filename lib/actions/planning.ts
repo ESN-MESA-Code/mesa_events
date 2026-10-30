@@ -7,6 +7,7 @@ import { berlinInputToIso, monthLabel, monthOf } from "@/lib/dates";
 import { EVENT_TYPES } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { validateAddress } from "@/lib/address";
+import { verifyAddress } from "@/lib/geocode";
 
 export const localDateTime = z
   .string()
@@ -158,6 +159,10 @@ export const updateEvent = defineAction(
     address: address.nullable().optional(),
   }),
   async (ctx, { id, address: a, ...rest }) => {
+    // Checked against the address lookup like a delivery address (round 2026-10-30); a lookup that cannot answer does not block.
+    if (a && (await verifyAddress({ country: a.country, street: a.street, postalCode: a.postal_code, city: a.city })) === "not_found") {
+      throw new ActionError("failed", "This address was not found – pick it from the suggestions, or check street, house number, postal code and city.");
+    }
     const patch = {
       ...rest,
       ...(a === undefined

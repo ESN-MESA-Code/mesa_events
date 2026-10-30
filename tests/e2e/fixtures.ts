@@ -1,7 +1,7 @@
 // Shared steps for the end-to-end tests. (Fixture callbacks are called
 // `provide` rather than Playwright's usual `use`, which React's lint rules
 // would take for a hook.)
-import { expect, test as base, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test as base, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { JOBS_SECRET, USERS, admin, passwordSession, sessionCookies, type SeedUser } from "../helpers/local";
 
 export { expect, USERS, admin };
@@ -30,6 +30,28 @@ export const test = base.extend<{ as: (user: SeedUser) => Promise<Page> }>({
 });
 
 /** Runs due jobs now (what pg_cron does every 30 seconds), through the protected route. */
+/**
+ * Drag and drop the way dnd-kit's pointer sensor sees it (it needs a few
+ * small moves first). The target is measured before the drag when both are
+ * on screen (dnd-kit scrolls the page while dragging, so a target measured
+ * then may never settle); else it is scrolled to during the drag.
+ */
+export async function drag(page: Page, from: Locator, to: Locator) {
+  await to.scrollIntoViewIfNeeded();
+  await from.scrollIntoViewIfNeeded();
+  const a = (await from.boundingBox())!;
+  const view = page.viewportSize()!;
+  const early = await to.boundingBox();
+  const visible = !!early && early.y >= 0 && early.y + early.height <= view.height;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 10, a.y + a.height / 2 + 10, { steps: 5 });
+  if (!visible) await to.scrollIntoViewIfNeeded();
+  const b = visible ? early! : (await to.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 15 });
+  await page.mouse.up();
+}
+
 export async function runJobs(baseURL: string) {
   for (let i = 0; i < 3; i++) {
     const res = await fetch(`${baseURL}/api/jobs/run`, { method: "POST", headers: { Authorization: `Bearer ${JOBS_SECRET}` } });

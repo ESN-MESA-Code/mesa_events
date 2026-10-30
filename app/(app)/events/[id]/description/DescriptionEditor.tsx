@@ -7,7 +7,6 @@ import {
   CONFIG,
   ESN_OBJECTIVES,
   ESN_TYPES,
-  STEP_FIELDS,
   applyEsnDefaults,
   coerceFields,
   esnObjectiveIds,
@@ -19,10 +18,13 @@ import {
   type StepId,
 } from "@/lib/description/template";
 import { searchTemplates, type SearchEntry } from "@/lib/description/search";
+import { ACCESS_LABELS, ESN_RATINGS, RATING_LABELS, SUSTAIN_LABELS, esnGoal, parseRatings } from "@/lib/esn/formData";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
 import { describeError, useAction } from "@/components/ActionButton";
 import { publishDescription, reviewDescription, saveDescription, submitDescription } from "@/app/actions/descriptions";
 import { cn } from "@/lib/utils";
+import type { EventAddress } from "@/lib/address";
+import { VenueFields } from "./VenueFields";
 
 type Status = "draft" | "submitted" | "changes_requested" | "approved" | "published" | string;
 
@@ -34,7 +36,9 @@ const STATUS: Record<string, { label: string; tone: "gray" | "blue" | "amber" | 
   published: { label: "Published", tone: "purple" },
 };
 
-const STEP_TITLES: Record<StepId, string> = { basics: "Basics", intro: "Intro", program: "Programme", extras: "Details" };
+const STEP_TITLES: Record<StepId, string> = { basics: "Basics", intro: "Intro", program: "Programme", extras: "Details", esn: "For ESN Activities" };
+/** The steps that make up the published text (left); "esn" sits below the preview. */
+const TEXT_STEPS: StepId[] = ["basics", "intro", "program", "extras"];
 const AUTOSAVE_MS = 800;
 
 interface Props {
@@ -53,9 +57,11 @@ interface Props {
   pool: SearchEntry[];
   templates: Record<string, DescriptionFields>;
   reviews: Array<{ id: string; reviewer: string; decision: string; comment: string; when: string }>;
+  /** The event's venue name and address (the venue fields start from them). */
+  place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
 }
 
-export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews }: Props) {
+export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
@@ -80,6 +86,8 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
 
   const rendered = useMemo(() => renderDescription(fields), [fields]);
   const validation = useMemo(() => validateAll(fields), [fields]);
+  const suggestedGoal = useMemo(() => esnGoal(fields), [fields]);
+  const typeRatings = ESN_RATINGS[fields.esnType] ?? { access: [2, 2, 2, 1], sustain: [1, 2] };
   const length = rendered.chat.length;
 
   // ── Autosave: the changed fields only, merged on the server ───────────────
@@ -263,7 +271,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
           </Card>
         )}
 
-        {(Object.keys(STEP_FIELDS) as StepId[]).map((step) => (
+        {TEXT_STEPS.map((step) => (
           <Card key={step}>
             <CardHeader>
               <CardTitle>{STEP_TITLES[step]}</CardTitle>
@@ -279,7 +287,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     </Field>
                     {text("time", "Time", { hint: "19:30, 7pm, 19:30–22:00 or TBA" })}
                   </div>
-                  {text("venue", "Venue", { placeholder: CONFIG.VENUE_SUGGESTIONS.join(", ") })}
+                  <VenueFields eventId={eventId} initial={place} canSaveEvent={place.canSaveEvent} onVenue={(v) => change("venue", v)} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     {text("price", "Price", { hint: "9.50, free or TBA" })}
                     {text("priceNote", "Price note", { placeholder: "ESNcard holders € 7.50" })}
@@ -306,34 +314,6 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     <input type="checkbox" checked={fields.weather} onChange={(e) => change("weather", e.target.checked)} /> Add the weather note (outdoor events)
                   </label>
                   {text("closing", "Closing: “We can’t wait to …”", { placeholder: "see you there!" })}
-                  <Field label="ESN Activities: type" htmlFor="f-esnType">
-                    <Select id="f-esnType" value={fields.esnType} onChange={(e) => change("esnType", e.target.value)}>
-                      <option value="">Choose …</option>
-                      {ESN_TYPES.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <fieldset>
-                    <legend className="text-sm font-medium text-gray-700 mb-1">ESN Activities: objectives</legend>
-                    <div className="grid sm:grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded border border-gray-200 p-2 text-xs">
-                      {ESN_OBJECTIVES.map(([value, label]) => {
-                        const ids = esnObjectiveIds(fields);
-                        return (
-                          <label key={value} className="flex items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              checked={ids.includes(value)}
-                              onChange={(e) => change("esnObjectives", (e.target.checked ? [...ids, value] : ids.filter((x) => x !== value)).join(","))}
-                            />
-                            {label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
                 </>
               )}
               {validation.errors[step].map((e) => (
@@ -346,7 +326,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
         ))}
       </div>
 
-      <div className="space-y-4 xl:sticky xl:top-4 h-fit">
+      <div className="space-y-4 h-fit">
         <Card>
           <CardHeader>
             <CardTitle>Preview (Chat post)</CardTitle>
@@ -363,6 +343,78 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                 ))}
               </ul>
             )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="esn-details">
+          <CardHeader>
+            <CardTitle>{STEP_TITLES.esn}</CardTitle>
+            {validation.errors.esn.length > 0 && <Badge tone="amber">{validation.errors.esn.length} to fix</Badge>}
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-gray-500">Not part of the post above – the executive board needs it to register the event on activities.esn.org. Changing only these keeps the review.</p>
+                  <Field label="Activity type" htmlFor="f-esnType">
+                    <Select id="f-esnType" value={fields.esnType} onChange={(e) => change("esnType", e.target.value)}>
+                      <option value="">Choose …</option>
+                      {ESN_TYPES.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <fieldset>
+                    <legend className="text-sm font-medium text-gray-700 mb-1">Objectives</legend>
+                    <div className="grid sm:grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded border border-gray-200 p-2 text-xs">
+                      {ESN_OBJECTIVES.map(([value, label]) => {
+                        const ids = esnObjectiveIds(fields);
+                        return (
+                          <label key={value} className="flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={ids.includes(value)}
+                              onChange={(e) => change("esnObjectives", (e.target.checked ? [...ids, value] : ids.filter((x) => x !== value)).join(","))}
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+            <Field label="Goal of the event" htmlFor="f-esnGoal" hint="1–3 sentences: what should participants get out of it?">
+              <Textarea id="f-esnGoal" rows={3} value={fields.esnGoal} onChange={(e) => change("esnGoal", e.target.value)} onBlur={flush} />
+            </Field>
+            {!fields.esnGoal.trim() && suggestedGoal && (
+              <button type="button" className="text-xs text-esn hover:underline" onClick={() => change("esnGoal", suggestedGoal)}>
+                Use “{suggestedGoal.slice(0, 80)}{suggestedGoal.length > 80 ? "…" : ""}” (from the hook and intro)
+              </button>
+            )}
+            <fieldset className="grid gap-2 sm:grid-cols-2">
+              <legend className="mb-1 text-sm font-medium text-gray-700">Accessibility and sustainability</legend>
+              {[...ACCESS_LABELS.map((label, i) => ({ key: "esnAccess" as const, n: 4, i, label })), ...SUSTAIN_LABELS.map((label, i) => ({ key: "esnSustain" as const, n: 2, i, label }))].map((r) => {
+                const current = parseRatings(fields[r.key], r.n) ?? (r.key === "esnAccess" ? typeRatings.access : typeRatings.sustain);
+                return (
+                  <Field key={`${r.key}-${r.i}`} label={r.label} htmlFor={`f-${r.key}-${r.i}`}>
+                    <Select
+                      id={`f-${r.key}-${r.i}`}
+                      value={String(current[r.i])}
+                      onChange={(e) => change(r.key, current.map((v, j) => (j === r.i ? Number(e.target.value) : v)).join(","))}
+                    >
+                      {RATING_LABELS.map((l, v) => (
+                        <option key={l} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                );
+              })}
+            </fieldset>
+            {validation.errors.esn.map((e) => (
+              <p key={e} className="text-xs text-red-600">
+                {e}
+              </p>
+            ))}
           </CardContent>
         </Card>
 

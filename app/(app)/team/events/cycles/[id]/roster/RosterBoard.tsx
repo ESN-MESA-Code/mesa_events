@@ -20,6 +20,8 @@ export interface BoardPerson {
 export interface BoardEvent {
   id: string;
   title: string;
+  /** ISO start, for the order. */
+  startsAt: string;
   when: string;
   helpersNeeded: number;
   status: EventStatus;
@@ -66,7 +68,7 @@ function Slot({ id, label, children, disabled }: { id: string; label: string; ch
 
 export function RosterBoard({ events, people, editable }: { events: BoardEvent[]; people: BoardPerson[]; editable: boolean }) {
   const cycleParam = useParams<{ id: string }>().id;
-  const { run, pending, error } = useAction();
+  const { run, error } = useAction();
   const [filter, setFilter] = useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const byId = new Map(people.map((p) => [p.id, p]));
@@ -90,47 +92,19 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
     return [w.oc && `OC: ${RANK[w.oc]}`, w.helper && `helper: ${RANK[w.helper]}`].filter(Boolean).join(", ");
   };
 
+  // Drag and drop only (the "Move to…" menu is gone, round 2026-10-30); the keyboard sensor still moves chips without a mouse.
   const PersonLine = ({ person, eventId, assignment }: { person: BoardPerson; eventId?: string; assignment?: BoardEvent["assignments"][number] }) => (
     <div className="flex items-center gap-1.5">
       <span className="font-medium text-gray-900 truncate">{person.name}</span>
       {eventId && wishLabel(person, eventId) && <span className="text-[11px] text-gray-500 truncate">({wishLabel(person, eventId)})</span>}
       {assignment?.source === "proposer" && <Badge tone="purple">idea</Badge>}
-      {editable && assignment && (
-        <select
-          aria-label={`Move ${person.name}`}
-          className="ml-auto text-xs border border-gray-200 rounded px-1 py-0.5 bg-white"
-          value=""
-          disabled={pending}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (!v) return;
-            if (v === "remove") run(unassign, { assignment_id: assignment.id });
-            else {
-              const [ev, role] = v.split(":");
-              run(moveAssignment, { assignment_id: assignment.id, event_id: ev, role });
-            }
-          }}
-        >
-          <option value="">Move to…</option>
-          {events.flatMap((ev) =>
-            (["oc", "helper"] as const).map((r) => (
-              <option key={`${ev.id}:${r}`} value={`${ev.id}:${r}`}>
-                {ev.title} – {r === "oc" ? "OC" : "helper"}
-              </option>
-            ))
-          )}
-          <option value="remove">Remove from roster</option>
-        </select>
-      )}
     </div>
   );
 
   const shown = people.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase()));
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext id="roster-board" sensors={sensors} onDragEnd={onDragEnd}>
       {error && (
         <Alert tone="error" className="mb-4">
           {error}
@@ -157,17 +131,18 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
               );
             })}
           </Slot>
-          <p className="text-xs text-gray-500 mt-2">Drag a name onto an OC or helper slot. Drop an assigned person here to remove them.</p>
+          <p className="text-xs text-gray-500 mt-2">Drag a name onto an OC or helper slot, or a chip to another event. Drop an assigned person here to remove them. Keyboard: focus a chip, Space to pick it up, arrows to move, Space to drop.</p>
         </Card>
 
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3" data-testid="roster-board">
-          {events.map((ev) => {
+          {[...events].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).map((ev) => {
             const oc = ev.assignments.filter((a) => a.role === "oc");
             const helpers = ev.assignments.filter((a) => a.role === "helper");
             const staffing = STAFFING[staffingStatus(oc.length > 0, helpers.length, ev.helpersNeeded)];
             const wishers = people.filter((p) => p.wishes[ev.id] && !ev.assignments.some((a) => a.profileId === p.id));
             return (
               <Card key={ev.id} className="p-3 space-y-2" data-testid={`roster-${ev.title}`}>
+                <p className="text-xs font-semibold tabular-nums text-esn-dark">{ev.when}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <a href={`/events/${ev.id}?from=cycle:${cycleParam}`} className="font-semibold text-gray-900 hover:text-esn mr-auto">
                     {ev.title}
@@ -175,7 +150,6 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
                   {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}
                   <Badge tone={staffing.tone}>{staffing.label}</Badge>
                 </div>
-                <p className="text-xs text-gray-500">{ev.when}</p>
                 <div>
                   <p className="text-xs font-semibold uppercase text-gray-500 mb-1">OC</p>
                   <Slot id={`${ev.id}:oc`} label={`${ev.title} OC`} disabled={!editable}>

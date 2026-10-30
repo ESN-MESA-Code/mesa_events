@@ -13,6 +13,8 @@ export interface MonthChoice {
   label: string;
   /** "done", "3 to do" … shown in the dropdown. */
   note?: string;
+  /** Where the month leads (default: `path?month=…`). */
+  href?: string;
 }
 
 const read = (key: string) => {
@@ -31,7 +33,7 @@ const write = (key: string, value: string) => {
 };
 
 /**
- * The month at the top of the Comms and Events pages (brief 2026-10-29, C):
+ * The month at the top of the team pages and the calendar (brief 2026-10-29, C):
  * ← → and a dropdown, ?month=YYYY-MM in the URL. Without a month in the URL
  * the page opens on the viewer's last choice (this browser) when it is still
  * offered, else on the server's default (the first month with work).
@@ -55,7 +57,7 @@ export function MonthSelector({
 }) {
   const router = useRouter();
   const values = options.map((o) => o.value);
-  const href = (v: string) => `${path}?month=${v}`;
+  const href = (v: string) => options.find((o) => o.value === v)?.href ?? `${path}?month=${v}`;
 
   useEffect(() => {
     if (explicit) {

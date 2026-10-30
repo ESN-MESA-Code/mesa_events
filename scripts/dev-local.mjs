@@ -14,6 +14,7 @@ const args = ["next", "dev", ...process.argv.slice(2)];
 const child = spawn("npx", args, {
   stdio: "inherit",
   shell: process.platform === "win32",
-  env: { ...process.env, ...LOCAL_ENV, NEXT_PUBLIC_LOCAL_LOGIN: "true" },
+  // Real address suggestions from Photon (OpenStreetMap) while trying the app; ADDRESS_LOOKUP=fake works offline.
+  env: { ...process.env, ...LOCAL_ENV, ADDRESS_LOOKUP: process.env.ADDRESS_LOOKUP || "photon", NEXT_PUBLIC_LOCAL_LOGIN: "true" },
 });
 child.on("exit", (code) => process.exit(code ?? 0));

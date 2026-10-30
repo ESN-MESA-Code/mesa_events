@@ -8,7 +8,7 @@ import type { Job, JobDeps, JobHandler } from "@/lib/jobs/runner";
 import { coerceFields } from "@/lib/description/template";
 import { telegramRefusal, type PostEventFacts } from "@/lib/publishing";
 import { bundleMessage, bundlePrice, eventMessage, lengthProblem, telegramLayout, type TelegramLayout } from "@/lib/telegram/messages";
-import { PictureError, resolvePicture } from "@/lib/telegram/picture";
+import { PictureError, resolvePicture, uploadPath, type UploadReader } from "@/lib/telegram/picture";
 import { telegramSetup } from "@/lib/telegram";
 import { TelegramError, telegramLink, type TelegramMessage, type TelegramPhoto } from "@/lib/telegram/types";
 import { channelPublishedMessage } from "@/lib/chatMessages";
@@ -36,6 +36,8 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   if (!post) return { skipped: "post gone" };
   if (post.version !== p.version) return { skipped: "a newer version is planned" };
   if (post.channel !== "telegram" || post.status === "skipped") return { skipped: `not a Telegram post to publish (${post.status})` };
+  // Nothing goes to Telegram that Comms did not confirm (round 2026-10-30).
+  if (!post.confirmed_at) return { skipped: "not confirmed" };
 
   const { data: rows, error: e2 } = await deps.admin.from("publication_post_events").select("position, events(id, title, starts_at)").eq("post_id", post.id).order("position");
   if (e2) throw new Error(e2.message);
@@ -67,19 +69,30 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   const tooLong = lengthProblem(text);
   if (tooLong) return refuse(deps, post.id, tooLong);
 
+  const tg = deps.telegram ?? telegramSetup(deps.admin, deps.env);
+  const layout = telegramLayout(text, !!post.picture);
+  const prev = (post.telegram ?? {}) as Partial<TelegramState>;
+  // The picture is read only when it is sent: an uploaded one is removed once the post is out.
+  const editsInPlace = prev.chatId === tg.chatId && prev.layout === layout;
   let photo: TelegramPhoto | null = null;
-  if (post.picture) {
+  if (post.picture && (!editsInPlace || post.picture !== prev.picture)) {
+    const readUpload: UploadReader = async (path) => {
+      const { data, error: e } = await deps.admin.storage.from("post-pictures").download(path);
+      if (e || !data) return null;
+      return { bytes: new Uint8Array(await data.arrayBuffer()), mimeType: data.type };
+    };
     try {
-      photo = await resolvePicture(post.picture, deps.google.drive);
+      photo = await resolvePicture(post.picture, deps.google.drive, readUpload);
     } catch (err) {
       if (err instanceof PictureError) return refuse(deps, post.id, err.message);
       throw err;
     }
   }
+  const dropUpload = async () => {
+    const path = uploadPath(post.picture);
+    if (path) await deps.admin.storage.from("post-pictures").remove([path]);
+  };
 
-  const tg = deps.telegram ?? telegramSetup(deps.admin, deps.env);
-  const layout = telegramLayout(text, !!photo);
-  const prev = (post.telegram ?? {}) as Partial<TelegramState>;
   const caption = layout === "photo" ? text.html : text.titleHtml;
   const state: TelegramState = { chatId: tg.chatId, layout, picture: post.picture };
   const unchangedOk = async (fn: () => Promise<void>) => {
@@ -91,7 +104,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   };
 
   // Same chat and layout: edit the messages in place.
-  if (prev.chatId === tg.chatId && prev.layout === layout) {
+  if (editsInPlace) {
     try {
       if (layout !== "text") {
         if (post.picture !== prev.picture) await tg.client.editMessageMedia({ chat_id: tg.chatId, message_id: prev.photoMessageId!, photo: photo!, caption });
@@ -100,6 +113,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
       if (layout !== "photo") await unchangedOk(() => tg.client.editMessageText({ chat_id: tg.chatId, message_id: prev.textMessageId!, text: text.html }));
       const done = { ...prev, ...state };
       await deps.admin.rpc("post_published", { post: post.id, version: post.version, telegram: done as unknown as Json, link: post.link ?? "", by_whom: p.by ?? "schedule" });
+      await dropUpload();
       return { edited: true };
     } catch (err) {
       // Deleted in Telegram meanwhile: post anew below.
@@ -132,6 +146,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
     by_whom: p.by ?? "schedule",
   });
   if (e3) throw new Error(e3.message);
+  await dropUpload();
   return { posted: layout, messageId: state.messageId };
 };
 

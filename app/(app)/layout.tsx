@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import Nav from "@/components/Nav";
 import { BrandMark } from "@/components/BrandMark";
-import { getViewer } from "@/lib/supabase/session";
+import { createSessionClient, getViewer } from "@/lib/supabase/session";
+import { ProfileMenu } from "@/components/ProfileMenu";
 import { navItems } from "@/lib/nav";
 import { volunteerForms } from "@/lib/eventStatus";
 import { ROLE_LABELS } from "@/lib/roles";
@@ -13,7 +14,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
   if (!viewer.accepted) redirect("/confidentiality");
-  const forms = await volunteerForms(viewer.id);
+  const supabase = await createSessionClient();
+  const [forms, { data: payout }] = await Promise.all([
+    volunteerForms(viewer.id),
+    supabase.from("profile_payout_details").select("profile_id").eq("profile_id", viewer.id).maybeSingle(),
+  ]);
 
   const initials = viewer.name
     .split(/[\s.]+/)
@@ -30,23 +35,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <BrandMark product="Events" />
           </Link>
           {/* No Google profile picture: loading it would show Google the member's IP address. */}
-          <div className="ml-auto flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-2.5 min-w-0" title={`Signed in as ${viewer.email}`}>
-              <span aria-hidden="true" className="h-9 w-9 rounded-full bg-white/15 ring-2 ring-white/40 flex items-center justify-center text-sm font-semibold shrink-0">
-                {initials}
-              </span>
-              <div className="hidden md:block leading-tight min-w-0">
-                <p className="text-sm font-medium truncate max-w-[14rem]" data-testid="viewer-name">{viewer.name}</p>
-                <p className="text-xs text-white/70 truncate max-w-[16rem]" data-testid="viewer-roles">
-                  {viewer.roles.length ? viewer.roles.map((r) => ROLE_LABELS[r]).join(" · ") : "Member"}
-                </p>
-              </div>
-            </div>
-            <form action="/auth/signout" method="post">
-              <button className="rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white/90 hover:bg-white/10">
-                Sign out
-              </button>
-            </form>
+          <div className="ml-auto flex items-center gap-3 min-w-0" title={`Signed in as ${viewer.email}`}>
+            <ProfileMenu
+              name={viewer.name}
+              email={viewer.email}
+              roles={viewer.roles.length ? viewer.roles.map((r) => ROLE_LABELS[r]).join(" · ") : "Member"}
+              initials={initials}
+              hasPayout={!!payout}
+            />
           </div>
         </div>
         <Nav nav={navItems(viewer.roles, { open: forms.length > 0, submitted: forms.every((f) => f.submittedAt) })} />

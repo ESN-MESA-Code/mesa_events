@@ -20,14 +20,16 @@ export interface TelegramText {
   length: number;
 }
 
-const plainLength = (html: string) =>
+/** Telegram HTML as the reader sees it (the preview before confirming). */
+export const plainText = (html: string) =>
   html
     .replace(/<[^>]+>/g, "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&").length;
+    .replace(/&amp;/g, "&");
+const plainLength = (html: string) => plainText(html).length;
 
 /** One event: <b>Title</b>, a blank line, the description as the template renders it. */
 export function eventMessage(d: DescriptionFields): TelegramText {

@@ -606,3 +606,106 @@ Implemented autonomously; the user was not available.
 - **Where it goes:** the description's venue is prefilled as "Venue (Street 4, 81671 München)",
   and the ESN form data takes the entered address (with its country) before anything parsed from
   the venue text, so "street address / postal code" leaves the missing list once it is entered.
+
+## 2026-10-30 – Round of user requests (deadlines, navigation, schedule, Comms, addresses, payouts)
+
+Requested in one message (plus payout details on the profile while the round ran). Where the
+user did not choose, the recommended option was taken and is noted here.
+
+**Description deadline**
+- **Set only once the roster is confirmed**, to a time still ahead, and at the latest when the
+  month's first event starts (as before). **Locked once it has passed** – changing or removing it
+  is refused by the database (`guard_cycle_deadlines`).
+- **At the deadline, events whose description was never submitted are cancelled** (recommended
+  option "not submitted": a slow Comms review never cancels an event; a description sent back
+  with changes requested was submitted and is only marked late).
+  `private.cancel_overdue_descriptions()` runs every minute (pg_cron) and cancels like a manual
+  cancellation (the Chat space is told; Comms sees it if something was published) with the
+  reason "Description not submitted by the deadline" and `cancelled_by = 'description deadline'`.
+  Events that started are left alone.
+- The demo seed submits a description for every event still ahead in a cycle whose deadline has
+  passed, so `seed:demo` never leads to cancellations.
+
+**Cycle pages and navigation**
+- **One page per step**, under a shared header (`cycles/[id]/layout.tsx`): schedule and ideas,
+  volunteer form (`/form`), allocation and roster (`/roster`), descriptions and the deadline
+  (`/descriptions`), hand-in (`/hand-in`). The **stepper is the breadcrumb**: every step links to
+  its page, the page shown is outlined, and "Next: …" leads to the current step's page. The
+  Events dashboard's stepper links the same way.
+- **The month selector is on every team page and the calendar**: the cycle header (switching
+  months keeps the page, e.g. roster → roster), Events, Comms (both tabs), ESN Activities,
+  Calendar. Options may carry their own link (`MonthChoice.href`).
+- **Comms pages are tabs** ("Events by stage", "Publishing schedule", keeping the month);
+  executives get a link to ESN Activities there.
+
+**Schedule and roster**
+- **The roster has no "Move to…" menu**; drag and drop only (dnd-kit's keyboard sensor still
+  moves chips without a mouse). Event cards are sorted by date with the date on top.
+- **The month schedule is a drag-and-drop calendar**: drag an event to another day (start and end
+  times are kept, `moveToDay`), or an idea from the tray onto a day to accept it (its suggested
+  type, 19:00, its helpers). Started, completed and cancelled events do not move. The list below
+  uses one grid, so dates, titles, type and status line up.
+- **Calendar page**: month grid by default, `?view=list` for the aligned list; one month at a
+  time with the month selector.
+- **Get inspired** loads 12 events at a time and more as the end of the list comes into view
+  (IntersectionObserver, with a "Load more" button as fallback); a new search starts again.
+
+**ESN Activities is the executive board's** (recommended option: executives only). Marking
+uploads, taking a link back and personal access tokens need the executive role (database and
+actions); a token works while its owner is an executive. The page moved to
+`/team/esn-activities` (the old address redirects) and lists the month's past events with their
+status and actions; "ESN Activities" is in the team navigation for executives. ESN work no
+longer counts as "Needs Comms". The Chat message says "The executive board has uploaded …".
+
+**Publishing**
+- **Three required channels** (recommended option): Telegram, Instagram, pretix
+  (`publication_channels.required`). The Chat space post stays automatic with the description;
+  ESN Activities follows the event. The board has an **"All channels" lane**: dropping an event
+  there plans it on every required channel it is not on yet, on that day (`plan_everywhere`); a
+  lane plans one channel. The tray lists upcoming events not on all channels, each with
+  TG / IG / pretix coverage (✓, ⏰ date, –) counted over all months; the Comms rows show
+  "n/3 channels planned".
+- **When the event is vs. when it is advertised**: a "📅 Events" row shows each event on its
+  date; each post lists its events with "📅 date · n d before" (red when after the event).
+  Clicking an event highlights its date column and all its posts.
+- **Telegram posts need a confirmation**: the card's "Preview & confirm" shows the picture and
+  the text as it will be posted; "Confirm for <time>" queues the job, "Confirm and publish now"
+  posts at once. Any change (events, time, picture, heading) takes the confirmation back
+  (`post_changed(post, confirm)`), so nothing unseen goes out; the job skips unconfirmed posts.
+- **Pictures are uploaded**, not linked: the private bucket `post-pictures` (JPG, PNG, WebP,
+  10 MB; Comms only), `picture = 'upload:<post id>/<file>'`. The job reads the file only when it
+  sends it and removes it once the post is out (re-publishing then edits the caption); replaced
+  or deleted posts remove their upload. Drive links and URLs still work for older posts.
+
+**Description step**: the ESN details have their own card **below the preview** – activity
+type, objectives, **goal** (required, 20–600 characters, with a suggestion from hook and intro)
+and the **accessibility and sustainability ratings** (default: the type's). They feed the ESN
+form data (what is entered wins). Changing only these keeps the description's status (no new
+review).
+
+**Addresses**
+- **Location name, street and house number, postal code, city, country** as separate fields,
+  with a search box that suggests places and addresses and fills all fields in, as delivery
+  forms do. The lookup is **Photon** (OpenStreetMap; recommended option: free, no key,
+  autocomplete allowed), called **from our server** (`/api/address`, members only), so members'
+  browsers never talk to it. `PHOTON_URL` points to photon.komoot.io or a self-hosted instance.
+- **Verification**: picking a suggestion marks the address verified; "Check address" looks typed
+  addresses up; **saving checks again** and refuses an address the lookup does not know. When the
+  lookup cannot answer (down, `ADDRESS_LOOKUP=off`), the form's own checks decide.
+- `ADDRESS_LOOKUP=fake` (tests, E2E, staging, local builds) uses a built-in list of Munich places
+  and the Munich-area postal codes; `dev:local` uses Photon.
+- **The description's venue uses the same fields** (location name, address, search) instead of one
+  text box. They write the post's venue line ("Shamrock (Trautenwolfstraße 6, 80802 München)");
+  for the OC and the Events team a complete address is saved on the event too (verified; Comms
+  only changes the post's line). Suggestions ask Photon for German names ("München").
+
+**Payout details on the profile** (user request during the round)
+- **Saved once** from the profile menu (click the initials, top right → "Payout details"):
+  IBAN with account holder, or PayPal (`profile_payout_details`, readable by the member only).
+- **Saving copies them** onto the member's claims that are not paid or rejected; a new claim
+  without its own details gets them (trigger). Finance keeps seeing the claim's copy only.
+- **Deleting** removes them from the profile and from claims Finance has not checked yet;
+  checked claims keep theirs until they are paid (then they are deleted, as before).
+- **Shown where reimbursements are**: "My reimbursements" names the account (masked) or warns that
+  none is saved; the receipt form says where it will be paid; the avatar has a dot and the menu
+  says "missing" while nothing is saved. Not written to the activity log (the Events team reads it).

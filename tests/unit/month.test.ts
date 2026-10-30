@@ -50,7 +50,8 @@ describe("Comms stages", () => {
     expect(stage({ description: "approved" })).toMatchObject({ current: "approved", filter: "publish", needsComms: true });
     expect(stage({ description: "published" })).toMatchObject({ current: "published", filter: "waiting", needsComms: false });
     expect(stage({ description: "published", startsAt: past })).toMatchObject({ current: "report", filter: "report", needsComms: false, position: 6 });
-    expect(stage({ description: "published", startsAt: past, reportIn: true, esn: "ready" })).toMatchObject({ current: "esn", filter: "esn", needsComms: true });
+    // ESN Activities is the executive board's since round 2026-10-30: never Comms work.
+    expect(stage({ description: "published", startsAt: past, reportIn: true, esn: "ready" })).toMatchObject({ current: "esn", filter: "esn", needsComms: false });
     expect(stage({ description: "published", startsAt: past, reportIn: true, esn: "not_ready" })).toMatchObject({ current: "esn", needsComms: false });
     const done = stage({ description: "published", startsAt: past, reportIn: true, esn: "uploaded" });
     expect(done).toMatchObject({ current: null, filter: "done", position: 7 });
@@ -75,5 +76,24 @@ describe("Comms stages", () => {
     expect(parseFilter("all")).toBe("all");
     expect(parseFilter("nonsense")).toBe("needs");
     expect(parseFilter(undefined)).toBe("needs");
+  });
+});
+
+describe("calendar grid (round 2026-10-30)", () => {
+  it("lays a month out in Monday-first weeks", async () => {
+    const { calendarWeeks } = await import("@/lib/month");
+    const weeks = calendarWeeks("2026-11-01");
+    // 1 Nov 2026 is a Sunday: six blanks, then the 1st.
+    expect(weeks[0]).toEqual([null, null, null, null, null, null, "2026-11-01"]);
+    expect(weeks.at(-1)).toEqual(["2026-11-30", null, null, null, null, null, null]);
+    expect(weeks.flat().filter(Boolean)).toHaveLength(30);
+    expect(calendarWeeks("2027-02-01")).toHaveLength(4); // Feb 2027 starts on a Monday, 28 days
+  });
+
+  it("moves an event to another day, keeping the times (also across months)", async () => {
+    const { moveToDay, dayDiff } = await import("@/lib/month");
+    expect(moveToDay("2026-11-05T19:00", null, "2026-11-12")).toEqual({ start: "2026-11-12T19:00", end: null });
+    expect(moveToDay("2026-11-28T09:00", "2026-11-29T18:00", "2026-11-30")).toEqual({ start: "2026-11-30T09:00", end: "2026-12-01T18:00" });
+    expect(dayDiff("2026-10-31", "2026-11-01")).toBe(1);
   });
 });

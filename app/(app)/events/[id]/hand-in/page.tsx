@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
-import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
+import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule, maskEmail, maskIban } from "@/lib/reimbursement";
 import { ClaimItem } from "@/components/ClaimItem";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
@@ -56,6 +56,8 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     supabase.rpc("event_report_prefill", { event: id }),
     seesEsn ? loadEsn(supabase, [id]).then((m) => m.get(id) ?? null) : Promise.resolve(null),
   ]);
+  const { data: myPayout } = await supabase.from("profile_payout_details").select("iban, paypal_email").eq("profile_id", viewer.id).maybeSingle();
+  const payoutLabel = myPayout ? (myPayout.iban ? `bank account ${maskIban(myPayout.iban)}` : `PayPal ${maskEmail(myPayout.paypal_email ?? "")}`) : null;
   const pre = (prefill ?? [])[0];
   const canReport = isOc || isEvents;
   const { data: rules } = policyId ? await supabase.from("reimbursement_rules").select("*").eq("policy_id", policyId as string) : { data: [] };
@@ -142,6 +144,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                   hasTripBudget={!!budget}
                   preapprovals={(preapprovals ?? []).filter((p) => p.status === "approved").map((p) => ({ id: p.id, label: `${p.description} (${formatCents(p.estimated_cents)})` }))}
                   defaultDate={berlinDate(event.starts_at)}
+                  profilePayout={payoutLabel}
                 />
               ) : (
                 <EmptyState>No reimbursement rules apply to this event.</EmptyState>
@@ -182,8 +185,8 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                       <div className="flex flex-wrap items-center gap-3 text-xs">
                         {c.status === "not_submitted" && <span className="text-amber-800">Beleg not handed in yet – bring the paper Beleg to Finance</span>}
                         {!c.payout_method && (
-                          <Link href="/me#claims" className="text-amber-800 underline">
-                            ⚠️ Add bank or PayPal details
+                          <Link href="/me/payout" className="text-amber-800 underline">
+                            ⚠️ Add your IBAN or PayPal to your profile
                           </Link>
                         )}
                         {c.status === "not_submitted" && (
@@ -278,7 +281,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
               <CardTitle>ESN Activities</CardTitle>
             </CardHeader>
             <CardContent>
-              <EsnUpload eventId={id} status={esn.status} canSet={hasRole(viewer.roles, "comms")} />
+              <EsnUpload eventId={id} status={esn.status} canSet={hasRole(viewer.roles, "executive")} />
             </CardContent>
           </Card>
         )}

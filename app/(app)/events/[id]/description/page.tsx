@@ -7,6 +7,7 @@ import { formatDateTime, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { DescriptionEditor } from "./DescriptionEditor";
+import { eventAddress, hasAddress } from "@/lib/address";
 
 export const metadata: Metadata = { title: "Description" };
 
@@ -85,6 +86,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         pool={pool}
         templates={templates}
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
+        place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
       />
     </div>
   );

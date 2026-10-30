@@ -4,7 +4,7 @@
 // Finance → paid.
 import { TEST_TAG, USERS, admin, hoursFromNow } from "../helpers/local";
 import { cycleLabel } from "../../lib/dates";
-import { expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
+import { drag, expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
 
 test("a month from idea to paid reimbursement", async ({ page, context, baseURL, browser }) => {
   test.setTimeout(480_000);
@@ -54,9 +54,12 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.getByRole("button", { name: "Add event" }).click();
     await expect(page.getByTestId("schedule")).toContainText(hike);
 
+    // The volunteer form has its own page; the cycle's steps lead there (round 2026-10-30).
+    await page.getByTestId("cycle-stepper").getByRole("link", { name: "Volunteer form" }).click();
+    await page.waitForURL(/\/form$/);
     await page.locator("#form-deadline").fill(`${month}-01T12:00`);
     await page.getByRole("button", { name: "Open volunteer form" }).click();
-    await expect(page.getByText("Volunteer form open", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("form-state")).toContainText("Open");
   });
 
   await test.step("volunteers fill in the form", async () => {
@@ -77,21 +80,26 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("Events closes the form, allocates, adjusts the roster and confirms", async () => {
     await as(USERS.events);
-    await page.goto(cycleUrl);
+    await page.goto(`${cycleUrl}/form`);
     await page.getByRole("button", { name: "Close form now" }).click();
+    await expect(page.getByTestId("form-state")).toContainText("Closed");
+    await page.getByTestId("cycle-next").click();
+    await page.waitForURL(/\/roster$/);
     await page.getByRole("button", { name: "Run allocation" }).click();
     await expect(page.getByText(/Allocation done: 5 assignments/)).toBeVisible();
 
-    await page.getByRole("link", { name: "Adjust the roster →" }).click();
     const quizCard = page.getByTestId(`roster-${quiz}`);
     await expect(quizCard).toContainText("Mia Member");
     await expect(quizCard).toContainText("Vera Volunteer");
     await expect(quizCard).toContainText("Hugo Helper");
     await expect(page.getByTestId(`roster-${hike}`)).toContainText("Victor Volunteer");
-    // Move Hugo from the quiz to the hike.
-    await quizCard.getByLabel("Move Hugo Helper").selectOption({ label: `${hike} – helper` });
+    // Move Hugo from the quiz to the hike: drag and drop (the "Move to…" menu is gone).
+    // A tall window: both cards in view, away from the edges where dnd-kit scrolls the page.
+    await page.setViewportSize({ width: 1280, height: 1600 });
+    await drag(page, quizCard.getByText("Hugo Helper"), page.getByLabel(`${hike} helpers`));
     await expect(page.getByTestId(`roster-${hike}`)).toContainText("Hugo Helper");
     await expect(quizCard).toContainText("Short of helpers");
+    await page.setViewportSize({ width: 1280, height: 720 });
 
     await page.getByRole("button", { name: "Confirm roster" }).click();
     await expect(page.getByText("Roster confirmed", { exact: true })).toBeVisible();
@@ -115,13 +123,17 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("the OC writes the description and submits it", async () => {
     await page.goto(`/events/${quizId}/description`);
-    await page.locator("#f-venue").fill("Shamrock Irish Pub");
+    // The venue: search the place, pick it – name and address are filled in (round 2026-10-30).
+    await page.getByRole("combobox", { name: "Search a place or address" }).fill("shamrock");
+    await page.getByTestId("address-suggestions").getByRole("button", { name: /Shamrock Irish Pub/ }).click();
+    await expect(page.getByRole("combobox", { name: "Search a place or address" })).toHaveValue("Shamrock Irish Pub, Trautenwolfstraße 6, 80802 München");
     await page.locator("#f-hook").fill("a night of trivia");
     await page.locator("#f-intro").fill("Test your knowledge in teams. Prizes for the best three!");
     await page.locator("#f-program").fill("Six rounds\nPrizes");
     await page.locator("#f-bring").fill("Good mood 😄");
     await page.locator("#f-closing").fill("see you there!");
     await page.locator("#f-esnType").selectOption({ label: "Game or social activity" });
+    await page.locator("#f-esnGoal").fill("Bring internationals and locals together over a quiz night.");
     await waitSaved(page);
     await expect(page.getByTestId("char-counter")).toContainText("/ 4,096");
     await expect(page.getByTestId("preview")).toContainText("Are you ready for a night of trivia? 🎉");

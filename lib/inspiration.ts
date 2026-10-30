@@ -65,14 +65,16 @@ export interface InspirationResult {
 }
 
 /** The search: the filters first, then the bot's search and grouping (all matches when there is a query, the 5 most recent without). */
-export function searchInspiration(pool: PastEvent[], f: InspirationFilters): { results: InspirationResult[]; total: number } {
+/** `limit`: groups to return (infinite scroll on /ideas loads more as the member scrolls); `groups` = all that match. */
+export function searchInspiration(pool: PastEvent[], f: InspirationFilters, limit?: number): { results: InspirationResult[]; total: number; groups: number } {
   const byId = new Map(pool.map((e) => [e.event_id, e]));
   const entries: SearchEntry[] = pool
     .filter((e) => matchesFilters(e, f))
     .map((e) => searchEntry(e.event_id, e.title, { title: e.title, dateIso: berlinDate(e.starts_at), venue: e.venue, price: e.price, hook: e.hook, intro: e.intro }));
-  const { rows, total } = searchTemplates(entries, f.query);
+  const { rows, total, totalGroups } = searchTemplates(entries, f.query, undefined, undefined, limit);
   return {
     total,
+    groups: totalGroups,
     results: rows.map((r) => ({
       event: byId.get(r.rec.eventId)!,
       earlier: r.earlier.map((x) => byId.get(x.eventId)!),

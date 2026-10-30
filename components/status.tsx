@@ -1,4 +1,5 @@
 // The same status chips and step displays on every page (review C11).
+import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, type EventStatus } from "@/lib/labels";
 import { STATUS_LABELS, type ClaimStatus } from "@/lib/reimbursement";
@@ -42,6 +43,10 @@ export interface StepView {
   state: "done" | "current" | "todo" | "failed";
   /** A second line, e.g. who and when. */
   note?: string;
+  /** Where the step is done: the step becomes a link (the cycle's breadcrumb). */
+  href?: string;
+  /** The page shown is this step's. */
+  here?: boolean;
 }
 
 /**
@@ -63,31 +68,43 @@ export function StageTrack({ steps, label, position, testId }: { steps: StepView
   );
 }
 
-/** Steps in a row (wrapping on phones): done ✓, the current one highlighted. */
+/** Steps in a row (wrapping on phones): done ✓, the current one highlighted; steps with `href` are links. */
 export function Stepper({ steps, label, compact = false, testId }: { steps: StepView[]; label: string; compact?: boolean; testId?: string }) {
   return (
     <ol aria-label={label} className={cn("flex flex-wrap items-start gap-x-1 gap-y-2", compact ? "text-[11px]" : "text-xs")} data-testid={testId}>
-      {steps.map((s, i) => (
-        <li key={s.label} className="flex items-center gap-1" aria-current={s.state === "current" ? "step" : undefined} data-state={s.state}>
-          {i > 0 && <span aria-hidden="true" className="text-gray-300">›</span>}
-          <span
-            className={cn(
-              "inline-flex flex-col rounded-full px-2 py-0.5 font-medium",
-              s.state === "done" && "bg-emerald-50 text-emerald-800",
-              s.state === "current" && "bg-esn text-white",
-              s.state === "todo" && "bg-gray-100 text-gray-500",
-              s.state === "failed" && "bg-red-50 text-red-700"
-            )}
-          >
+      {steps.map((s, i) => {
+        const chip = cn(
+          "inline-flex flex-col rounded-full px-2 py-0.5 font-medium",
+          s.state === "done" && "bg-emerald-50 text-emerald-800",
+          s.state === "current" && "bg-esn text-white",
+          s.state === "todo" && "bg-gray-100 text-gray-500",
+          s.state === "failed" && "bg-red-50 text-red-700",
+          s.href && "hover:ring-2 hover:ring-esn/40",
+          s.here && "ring-2 ring-esn-dark ring-offset-1"
+        );
+        const body = (
+          <>
             <span>
               {s.state === "done" && "✓ "}
               {s.state === "failed" && "✕ "}
               {s.label}
             </span>
             {s.note && !compact && <span className="font-normal opacity-80">{s.note}</span>}
-          </span>
-        </li>
-      ))}
+          </>
+        );
+        return (
+          <li key={s.label} className="flex items-center gap-1" aria-current={s.here ? "page" : s.state === "current" ? "step" : undefined} data-state={s.state}>
+            {i > 0 && <span aria-hidden="true" className="text-gray-300">›</span>}
+            {s.href ? (
+              <Link href={s.href} className={chip}>
+                {body}
+              </Link>
+            ) : (
+              <span className={chip}>{body}</span>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }

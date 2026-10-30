@@ -23,7 +23,7 @@ export function NewTokenForm({ baseUrl }: { baseUrl: string }) {
             setToken(data.token);
             setLabel("");
             // The script for this platform; the token is put in here, in the browser (it never goes back to the server).
-            const res = await fetch("/team/comms/esn-activities/script");
+            const res = await fetch("/team/esn-activities/script");
             if (res.ok) setScript((await res.text()).replace(/const EMBEDDED_TOKEN = '[^']*';/, `const EMBEDDED_TOKEN = '${data.token}';`));
           });
         }}

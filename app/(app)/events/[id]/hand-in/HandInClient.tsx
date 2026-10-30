@@ -20,6 +20,7 @@ export function ReceiptForm({
   hasTripBudget,
   preapprovals,
   defaultDate,
+  profilePayout = null,
 }: {
   eventId: string;
   role: "oc" | "helper";
@@ -30,6 +31,8 @@ export function ReceiptForm({
   hasTripBudget: boolean;
   preapprovals: Array<{ id: string; label: string }>;
   defaultDate: string;
+  /** The payout details saved on the member's profile ("bank account DE89 •••• 3000"), or null. */
+  profilePayout?: string | null;
 }) {
   const { run, pending, error, setError } = useAction();
   const [kind, setKind] = useState<ExpenseKind>(kinds[0]);
@@ -121,13 +124,26 @@ export function ReceiptForm({
       <Field label="Note (optional)" htmlFor="r-desc">
         <Input id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
       </Field>
-      <Field label="Pay me by" htmlFor="r-method">
+      {profilePayout && !method ? (
+        <p className="self-end text-sm text-gray-700" data-testid="receipt-payout">
+          Paid to your {profilePayout} (profile) ·{" "}
+          <button type="button" className="text-esn hover:underline" onClick={() => setMethod("bank")}>
+            other for this receipt
+          </button>
+        </p>
+      ) : (
+      <Field
+        label="Pay me by"
+        htmlFor="r-method"
+        hint={profilePayout ? undefined : "Tip: save your IBAN or PayPal once in your profile (click your initials, top right)."}
+      >
         <Select id="r-method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
-          <option value="">Decide later</option>
+          <option value="">{profilePayout ? "My profile's details" : "Decide later"}</option>
           <option value="bank">Bank transfer</option>
           <option value="paypal">PayPal</option>
         </Select>
       </Field>
+      )}
       {method === "bank" && (
         <>
           <Field label="Account holder" htmlFor="r-holder">

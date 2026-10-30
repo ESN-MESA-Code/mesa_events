@@ -12,4 +12,6 @@ export const LOCAL_ENV = {
   JOBS_SECRET: "local-jobs-secret-not-for-production",
   APP_BASE_URL: "http://localhost:3000",
   GOOGLE_MODE: "fake",
+  // Address suggestions and checks from a built-in list (lib/geocode.ts); dev:local uses Photon.
+  ADDRESS_LOOKUP: "fake",
 };

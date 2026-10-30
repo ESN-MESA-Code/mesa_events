@@ -7,6 +7,7 @@ import { Alert, Badge, Card, CardContent, EmptyState, PageHeader, buttonVariants
 import { ActionButton } from "@/components/ActionButton";
 import { StageTrack } from "@/components/status";
 import { MonthSelector } from "@/components/MonthSelector";
+import { CommsTabs } from "@/components/CommsTabs";
 import { EsnUpload } from "@/components/EsnUpload";
 import { noteCancellation, publishDescription } from "@/app/actions/descriptions";
 import { hasRole } from "@/lib/roles";
@@ -42,6 +43,7 @@ type Row = {
 export default async function CommsPage({ searchParams }: { searchParams: Promise<{ month?: string; show?: string; missing?: string }> }) {
   const viewer = await requirePageRole(["comms"], { executiveMayRead: true, page: "Comms" });
   const isComms = hasRole(viewer.roles, "comms");
+  const isExecutive = hasRole(viewer.roles, "executive");
   const sp = await searchParams;
   const supabase = await createSessionClient();
   const now = nowMs();
@@ -86,7 +88,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   // Per channel: published, planned, skipped or not planned (brief 2026-10-29, E1).
   const [{ data: statusRows }, { data: channelRows }] = await Promise.all([
     supabase.rpc("publication_status", { events: inMonth.map((r) => r.event_id) }),
-    supabase.from("publication_channels").select("key, name").eq("enabled", true).order("position"),
+    supabase.from("publication_channels").select("key, name, required").eq("enabled", true).order("position"),
   ]);
   const channels = channelRows ?? [];
   const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
@@ -107,14 +109,6 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Comms" description="Each event of the month from its description to ESN Activities – what is next, and the action right there.">
         <div className="flex flex-wrap items-center gap-3">
-          <Link href={`/team/comms/schedule${month ? `?month=${monthParam(month)}` : ""}`} className="text-sm text-esn hover:underline">
-            Publishing schedule →
-          </Link>
-          {isComms && (
-            <Link href="/team/comms/esn-activities" className="text-sm text-esn hover:underline">
-              ESN Activities script →
-            </Link>
-          )}
           <MonthSelector
             options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
             current={month ? monthParam(month) : null}
@@ -124,6 +118,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
           />
         </div>
       </PageHeader>
+      <CommsTabs current="stages" month={month ? monthParam(month) : null} executive={isExecutive} />
 
       {(cancelled ?? []).length > 0 && (
         <Alert tone="warning" className="mb-6 space-y-2" data-testid="cancelled-published">
@@ -257,6 +252,15 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                       </div>
                       <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
                       <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600" data-testid="channel-chips">
+                        {(() => {
+                          const req = channels.filter((c) => c.required);
+                          const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
+                          return req.length > 0 ? (
+                            <Link href={`/team/comms/schedule?month=${monthParam(month!)}`} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
+                              {on}/{req.length} channels planned
+                            </Link>
+                          ) : null;
+                        })()}
                         {channels.map((c) => {
                           const st = statusOf.get(`${r.event_id}|${c.key}`);
                           const state = (st?.state ?? "not_planned") as ChannelState;
@@ -268,7 +272,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                           );
                         })}
                       </p>
-                      {v.current === "esn" && e && <EsnUpload eventId={r.event_id} status={e.status} canSet={isComms} compact />}
+                      {v.current === "esn" && e && <EsnUpload eventId={r.event_id} status={e.status} canSet={isExecutive} compact />}
                     </li>
                   );
                 })}

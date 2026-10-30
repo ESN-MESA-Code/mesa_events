@@ -91,9 +91,9 @@ export function photoUploadMessage(title: string, folder: { url: string; name: s
   return lines.join("\n");
 }
 
-/** Comms uploaded the event to ESN Activities (the bot's "📢 PR has uploaded …"), once per event. */
+/** The executive board uploaded the event to ESN Activities (the bot's "📢 PR has uploaded …"), once per event. */
 export function esnUploadedMessage(title: string, url: string): string {
-  return `${MENTION_ALL} 📢 Comms has uploaded *${title}* on ESN Activities. <${url}|Open>`;
+  return `${MENTION_ALL} 📢 The executive board has uploaded *${title}* on ESN Activities. <${url}|Open>`;
 }
 
 /** Comms (or Events) reminds the OC: the description, or the event report after the event. */

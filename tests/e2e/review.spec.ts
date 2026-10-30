@@ -50,7 +50,7 @@ test.describe("Home per role", () => {
       // A new description is prefilled, not "unsaved" (review C10).
       await expect(page.getByTestId("save-state")).toContainText("Not saved yet");
       await expect(page.getByTestId("save-state")).not.toHaveText("Unsaved changes");
-      await page.locator("#f-venue").fill("Backstage");
+      await page.getByLabel("Location name").fill("Backstage");
       await expect(page.getByTestId("save-state")).toHaveText("All changes saved");
       const { data } = await admin.from("descriptions").select("fields").eq("event_id", ev.id).single();
       expect(data!.fields).toMatchObject({ venue: "Backstage", title: ev.title });
@@ -115,9 +115,9 @@ test.describe("volunteer form, cycle month", () => {
     await page.goto("/");
     await expect(page.getByTestId("home-volunteer").filter({ hasText: label })).toContainText("submitted ✓");
 
-    // Events clears the answers on the cycle page, with a reason.
+    // Events clears the answers on the cycle's volunteer form page, with a reason.
     await signInAs(context, baseURL!, USERS.events);
-    await page.goto(`/team/events/cycles/${cycleId}`);
+    await page.goto(`/team/events/cycles/${cycleId}/form`);
     const row = page.getByTestId(`response-${USERS.volunteer2.email}`);
     await expect(row).toContainText("1 event");
     await row.getByRole("button", { name: "Clear" }).click();

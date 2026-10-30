@@ -15,7 +15,7 @@ describe("navigation", () => {
   it("team pages are their own group; executives see all of them (incl. Finance), not Admin", () => {
     expect(labels(navItems(["events"]).team)).toEqual(["Events"]);
     expect(labels(navItems(["treasurer"]).team)).toEqual(["Finance"]);
-    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance"]);
+    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance", "ESN Activities"]);
     expect(labels(navItems(["admin"]).team)).toEqual(["Admin"]);
     expect(labels(navItems(["executive"]).personal)).not.toContain("Finance");
   });

@@ -28,7 +28,7 @@ describe("generated actions", () => {
 
 describe("revalidation", () => {
   it("finds every action", () => {
-    expect(actions.length).toBe(69);
+    expect(actions.length).toBe(73);
   });
 
   it("autosave revalidates nothing", () => {
@@ -40,6 +40,9 @@ describe("revalidation", () => {
     expect(everything.sort()).toEqual([
       "admin.addManualRole",
       "admin.removeManualRole",
+      // The header's profile menu marks missing payout details (round 2026-10-30).
+      "handin.deleteMyPayoutDetails",
+      "handin.setMyPayoutDetails",
       "planning.closeForm",
       "planning.openForm",
       "planning.submitVolunteerForm",

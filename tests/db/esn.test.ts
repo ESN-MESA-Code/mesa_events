@@ -55,7 +55,7 @@ afterAll(async () => {
   await admin.from("fake_chat_messages").delete().eq("space", space);
   await admin.from("jobs").delete().in("event_id", created);
   await admin.from("events").delete().in("id", created);
-  await admin.from("esn_access_tokens").delete().in("profile_id", [USERS.comms.id, USERS.member.id]);
+  await admin.from("esn_access_tokens").delete().in("profile_id", [USERS.comms.id, USERS.executive.id, USERS.member.id]);
 });
 beforeEach(() => {
   tokenLimiter.clear();
@@ -95,55 +95,58 @@ describe("the event report", () => {
 });
 
 describe("the upload status", () => {
-  it("only Comms, Events and executives read it; only Comms sets it", async () => {
+  it("only Comms, Events and executives read it; only the executive board sets it (round 2026-10-30)", async () => {
     expect(await E.markEsnUploaded(await actionContext(USERS.events), { event_id: past, url: ACTIVITY })).toMatchObject({ ok: false, error: "forbidden" });
+    // Comms no longer does it (it moved to the executive board).
+    expect(await E.markEsnUploaded(await actionContext(USERS.comms), { event_id: past, url: ACTIVITY })).toMatchObject({ ok: false, error: "forbidden" });
+    expect((await (await as(USERS.comms)).rpc("create_esn_token", { label: "x", valid_days: 30 })).error?.code).toBe("42501");
     expect((await (await as(USERS.oc)).rpc("mark_esn_uploaded", { event: past, url: ACTIVITY })).error?.code).toBe("42501");
-    expect(await E.markEsnUploaded(await actionContext(USERS.comms), { event_id: past, url: "https://activities.esn.org/add/physical-activity" })).toMatchObject({ ok: false, error: "invalid_input" });
-    expect((await (await as(USERS.comms)).rpc("mark_esn_uploaded", { event: past, url: "https://evil.example/activity/x" })).error?.code).toBe("22023");
-    expect((await E.markEsnUploaded(await actionContext(USERS.comms), { event_id: past, url: `${ACTIVITY}?utm=x` })).ok).toBe(true);
+    expect(await E.markEsnUploaded(await actionContext(USERS.executive), { event_id: past, url: "https://activities.esn.org/add/physical-activity" })).toMatchObject({ ok: false, error: "invalid_input" });
+    expect((await (await as(USERS.executive)).rpc("mark_esn_uploaded", { event: past, url: "https://evil.example/activity/x" })).error?.code).toBe("22023");
+    expect((await E.markEsnUploaded(await actionContext(USERS.executive), { event_id: past, url: `${ACTIVITY}?utm=x` })).ok).toBe(true);
     for (const u of [USERS.comms, USERS.events, USERS.executive]) expect((await (await as(u)).from("esn_uploads").select("activity_url").eq("event_id", past)).data, u.email).toEqual([{ activity_url: ACTIVITY }]);
     for (const u of [USERS.oc, USERS.helper, USERS.finance, USERS.member, USERS.admin]) expect((await (await as(u)).from("esn_uploads").select("event_id").eq("event_id", past)).data, u.email).toEqual([]);
     const { data } = await admin.from("esn_uploads").select("via, uploaded_by").eq("event_id", past).single();
-    expect(data).toEqual({ via: "manual", uploaded_by: USERS.comms.email });
+    expect(data).toEqual({ via: "manual", uploaded_by: USERS.executive.email });
   });
 
   it("tells the event's space once, and logs every change", async () => {
     await runJobs();
-    await (await as(USERS.comms)).rpc("mark_esn_uploaded", { event: past, url: "https://activities.esn.org/activity/pub-quiz-mesa-4712" });
+    await (await as(USERS.executive)).rpc("mark_esn_uploaded", { event: past, url: "https://activities.esn.org/activity/pub-quiz-mesa-4712" });
     await runJobs();
     const { data: messages } = await admin.from("fake_chat_messages").select("text").eq("space", space).like("text", "%ESN Activities%");
-    expect(messages).toEqual([{ text: `<users/all> 📢 Comms has uploaded *ESN past quiz* on ESN Activities. <${ACTIVITY}|Open>` }]);
-    expect((await E.unmarkEsnUploaded(await actionContext(USERS.comms), { event_id: past })).ok).toBe(true);
+    expect(messages).toEqual([{ text: `<users/all> 📢 The executive board has uploaded *ESN past quiz* on ESN Activities. <${ACTIVITY}|Open>` }]);
+    expect((await E.unmarkEsnUploaded(await actionContext(USERS.executive), { event_id: past })).ok).toBe(true);
     const { data: log } = await (await as(USERS.comms)).from("activity_log").select("action").eq("event_id", past).eq("entity", "esn_uploads").order("id");
     expect(log!.map((l) => l.action)).toEqual(["insert", "update", "delete"]);
   });
 });
 
 describe("personal access tokens", () => {
-  it("only Comms creates them; stored as SHA-256, shown once; owners see only their own", async () => {
+  it("only executives create them; stored as SHA-256, shown once; owners see only their own", async () => {
     expect(await E.createEsnToken(await actionContext(USERS.member), { label: "x", valid_days: 30 })).toMatchObject({ ok: false, error: "forbidden" });
     expect((await (await as(USERS.events)).rpc("create_esn_token", { label: "x", valid_days: 30 })).error?.code).toBe("42501");
-    const r = await E.createEsnToken(await actionContext(USERS.comms), { label: "Laptop", valid_days: 90 });
+    const r = await E.createEsnToken(await actionContext(USERS.executive), { label: "Laptop", valid_days: 90 });
     if (!r.ok) throw new Error(r.message);
     expect(r.data.token).toMatch(/^mesa_esn_[A-Za-z0-9_-]{43}$/);
     const { data: row } = await admin.from("esn_access_tokens").select("*").eq("token_prefix", r.data.token.slice(0, 13)).single();
     expect(row!.token_hash).toBe(hashToken(r.data.token));
     expect(JSON.stringify(row)).not.toContain(r.data.token);
-    expect((await (await as(USERS.comms)).from("esn_access_tokens").select("id")).data!.map((t) => t.id)).toContain(row!.id);
-    for (const u of [USERS.member, USERS.admin, USERS.executive]) expect((await (await as(u)).from("esn_access_tokens").select("id").eq("id", row!.id)).data, u.email).toEqual([]);
+    expect((await (await as(USERS.executive)).from("esn_access_tokens").select("id")).data!.map((t) => t.id)).toContain(row!.id);
+    for (const u of [USERS.member, USERS.admin, USERS.comms]) expect((await (await as(u)).from("esn_access_tokens").select("id").eq("id", row!.id)).data, u.email).toEqual([]);
     // Nobody else revokes it; nobody resolves tokens but the service role.
     expect((await (await as(USERS.admin)).rpc("revoke_esn_token", { token: row!.id })).error).not.toBeNull();
-    expect((await (await as(USERS.comms)).rpc("esn_token_owner", { hash: row!.token_hash })).error).not.toBeNull();
+    expect((await (await as(USERS.executive)).rpc("esn_token_owner", { hash: row!.token_hash })).error).not.toBeNull();
     const { data: log } = await (await as(USERS.events)).from("activity_log").select("details").eq("entity", "esn_access_tokens").eq("entity_id", row!.id);
     expect(log).toEqual([{ details: { label: "Laptop", token_prefix: r.data.token.slice(0, 13), valid_days: 90 } }]);
   });
 
   it("at most 5 active per person", async () => {
-    const ctx = await actionContext(USERS.comms);
-    const active = (await admin.from("esn_access_tokens").select("id").eq("profile_id", USERS.comms.id).is("revoked_at", null)).data!.length;
+    const ctx = await actionContext(USERS.executive);
+    const active = (await admin.from("esn_access_tokens").select("id").eq("profile_id", USERS.executive.id).is("revoked_at", null)).data!.length;
     for (let i = active; i < 5; i++) expect((await E.createEsnToken(ctx, { label: `t${i}`, valid_days: 30 })).ok).toBe(true);
     expect(await E.createEsnToken(ctx, { label: "sixth", valid_days: 30 })).toMatchObject({ ok: false, message: "You have 5 active tokens – revoke one first" });
-    await admin.from("esn_access_tokens").update({ revoked_at: new Date().toISOString() }).eq("profile_id", USERS.comms.id);
+    await admin.from("esn_access_tokens").update({ revoked_at: new Date().toISOString() }).eq("profile_id", USERS.executive.id);
   });
 });
 
@@ -161,7 +164,7 @@ describe("the script's API", () => {
   const link = (id: string, url: unknown, opts?: Parameters<typeof req>[2]) => POST(req("POST", `/api/esn/events/${id}/linked`, { ...opts, body: { url } }), { params: Promise.resolve({ id }) });
 
   beforeAll(async () => {
-    const r = await E.createEsnToken(await actionContext(USERS.comms), { label: "API test", valid_days: 30 });
+    const r = await E.createEsnToken(await actionContext(USERS.executive), { label: "API test", valid_days: 30 });
     if (!r.ok) throw new Error(r.message);
     token = r.data.token;
   });
@@ -186,7 +189,7 @@ describe("the script's API", () => {
     expect(used!.last_used_at).not.toBeNull();
   });
 
-  it("refuses missing, malformed, unknown, revoked and expired tokens and a token whose owner left Comms", async () => {
+  it("refuses missing, malformed, unknown, revoked and expired tokens and a token whose owner left the executive board", async () => {
     expect((await get(past, { token: null })).status).toBe(401);
     expect((await get(past, { token: "mesa_esn_short" })).status).toBe(401);
     expect((await get(past, { token: `mesa_esn_${"x".repeat(43)}` })).status).toBe(401);
@@ -195,8 +198,8 @@ describe("the script's API", () => {
     const revoked = `mesa_esn_${"r".repeat(43)}`;
     const notComms = `mesa_esn_${"m".repeat(43)}`;
     await admin.from("esn_access_tokens").insert([
-      { profile_id: USERS.comms.id, label: "expired", token_hash: hashToken(expired), token_prefix: expired.slice(0, 13), expires_at: hoursFromNow(-1) },
-      { profile_id: USERS.comms.id, label: "revoked", token_hash: hashToken(revoked), token_prefix: revoked.slice(0, 13), expires_at: hoursFromNow(24), revoked_at: hoursFromNow(-1) },
+      { profile_id: USERS.executive.id, label: "expired", token_hash: hashToken(expired), token_prefix: expired.slice(0, 13), expires_at: hoursFromNow(-1) },
+      { profile_id: USERS.executive.id, label: "revoked", token_hash: hashToken(revoked), token_prefix: revoked.slice(0, 13), expires_at: hoursFromNow(24), revoked_at: hoursFromNow(-1) },
       { profile_id: USERS.member.id, label: "not comms", token_hash: hashToken(notComms), token_prefix: notComms.slice(0, 13), expires_at: hoursFromNow(24) },
     ]);
     for (const t of [expired, revoked, notComms]) {
@@ -228,7 +231,7 @@ describe("the script's API", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     const { data } = await admin.from("esn_uploads").select("activity_url, via, uploaded_by").eq("event_id", past).single();
-    expect(data).toEqual({ activity_url: ACTIVITY, via: "script", uploaded_by: USERS.comms.email });
+    expect(data).toEqual({ activity_url: ACTIVITY, via: "script", uploaded_by: USERS.executive.email });
     expect(((await (await get(past)).json()) as { uploaded: string }).uploaded).toBe(ACTIVITY);
   });
 

@@ -1,5 +1,37 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-10-30: User requests (deadlines, navigation, schedule, Comms, addresses, payouts)
+
+Status: **implemented and tested locally; committed on local `main`, nothing pushed.** Decisions: `docs/DECISIONS.md`
+("2026-10-30"). New migrations `20261030000100`–`20261030000600`. No real Google, Telegram or
+ESN call; the address lookup calls Photon only from `dev:local`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Description deadline | Set only after the roster is confirmed, to a time ahead; locked once passed; events without a submitted description are cancelled at the deadline (pg_cron, every minute) | DB: roster gate, future only, locked, cancellation with reason and Chat job, nothing twice |
+| Cycle pages | Schedule, volunteer form, roster, descriptions, hand-in on their own pages; the stepper links each step; the month selector in the header keeps the page | E2E: monthly cycle through the step links, form page, roster by drag and drop, hand-in page |
+| Schedule | Drag-and-drop month calendar (events to other days, ideas onto days); aligned list; roster without "Move to…", sorted by date | Unit: calendar weeks, moving keeps the times |
+| Calendar, Get inspired | Calendar grid / aligned list with the month selector; infinite scroll on Get inspired | E2E: dropout test uses the list view |
+| ESN Activities | Executive board only (database, actions, page at `/team/esn-activities`, navigation); no longer Comms work | DB + E2E: executives mark, Comms and members refused, tokens |
+| Publishing | Three required channels, "All channels" lane, coverage per event, event dates on the board, Telegram confirmation with preview, uploaded pictures (private bucket) | DB: confirmation, plan everywhere, uploads; E2E: confirm, all channels |
+| Descriptions | ESN card below the preview: type, objectives, goal (required), ratings; ESN-only edits keep the review | Unit: validation, form data |
+| Addresses | Location name + street + postal code + city + country, search with suggestions, verification on save (Photon through `/api/address`; fake in tests) | Unit: Photon mapping, verification, modes; E2E: search, refusal |
+| Payout details | On the profile (avatar menu → payout page), copied to open claims and new ones, deletable, warnings on reimbursements | DB: copy, owner only, delete rules; RLS matrix row |
+| Demo data | More for Comms: reviews waiting, changes requested, approved, draft, an event on all three channels, confirmed and unconfirmed Telegram posts, an uploaded picture | `seed:demo` run; no event cancelled by the deadline job |
+
+### Checks (this round)
+
+| Check | Result |
+|---|---|
+| `npm test` (unit) | **452 passed** |
+| `npm run test:db` | **2,189 passed** (16 files) |
+| `npm run lint`, `npm run typecheck`, `npm run gen:actions -- --check` | clean |
+| E2E (the 7 changed spec files, production build) | **33 passed** (monthly cycle, cycle hand-in, team months, schedule, ESN, dropout, review incl. 375 px) |
+
+Not done / limits: the full E2E suite, the bundle scan and the staging build were not rerun this
+round; Photon's public instance has a fair-use policy (self-host it with `PHOTON_URL` for heavy
+use); the legal texts do not yet mention the address lookup or saved payout details.
+
 ## Round 2026-10-29: Staging with rich demo data
 
 Brief: `docs/BRIEF-2026-10-29-staging.md`. Status: **S1–S4 implemented and tested; all checks

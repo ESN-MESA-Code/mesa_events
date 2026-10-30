@@ -89,8 +89,15 @@ describe("ESN form data (the bot's esnFormData_)", () => {
   });
 
   it("the classification can change without a new publication", () => {
-    const d = buildEsnFormData(input({ classification: { esnType: "9", esnObjectives: "424,425,428" } }));
+    const d = buildEsnFormData(input({ classification: { esnType: "9", esnObjectives: "424,425,428", esnGoal: "", esnAccess: "", esnSustain: "" } }));
     expect(d).toMatchObject({ types: ["9"], objectives: ["424", "425", "428"], access: [1, 2, 1, 3] });
+  });
+
+  it("the goal and ratings from the description win over the derived ones (round 2026-10-30)", () => {
+    const d = buildEsnFormData(input({ classification: { esnType: "9", esnObjectives: "424", esnGoal: "  Get people hiking  together. ", esnAccess: "0,1,2,3", esnSustain: "3,3" } }));
+    expect(d).toMatchObject({ goal: "Get people hiking together.", access: [0, 1, 2, 3], sustain: [3, 3] });
+    // Broken ratings fall back to the type's.
+    expect(buildEsnFormData(input({ classification: { esnType: "9", esnObjectives: "424", esnGoal: "", esnAccess: "4,1", esnSustain: "x" } }))).toMatchObject({ access: [1, 2, 1, 3], sustain: [1, 2] });
   });
 
   it("lists what is missing: no publication, type, address, TBA price", () => {

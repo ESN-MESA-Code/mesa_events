@@ -42,3 +42,37 @@ export function neighbours(months: string[], month: string): { prev: string | nu
   if (i < 0) return { prev: [...sorted].reverse().find((m) => m < month) ?? null, next: sorted.find((m) => m > month) ?? null };
   return { prev: sorted[i - 1] ?? null, next: sorted[i + 1] ?? null };
 }
+
+/**
+ * The weeks of `month` ("2026-11-01") for a calendar grid, Monday first:
+ * each week has 7 days as "2026-11-05", null outside the month.
+ */
+export function calendarWeeks(month: string): Array<Array<string | null>> {
+  const [y, m] = month.split("-").map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+  const cells: Array<string | null> = Array.from({ length: lead }, () => null);
+  for (let d = 1; d <= days; d++) cells.push(`${month.slice(0, 8)}${String(d).padStart(2, "0")}`);
+  while (cells.length % 7) cells.push(null);
+  return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
+}
+
+/** Days from `a` to `b` ("2026-11-05" → "2026-11-08" = 3). */
+export function dayDiff(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+/** `day` ("2026-11-05") moved by `n` days. */
+export function addDays(day: string, n: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * An event moved to another day, keeping its times: the new start and end
+ * as Berlin datetime-local values ("2026-11-08T19:00"). `start`/`end` are
+ * Berlin datetime-local values too.
+ */
+export function moveToDay(start: string, end: string | null, day: string): { start: string; end: string | null } {
+  const shift = dayDiff(start.slice(0, 10), day);
+  return { start: `${day}${start.slice(10)}`, end: end ? `${addDays(end.slice(0, 10), shift)}${end.slice(10)}` : null };
+}

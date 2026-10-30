@@ -86,22 +86,68 @@ describe("who plans", () => {
 describe("Telegram", () => {
   let tg: string;
 
-  it("a planned post has one job at its time; a move makes a new version, the old job skips itself", async () => {
+  it("a planned post goes out only once Comms confirmed it (round 2026-10-30); a change takes the confirmation back", async () => {
     tg = await post("telegram", [approved], 48);
     const jobs = async () => (await admin.from("jobs").select("idempotency_key, run_after, status").like("idempotency_key", `telegram.publish_post:${tg}:%`).order("id")).data!;
+    // Planned, not confirmed: no job.
+    expect(await jobs()).toHaveLength(0);
+    expect(await P.confirmPost(await actionContext(USERS.events), { post_id: tg })).toMatchObject({ ok: false, error: "forbidden" });
+    expect((await P.confirmPost(await actionContext(USERS.comms), { post_id: tg })).ok).toBe(true);
+    expect(await row(tg)).toMatchObject({ confirmed_by: USERS.comms.email });
     let j = await jobs();
     expect(j).toHaveLength(1);
     expect(Math.abs(Date.parse(j[0].run_after) - Date.parse((await row(tg)).scheduled_for))).toBeLessThan(1000);
     await runJobs();
     expect((await row(tg)).status).toBe("planned");
+    // A move is a new version without confirmation: no new job, and the old one skips itself.
     expect((await P.movePost(await actionContext(USERS.comms), { post_id: tg, day: day(72), time: "11:00" })).ok).toBe(true);
+    expect((await row(tg)).confirmed_at).toBeNull();
     j = await jobs();
-    expect(j).toHaveLength(2);
-    // The old version's job, run anyway: nothing happens.
-    await admin.from("jobs").update({ run_after: new Date().toISOString() }).eq("idempotency_key", j[0].idempotency_key);
-    const r = await runJobs();
-    expect(r.results.find((x) => x.kind === "telegram.publish_post")?.ok).toBe(true);
+    expect(j).toHaveLength(1);
+    // A minute back: the database clock may lag the test's.
+    await admin.from("jobs").update({ run_after: new Date(Date.now() - 60_000).toISOString() }).eq("idempotency_key", j[0].idempotency_key);
+    await runJobs();
+    // (pg_cron's runner may have taken it first – either way it ran and skipped itself.)
+    expect((await jobs())[0].status).toBe("done");
     expect((await row(tg)).status).toBe("planned");
+    // Confirmed again: a job for the new version.
+    expect((await P.confirmPost(await actionContext(USERS.comms), { post_id: tg })).ok).toBe(true);
+    expect(await jobs()).toHaveLength(2);
+    // Only Telegram posts are confirmed.
+    const ig = await post("instagram", [approved], 48);
+    expect(await P.confirmPost(await actionContext(USERS.comms), { post_id: ig })).toMatchObject({ ok: false, message: "Only Telegram posts are confirmed for sending" });
+    await P.deletePost(await actionContext(USERS.comms), { post_id: ig });
+  });
+
+  it("plans an event on every required channel it is missing from, on one day (round 2026-10-30)", async () => {
+    const beforeRows = (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel)").eq("event_id", approved)).data!;
+    const before = beforeRows.map((x) => (x.publication_posts as { channel: string }).channel);
+    const r = await P.planEverywhere(await actionContext(USERS.comms), { event_id: approved, day: day(96), time: "09:00" });
+    expect(r.ok).toBe(true);
+    const after = (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel, scheduled_for)").eq("event_id", approved)).data!;
+    const channels = after.map((x) => (x.publication_posts as { channel: string }).channel);
+    for (const c of ["telegram", "instagram", "pretix"]) expect(channels).toContain(c);
+    // Telegram was there already: not planned twice.
+    expect(channels.filter((c) => c === "telegram")).toHaveLength(before.filter((c) => c === "telegram").length);
+    expect(r.ok && r.data.posts).toBe(3 - new Set(before.filter((c) => ["telegram", "instagram", "pretix"].includes(c))).size);
+    // Again: nothing left to plan.
+    expect(await P.planEverywhere(await actionContext(USERS.comms), { event_id: approved, day: day(96) })).toMatchObject({ ok: true, data: { posts: 0 } });
+    expect(await P.planEverywhere(await actionContext(USERS.events), { event_id: approved, day: day(96) })).toMatchObject({ ok: false, error: "forbidden" });
+    const added = after.map((x) => x.post_id).filter((id) => !beforeRows.some((b) => b.post_id === id));
+    for (const id of added) await P.deletePost(await actionContext(USERS.comms), { post_id: id });
+  });
+
+  it("uploaded pictures: Comms only, kept in a private bucket until the post is out", async () => {
+    const path = `${tg}/${crypto.randomUUID()}.png`;
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect((await (await as(USERS.events)).storage.from("post-pictures").upload(path, png, { contentType: "image/png" })).error).not.toBeNull();
+    expect((await (await as(USERS.comms)).storage.from("post-pictures").upload(path, png, { contentType: "image/png" })).error).toBeNull();
+    expect(await P.editPost(await actionContext(USERS.comms), { post_id: tg, picture: "https://example.com/x.jpg" })).toMatchObject({ ok: false });
+    expect((await P.editPost(await actionContext(USERS.comms), { post_id: tg, picture: `upload:${path}` })).ok).toBe(true);
+    for (const u of [USERS.member, USERS.events]) expect(((await (await as(u)).storage.from("post-pictures").list(tg)).data ?? []).length, u.email).toBe(0);
+    // Removed again: the upload goes too.
+    expect((await P.editPost(await actionContext(USERS.comms), { post_id: tg, picture: "" })).ok).toBe(true);
+    expect((await admin.storage.from("post-pictures").list(tg)).data).toEqual([]);
   });
 
   it("publishes at its time (here: now), tells the space once; re-publishing edits the same message", async () => {

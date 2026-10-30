@@ -40,6 +40,7 @@ const filled = (over: Partial<DescriptionFields> = {}): DescriptionFields => ({
   closing: "We can't wait to see you there! ✨",
   esnType: "10",
   esnObjectives: "413,426",
+  esnGoal: "Bring international and local students together over a fun quiz night.",
   ...over,
 });
 
@@ -209,7 +210,14 @@ describe("validation", () => {
     expect(v.errors.basics).toEqual(expect.arrayContaining(["The event name is missing.", "Pick the event date.", "The venue is missing."]));
     expect(v.errors.intro).toContain("Describe the event in 2–4 sentences.");
     expect(v.errors.program).toHaveLength(2);
-    expect(v.errors.extras).toEqual(expect.arrayContaining(["Pick the ESN activity type (needed for ESN Activities)."]));
+    // What ESN Activities needs has its own step below the preview (round 2026-10-30).
+    expect(v.errors.esn).toEqual(expect.arrayContaining(["Pick the ESN activity type (needed for ESN Activities).", "Describe the goal of the event (needed for ESN Activities)."]));
+    expect(v.errors.extras).not.toContain("Pick the ESN activity type (needed for ESN Activities).");
+  });
+
+  it("the goal must say something; ratings are optional (the type's defaults)", () => {
+    expect(validateAll(filled({ esnGoal: "Fun." })).errors.esn).toContain("The goal is very short – say in a sentence what the event wants to achieve.");
+    expect(validateAll(filled({ esnAccess: "" })).errors.esn).toEqual([]);
   });
 
   it("warns without blocking", () => {

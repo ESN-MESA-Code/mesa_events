@@ -118,7 +118,8 @@ export function searchGroupKey(rec: SearchEntry): string {
     .trim();
 }
 
-export function searchTemplates(pool: SearchEntry[], query: string, excludeId?: string, expandKey?: string) {
+/** `limit`: how many groups to return (default: the template search's caps). */
+export function searchTemplates(pool: SearchEntry[], query: string, excludeId?: string, expandKey?: string, limit?: number) {
   const terms = searchFold(query).split(" ").filter(Boolean);
   const alts = terms.map(searchAlternatives);
   const byDate = (a: SearchEntry, b: SearchEntry) => ((a.published.dateIso || "") < (b.published.dateIso || "") ? 1 : -1);
@@ -150,7 +151,7 @@ export function searchTemplates(pool: SearchEntry[], query: string, excludeId?: 
     }
     groups[index[key]].members.push(r);
   }
-  const max = terms.length ? SEARCH_MAX_GROUPS : SEARCH_RECENT;
+  const max = limit ?? (terms.length ? SEARCH_MAX_GROUPS : SEARCH_RECENT);
   const rows: SearchRow[] = [];
   for (const g of groups.slice(0, max)) {
     if (g.key === expandKey) g.members.forEach((rec) => rows.push({ rec, earlier: [], key: g.key, expanded: true }));

@@ -34,9 +34,12 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   await expect(page.getByTestId("cycle-next")).toContainText("Remind the OCs of 1 event that is not handed in yet");
   await expect(page.getByTestId("cycle-next")).toContainText("1 of 2 events handed in");
   await expect(page.getByTestId("cycle-next")).not.toContainText("descriptions are missing");
+  // The hand-in step has its own page; the next action leads there (round 2026-10-30).
+  await page.getByTestId("cycle-next").click();
+  await page.waitForURL(/\/hand-in$/);
   const missing = page.getByTestId("hand-in-open");
   await expect(missing).toContainText(`Not handed in ${tag}`);
-  await expect(missing).toContainText("missing: attendance list, photos, event report");
+  await expect(missing).toContainText("missing attendance list, photos, event report");
   await expect(missing).not.toContainText(`Handed in ${tag}`);
   await expect(missing.getByRole("link", { name: `Not handed in ${tag}` })).toHaveAttribute("href", `/events/${open.id}/hand-in?from=cycle:${cycle!.id}`);
 

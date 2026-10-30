@@ -62,7 +62,7 @@ const FOUNDATION: Spec[] = [
         match: (p) => ({ id: p.id as string }),
       },
     ],
-    update: [{ name: "set the description deadline", make: async (w) => ({ id: w.cycle.id }), patch: () => ({ description_deadline: new Date().toISOString() }), allowed: ["events"] }],
+    update: [{ name: "set the description deadline", make: async (w) => ({ id: w.cycle.id }), patch: () => ({ description_deadline: new Date(Date.now() + 2 * 86_400_000).toISOString() }), allowed: ["events"] }],
     delete: [{ name: "cycle", make: async () => ins("planning_cycles", { month: uniqueMonth() }), allowed: NOBODY }],
   },
   {
@@ -238,6 +238,7 @@ afterAll(async () => {
   await admin.from("jobs").delete().like("idempotency_key", "rls.%");
   await admin.from("events").delete().in("title", ["RLS assignment", "New", "Del"]);
   await admin.from("app_settings").delete().like("key", "zzrls%");
+  await admin.from("profile_payout_details").delete().eq("profile_id", USERS.member.id);
   await admin.from("planning_cycles").delete().gte("month", "3000-01-01");
   await destroyWorld(world);
 });

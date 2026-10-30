@@ -9,6 +9,7 @@
 // Run it again to start over: it replaces what it created before (everything
 // created_by demo@esnmesa.org, and whatever was added to its cycles). Never
 // touches .env.local.
+import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { LOCAL_ENV } from "./local-supabase.mjs";
 import { importArchive } from "./bot-archive.mjs";
@@ -154,7 +155,7 @@ async function main() {
   // The team uploaded 14 photos to its Drive folder (fake), counted since.
   await photoFolder(crawl, at(-6, 20), "Pub Crawl Maxvorstadt", 14, at(-4, 10));
   // Published, and the OC wrote the event report: ready for ESN Activities.
-  const crawlFields = { title: "Pub Crawl Maxvorstadt", dateIso: at(-6, 20).slice(0, 10), time: "20:00", venue: "Schelling-Salon, Schellingstraße 54, 80799 München", price: "free", hook: "a night out in Maxvorstadt", intro: "Four bars, one evening, lots of new friends. We start at the Schelling-Salon and walk together.", program: "Meet at the Schelling-Salon\nFour bars", bring: "Your ESNcard", closing: "celebrate with you", esnType: "10", esnObjectives: "413,426" };
+  const crawlFields = { title: "Pub Crawl Maxvorstadt", dateIso: at(-6, 20).slice(0, 10), time: "20:00", venue: "Schelling-Salon, Schellingstraße 54, 80799 München", price: "free", hook: "a night out in Maxvorstadt", intro: "Four bars, one evening, lots of new friends. We start at the Schelling-Salon and walk together.", program: "Meet at the Schelling-Salon\nFour bars", bring: "Your ESNcard", closing: "celebrate with you", esnType: "10", esnObjectives: "413,426", esnGoal: "Help new international students get to know each other and the student district on a relaxed evening out." };
   check(await db.from("descriptions").upsert({ event_id: crawl, status: "published", published_at: at(-8, 12), published_by: "comms@esnmesa.org", fields: crawlFields, approved_fields: crawlFields }), "crawl description");
   check(await db.from("event_reports").upsert({ event_id: crawl, intl_participants: 20, local_participants: 3, organizers: 2, goals_reached: true, went_well: "Great mood, everyone stayed until the last bar.", could_be_better: "Book the first bar earlier.", created_by: "oc@esnmesa.org", updated_by: "oc@esnmesa.org" }), "crawl report");
 
@@ -163,7 +164,7 @@ async function main() {
   check(await db.from("attendance_lists").update({ signed_off_at: at(-19, 10), signed_off_by: "volunteer1@esnmesa.org", headcount: 31 }).eq("event_id", games), "games sign-off");
   await photoFolder(games, at(-20, 19), "Board Game Night", 22, at(-18, 10));
   await place(games, "Café Gans am Wasser", "Siegfriedstraße 24", "80803");
-  const gamesFields = { title: "Board Game Night", dateIso: at(-20, 19).slice(0, 10), time: "19:00", venue: "Café Gans am Wasser, Siegfriedstraße 24, 80803 München", price: "free", hook: "an evening of board games", intro: "Bring your favourite game or learn a new one. Snacks are on us!", program: "Games for everyone\nSnacks", bring: "A game if you like", closing: "play with you", esnType: "10", esnObjectives: "413,426" };
+  const gamesFields = { title: "Board Game Night", dateIso: at(-20, 19).slice(0, 10), time: "19:00", venue: "Café Gans am Wasser, Siegfriedstraße 24, 80803 München", price: "free", hook: "an evening of board games", intro: "Bring your favourite game or learn a new one. Snacks are on us!", program: "Games for everyone\nSnacks", bring: "A game if you like", closing: "play with you", esnType: "10", esnObjectives: "413,426", esnGoal: "A low-threshold evening where internationals and locals meet over board games." };
   check(await db.from("descriptions").upsert({ event_id: games, status: "published", published_at: at(-24, 12), published_by: "comms@esnmesa.org", fields: gamesFields, approved_fields: gamesFields }), "games description");
   check(await db.from("event_reports").upsert({ event_id: games, intl_participants: 27, local_participants: 4, organizers: 2, goals_reached: true, went_well: "Full house, many new faces.", created_by: "volunteer1@esnmesa.org", updated_by: "volunteer1@esnmesa.org" }), "games report");
   check(await db.from("esn_uploads").upsert({ event_id: games, activity_url: "https://activities.esn.org/activity/board-game-night-mesa-12345", via: "manual", uploaded_by: "comms@esnmesa.org", uploaded_at: at(-15, 11) }), "games upload");
@@ -180,47 +181,102 @@ async function main() {
     if (payout) check(await db.from("payout_details").insert({ reimbursement_id: claim.id, ...payout }), "payout");
   }
 
-  // The description deadline lies before each cycle's first event (the
-  // database refuses a later one from the app): in three days, or two days
-  // before the first event if that is earlier.
-  for (const id of confirmed.values()) {
-    const first = check(await db.from("events").select("starts_at").eq("cycle_id", id).order("starts_at").limit(1).maybeSingle(), "first event");
-    const latest = first ? Date.parse(first.starts_at) - 2 * day : Infinity;
-    const deadline = new Date(Math.min(Date.parse(at(3, 20)), latest)).toISOString();
-    check(await db.from("planning_cycles").update({ description_deadline: deadline }).eq("id", id).eq("created_by", DEMO), "deadline");
-  }
-
   // A published description to start templates from.
   check(
     await db.from("descriptions").upsert({
       event_id: museum,
       status: "published",
       published_at: new Date().toISOString(),
-      fields: { title: "Museum Night", hook: "a night at the museum", intro: "Explore Munich's museums after dark. Tickets included!", program: "Guided tour\nFree time", bring: "Curiosity 🤓", closing: "see you there!", venue: "Pinakothek", price: "15", time: "19:00", esnType: "438", esnObjectives: "424,426" },
+      fields: { title: "Museum Night", hook: "a night at the museum", intro: "Explore Munich's museums after dark. Tickets included!", program: "Guided tour\nFree time", bring: "Curiosity 🤓", closing: "see you there!", venue: "Pinakothek", price: "15", time: "19:00", esnType: "438", esnObjectives: "424,426", esnGoal: "Bring international students closer to Munich's art and history." },
       approved_fields: { title: "Museum Night", hook: "a night at the museum", intro: "Explore Munich's museums after dark. Tickets included!", program: "Guided tour\nFree time", bring: "Curiosity 🤓", closing: "see you there!", venue: "Pinakothek", price: "15", time: "19:00", esnType: "438", esnObjectives: "424,426" },
     }),
     "description"
   );
 
-  // The publishing schedule: published posts of the past events, a Telegram
-  // post for the museum night that publishes itself tomorrow at 10:00 (the
-  // job is queued like the board does it), an Instagram bundle, and a
-  // Telegram post for the quiz that is warned about (description not in).
+  // Work for Comms in every stage (round 2026-10-30): descriptions waiting
+  // for review, with changes requested, approved and ready to publish, a
+  // draft, and an event published on all three channels.
+  const karaoke = await ev({ title: "Karaoke Night", type: "standard", status: "confirmed", starts_at: at(7, 20), helpers_needed: 1, price_cents: 300 }, [[U.volunteer2, "oc"], [U.member, "helper"]]);
+  const cooking = await ev({ title: "International Cooking Class", type: "special", status: "confirmed", starts_at: at(10, 18), helpers_needed: 2, price_cents: 800 }, [[U.volunteer1, "oc"], [U.helper, "helper"], [U.volunteer2, "helper"]]);
+  const skating = await ev({ title: "Ice Skating at Karlsplatz", type: "standard", status: "confirmed", starts_at: at(14, 18), helpers_needed: 1, price_cents: 600 }, [[U.member, "oc"], [U.volunteer1, "helper"]]);
+  const brunch = await ev({ title: "Bavarian Brunch", type: "standard", status: "confirmed", starts_at: at(6, 11), helpers_needed: 1, price_cents: 1200 }, [[U.oc, "oc"], [U.volunteer2, "helper"]]);
+  await place(karaoke, "Bavarian Karaoke Bar", "Augustenstraße 5", "80333");
+  await place(cooking, "Kochschule Munich", "Arcisstraße 21", "80333");
+  await place(brunch, "Augustiner-Keller", "Arnulfstraße 52", "80335");
+  await place(museum, "Pinakothek der Moderne", "Barer Straße 40", "80333");
+  await place(hike, "Kampenwand", "Kampenwandstraße 1", "83229");
+  const text = (title, startsAt, venue, price, hook, intro, goal, extra = {}) => ({
+    title, dateIso: berlinDay(startsAt), time: `${String(new Date(startsAt).getUTCHours() + 1).padStart(2, "0")}:00`, venue, price, priceNote: "", hook, intro,
+    program: "Welcome and introductions\nThe main part\nDrinks afterwards", bring: "Good mood 😄\nYour ESNcard 🪪", closing: "see you there!",
+    importantHeading: "", important: "", weather: false, esnType: "10", esnObjectives: "413,426", esnGoal: goal, esnAccess: "", esnSustain: "", ...extra,
+  });
+  const describe = async (event_id, status, fields, extra = {}) =>
+    check(await db.from("descriptions").upsert({ event_id, status, fields, version: 3, updated_by: "oc@esnmesa.org", ...(status !== "draft" ? { submitted_at: at(-1, 12), submitted_by: "oc@esnmesa.org" } : {}), ...extra }), `description ${status}`);
+  await describe(hike, "submitted", text("Hike to the Kampenwand", at(9, 8), "Kampenwand, Aschau im Chiemgau", "TBA", "a day in the mountains", "We take the train to Aschau and hike up the Kampenwand. The views over the Chiemsee are worth every step.", "Show international students the Bavarian Alps and how to hike safely.", { esnType: "9" }));
+  await describe(cooking, "submitted", text("International Cooking Class", at(10, 18), "Kochschule Munich, Arcisstraße 21", "8", "a taste of the world", "Four volunteers from four countries show you their favourite dish. We cook together and eat everything.", "Share food cultures and let participants cook with people from other countries."));
+  await describe(alps, "changes_requested", text("Weekend in the Alps", at(16, 8), "Berchtesgaden", "89", "a weekend in the mountains", "Two days, one hut, many mountains.", "Give international students a first real mountain weekend with the group.", { esnType: "9" }));
+  check(await db.from("reviews").insert({ event_id: alps, reviewer: "comms@esnmesa.org", decision: "changes_requested", comment: "Please add what is included in the price and when we meet at the station.", version: 2, created_at: at(-1, 15) }), "review");
+  const karaokeFields = text("Karaoke Night", at(7, 20), "Bavarian Karaoke Bar, Augustenstraße 5, 80333 München", "3", "a night on the stage", "Sing alone, in a duet or with the whole room. Songs in every language you can think of.", "Get shy newcomers on stage and mixing with others through music.");
+  await describe(karaoke, "approved", karaokeFields, {
+    approved_fields: karaokeFields, approved_at: at(-1, 16), approved_by: "comms@esnmesa.org",
+    approved_text: "🎤 Karaoke Night\n\nAre you ready for a night on the stage? 🎉\n\nSing alone, in a duet or with the whole room. Songs in every language you can think of.\n\nWith lots of love,\nTeam ESN MESA",
+  });
+  await describe(skating, "draft", text("Ice Skating at Karlsplatz", at(14, 18), "Münchner Eiszauber, Karlsplatz", "TBA", "", "", ""));
+  const brunchFields = text("Bavarian Brunch", at(6, 11), "Augustiner-Keller, Arnulfstraße 52, 80335 München", "12", "a real Bavarian Sunday", "Weißwurst, Brezn and sweet mustard – we show you how Bavarians start a Sunday. A vegetarian option is included.", "Introduce international students to Bavarian food culture in a relaxed setting.");
+  await describe(brunch, "published", brunchFields, { approved_fields: brunchFields, approved_at: at(-4, 10), approved_by: "comms@esnmesa.org", published_at: at(-3, 12), published_by: "comms@esnmesa.org" });
+
+  // The description deadline lies before each cycle's first event (the
+  // database refuses a later one from the app): in three days, or two days
+  // before the first event if that is earlier. Where it has already passed,
+  // every event still ahead has its description in – otherwise the deadline
+  // job would cancel it at once (round 2026-10-30).
+  for (const id of confirmed.values()) {
+    const first = check(await db.from("events").select("starts_at").eq("cycle_id", id).order("starts_at").limit(1).maybeSingle(), "first event");
+    const latest = first ? Date.parse(first.starts_at) - 2 * day : Infinity;
+    const deadline = new Date(Math.min(Date.parse(at(3, 20)), latest)).toISOString();
+    check(await db.from("planning_cycles").update({ description_deadline: deadline }).eq("id", id).eq("created_by", DEMO), "deadline");
+    if (Date.parse(deadline) > Date.now()) continue;
+    const ahead = check(await db.from("events").select("id, title, starts_at, descriptions(submitted_at)").eq("cycle_id", id).gt("starts_at", new Date().toISOString()), "events ahead");
+    for (const e of ahead.filter((x) => !x.descriptions?.submitted_at)) {
+      const f = text(e.title, e.starts_at, "Munich", "free", "a great evening", "We meet, we talk, we have fun. Everyone is welcome.", "Bring international and local students together.");
+      await describe(e.id, "approved", f, { approved_fields: f, approved_at: at(-1, 16), approved_by: "comms@esnmesa.org", approved_text: `${e.title}\n\nWe meet, we talk, we have fun.` });
+    }
+  }
+
+  // The publishing schedule: every event belongs on Telegram, Instagram and
+  // pretix. Published posts of the past events; the brunch on all three; a
+  // confirmed Telegram post with an uploaded picture for the museum night
+  // that publishes itself tomorrow at 10:00 (its job is queued, as
+  // confirming does it); the karaoke planned everywhere but its Telegram
+  // post not confirmed yet; an Instagram bundle; the cooking class only on
+  // Instagram (two channels missing); a Telegram post for the quiz with
+  // warnings (description not in).
   const tenAm = (days) => new Date(Date.parse(at(days, 10).slice(0, 10) + "T09:00:00Z")).toISOString();
   const demoPost = async (channel, scheduled_for, events, extra = {}) => {
     const p = check(await db.from("publication_posts").insert({ channel, scheduled_for, created_by: "comms@esnmesa.org", ...extra }).select("id, version").single(), "post");
     check(await db.from("publication_post_events").insert(events.map((event_id, position) => ({ post_id: p.id, event_id, position }))), "post events");
-    if (channel === "telegram" && (extra.status ?? "planned") === "planned") {
+    if (channel === "telegram" && (extra.status ?? "planned") === "planned" && extra.confirmed_at) {
       check(await db.from("jobs").insert({ kind: "telegram.publish_post", payload: { post_id: p.id, version: p.version }, idempotency_key: `telegram.publish_post:${p.id}:${p.version}`, run_after: scheduled_for }), "post job");
     }
     return p.id;
   };
-  await demoPost("instagram", tenAm(-21), [games], { status: "published", link: "https://www.instagram.com/p/demo-board-games/", published_at: tenAm(-21), published_by: "comms@esnmesa.org" });
+  const published = (link, days) => ({ status: "published", link, published_at: tenAm(days), published_by: "comms@esnmesa.org" });
+  await demoPost("instagram", tenAm(-21), [games], published("https://www.instagram.com/p/demo-board-games/", -21));
   await demoPost("pretix", tenAm(-9), [crawl], { status: "skipped", skip_reason: "No pretix for free events" });
-  await demoPost("instagram", tenAm(-8), [crawl], { status: "published", link: "https://www.instagram.com/p/demo-pub-crawl/", published_at: tenAm(-8), published_by: "comms@esnmesa.org" });
-  await demoPost("telegram", tenAm(1), [museum]);
+  await demoPost("instagram", tenAm(-8), [crawl], published("https://www.instagram.com/p/demo-pub-crawl/", -8));
+  await demoPost("telegram", tenAm(-3), [brunch], published("https://t.me/esnmesa/1201", -3));
+  await demoPost("instagram", tenAm(-3), [brunch], published("https://www.instagram.com/p/demo-brunch/", -3));
+  await demoPost("pretix", tenAm(-4), [brunch], published("https://pretix.eu/esnmesa/brunch/", -4));
+  const museumPost = await demoPost("telegram", tenAm(1), [museum], { confirmed_at: at(-1, 17), confirmed_by: "comms@esnmesa.org" });
+  // Its picture was uploaded for the post (kept until it is published).
+  const picture = `${museumPost}/${crypto.randomUUID()}.png`;
+  const upload = await db.storage.from("post-pictures").upload(picture, readFileSync("public/esn-mesa-logo.png"), { contentType: "image/png" });
+  if (!upload.error) check(await db.from("publication_posts").update({ picture: `upload:${picture}` }).eq("id", museumPost), "picture");
+  await demoPost("pretix", tenAm(-1), [museum], published("https://pretix.eu/esnmesa/museum-night/", -1));
   await demoPost("instagram", tenAm(2), [quiz, museum], { note: "This week at ESN MESA" });
   await demoPost("telegram", tenAm(3), [quiz]);
+  for (const channel of ["telegram", "instagram", "pretix"]) await demoPost(channel, tenAm(2), [karaoke]);
+  await demoPost("instagram", tenAm(4), [cooking]);
 
   // History from the description bot's Sheet, for "Get inspired" on /ideas
   // (as `npm run import:bot-archive` would bring it in).
@@ -269,6 +325,7 @@ async function main() {
   console.log(`  Alps:   http://localhost:3000/events/${alps}`);
   console.log(`  Crawl:  http://localhost:3000/events/${crawl}/hand-in (receipts; Finance: /team/finance)`);
   console.log(`  Café:   http://localhost:3000/events/${cafe}/attendance (list open)  form: http://localhost:3000/event/${cafeToken}`);
+  console.log(`  Comms:  http://localhost:3000/team/comms and /team/comms/schedule (reviews, publishing, three channels)`);
 }
 
 main().catch((err) => {

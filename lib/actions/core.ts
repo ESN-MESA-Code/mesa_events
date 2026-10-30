@@ -80,7 +80,7 @@ export const PAGES = {
   event: ["/events/[id]", "layout"],
   eventsTeam: ["/team/events", "layout"],
   comms: "/team/comms",
-  esn: "/team/comms/esn-activities",
+  esn: "/team/esn-activities",
   schedule: "/team/comms/schedule",
   finance: ["/team/finance", "layout"],
   admin: "/admin",

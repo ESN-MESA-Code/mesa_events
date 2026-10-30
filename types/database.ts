@@ -575,6 +575,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"profile_payout_details": {
+                  Row: {
+                    "account_holder": string | null,"iban": string | null,"paypal_email": string | null,"profile_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_holder"?: string | null,"iban"?: string | null,"paypal_email"?: string | null,"profile_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "account_holder"?: string | null,"iban"?: string | null,"paypal_email"?: string | null,"profile_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profile_payout_details_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"profiles": {
                   Row: {
                     "created_at": string,"email": string,"full_name": string,"id": string
@@ -591,14 +611,14 @@ isOneToOne: false
                   ]
                 },"publication_channels": {
                   Row: {
-                    "enabled": boolean,"key": string,"kind": string,"name": string,"position": number,"schedulable": boolean
+                    "enabled": boolean,"key": string,"kind": string,"name": string,"position": number,"required": boolean,"schedulable": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "enabled"?: boolean,"key": string,"kind": string,"name": string,"position"?: number,"schedulable"?: boolean
+                    "enabled"?: boolean,"key": string,"kind": string,"name": string,"position"?: number,"required"?: boolean,"schedulable"?: boolean
                   }
                   Update: {
-                    "enabled"?: boolean,"key"?: string,"kind"?: string,"name"?: string,"position"?: number,"schedulable"?: boolean
+                    "enabled"?: boolean,"key"?: string,"kind"?: string,"name"?: string,"position"?: number,"required"?: boolean,"schedulable"?: boolean
                   }
                   Relationships: [
                     
@@ -631,14 +651,14 @@ isOneToOne: false
                   ]
                 },"publication_posts": {
                   Row: {
-                    "channel": string,"created_at": string,"created_by": string | null,"id": string,"last_error": string | null,"link": string | null,"note": string,"picture": string | null,"published_at": string | null,"published_by": string | null,"scheduled_for": string,"skip_reason": string | null,"status": string,"telegram": Json | null,"updated_at": string,"version": number
+                    "channel": string,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"created_by": string | null,"id": string,"last_error": string | null,"link": string | null,"note": string,"picture": string | null,"published_at": string | null,"published_by": string | null,"scheduled_for": string,"skip_reason": string | null,"status": string,"telegram": Json | null,"updated_at": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "channel": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for": string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                    "channel": string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for": string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
                   }
                   Update: {
-                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for"?: string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                    "channel"?: string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for"?: string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -898,6 +918,9 @@ isOneToOne: false
 "cancel_event":
 { Args: { "event": string,"reason"?: string }; Returns: undefined
                            },
+"cancel_overdue_descriptions":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "chat_space_roster":
 { Args: { "event": string }; Returns: {
               "email": string,"full_name": string,"kind": string
@@ -952,6 +975,9 @@ isOneToOne: false
 "confirm_allocation":
 { Args: { "cycle": string }; Returns: undefined
                            },
+"confirm_post":
+{ Args: { "post": string }; Returns: undefined
+                           },
 "create_esn_token":
 { Args: { "label": string,"valid_days"?: number }; Returns: string
                            },
@@ -991,6 +1017,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "delete_expired_lists":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"delete_my_payout_details":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "delete_post":
@@ -1121,6 +1150,9 @@ isOneToOne: false
 "pay_early":
 { Args: { "claim": string }; Returns: undefined
                            },
+"plan_everywhere":
+{ Args: { "event": string,"scheduled_for": string }; Returns: string[]
+                           },
 "policy_for":
 { Args: { "day": string }; Returns: string
                            },
@@ -1205,6 +1237,9 @@ isOneToOne: false
                            },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
+                           },
+"set_my_payout_details":
+{ Args: { "account_holder"?: string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: number
                            },
 "set_payout_details":
 { Args: { "account_holder"?: string,"claim": string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: undefined

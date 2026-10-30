@@ -4,128 +4,9 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Alert, Badge, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionButton, useAction } from "@/components/ActionButton";
-import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type CycleStatus, type EventStatus, type EventType } from "@/lib/labels";
-import {
-  acceptIdea,
-  clearVolunteerResponse,
-  closeForm,
-  confirmAllocation,
-  createEvent,
-  dropEvent,
-  mergeIdea,
-  moveIdea,
-  openForm,
-  rejectIdea,
-  runAllocation,
-  updateEvent,
-} from "@/app/actions/planning";
-import { setDescriptionDeadline } from "@/app/actions/descriptions";
+import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type EventStatus, type EventType } from "@/lib/labels";
+import { acceptIdea, clearVolunteerResponse, createEvent, dropEvent, mergeIdea, moveIdea, rejectIdea, updateEvent } from "@/app/actions/planning";
 import { plural } from "@/lib/plural";
-
-export function CycleControls({
-  cycle,
-  canEdit,
-  responses,
-}: {
-  cycle: {
-    id: string;
-    status: CycleStatus;
-    formClosesAt: string | null;
-    descriptionDeadline: string;
-    /** The latest allowed deadlines (review 2026-10-29 A5): Berlin input values and labels. */
-    formLatest: { input: string; label: string };
-    descriptionLatest: { input: string; label: string } | null;
-  };
-  canEdit: boolean;
-  responses: number;
-}) {
-  const { run, pending, error } = useAction();
-  const [closes, setCloses] = useState("");
-  const [deadline, setDeadline] = useState(cycle.descriptionDeadline);
-  const [summary, setSummary] = useState<string | null>(null);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <span className="text-sm text-gray-600">
-          {plural(responses, "volunteer")} answered
-          {cycle.formClosesAt && ` · form ${cycle.status === "form_open" ? "closes" : "closed"} ${cycle.formClosesAt}`}
-        </span>
-        {canEdit && (cycle.status === "planning" || cycle.status === "form_closed") && (
-          <form
-            className="flex flex-wrap items-end gap-2 ml-auto"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(openForm, { cycle_id: cycle.id, closes_at: closes });
-            }}
-          >
-            <Field label="Form deadline" htmlFor="form-deadline" hint={`At the latest ${cycle.formLatest.label} (the month's first day)`}>
-              <Input id="form-deadline" type="datetime-local" value={closes} max={cycle.formLatest.input} onChange={(e) => setCloses(e.target.value)} required />
-            </Field>
-            <Button disabled={pending || !closes}>{cycle.status === "planning" ? "Open volunteer form" : "Reopen form"}</Button>
-          </form>
-        )}
-        {canEdit && cycle.status === "form_open" && (
-          <ActionButton action={closeForm} input={{ cycle_id: cycle.id }} variant="outline" size="default" className="ml-auto" confirm="Close the volunteer form now?">
-            Close form now
-          </ActionButton>
-        )}
-        {canEdit && (cycle.status === "form_closed" || cycle.status === "allocated") && (
-          <Button
-            variant={cycle.status === "form_closed" ? "default" : "outline"}
-            disabled={pending}
-            className={cycle.status === "form_closed" ? "" : "ml-auto"}
-            onClick={() => {
-              if (cycle.status === "allocated" && !window.confirm("Run the allocation again? Manual roster changes are replaced.")) return;
-              run(runAllocation, { cycle_id: cycle.id }, (d) => {
-                const r = d as { assignments: number; events: Record<string, { status: string }>; conflicts: unknown[] };
-                const st = Object.values(r.events).map((e) => e.status);
-                setSummary(
-                  `${r.assignments} assignments · ${st.filter((s) => s === "staffed").length} staffed · ${st.filter((s) => s === "understaffed" || s === "no_oc").length} short · ${st.filter((s) => s === "dropped").length} dropped · ${r.conflicts.length} time conflicts`
-                );
-              });
-            }}
-          >
-            {cycle.status === "form_closed" ? "Run allocation" : "Re-run allocation"}
-          </Button>
-        )}
-        {canEdit && cycle.status === "allocated" && (
-          <ActionButton
-            action={confirmAllocation}
-            input={{ cycle_id: cycle.id }}
-            size="default"
-            variant="success"
-            confirm="Confirm the roster? Events without anybody are dropped, Chat spaces are created and everyone sees the roster."
-          >
-            Confirm roster
-          </ActionButton>
-        )}
-      </div>
-      {summary && <Alert tone="success">Allocation done: {summary}</Alert>}
-      {canEdit && (
-        <form
-          className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(setDescriptionDeadline, { cycle_id: cycle.id, deadline: deadline || null });
-          }}
-        >
-          <Field
-            label="Description deadline (all events of the month)"
-            htmlFor="desc-deadline"
-            hint={cycle.descriptionLatest ? `At the latest ${cycle.descriptionLatest.label} (when the first event starts)` : "Before the month's first event"}
-          >
-            <Input id="desc-deadline" type="datetime-local" value={deadline} max={cycle.descriptionLatest?.input} onChange={(e) => setDeadline(e.target.value)} />
-          </Field>
-          <Button variant="outline" disabled={pending}>
-            Save deadline
-          </Button>
-        </form>
-      )}
-      {error && <Alert tone="error">{error}</Alert>}
-    </div>
-  );
-}
 
 interface RowEvent {
   id: string;
@@ -187,7 +68,7 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
           <Field label="Ends (optional)" htmlFor={`e-${event.id}`}>
             <Input id={`e-${event.id}`} type="datetime-local" value={v.endsAt} onChange={(e) => setV({ ...v, endsAt: e.target.value })} />
           </Field>
-          <Field label="Location" htmlFor={`l-${event.id}`}>
+          <Field label="Location name" htmlFor={`l-${event.id}`} hint="The full address is entered on the event page">
             <Input id={`l-${event.id}`} value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
           </Field>
           <Field label="Helpers needed" htmlFor={`h-${event.id}`}>
@@ -205,20 +86,27 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
     );
   }
 
+  // One grid for every row, so dates, titles and labels line up in columns.
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3" data-testid={`schedule-${event.title}`}>
-      <span className="w-40 shrink-0 text-sm tabular-nums text-gray-600">{event.startsLabel}</span>
-      <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="font-medium text-gray-900 hover:text-esn">
+    <li
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 sm:grid-cols-[10.5rem_minmax(0,1fr)_7.5rem_7.5rem_9rem_auto]"
+      data-testid={`schedule-${event.title}`}
+    >
+      <span className="col-span-2 text-sm tabular-nums text-gray-600 sm:col-span-1">{event.startsLabel}</span>
+      <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="min-w-0 truncate font-medium text-gray-900 hover:text-esn">
         {event.title}
       </a>
-      <Badge>{EVENT_TYPE_LABELS[event.type]}</Badge>
-      <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
-      <span className="text-xs text-gray-500">
-        {plural(event.helpersNeeded, "helper")} · {plural(event.signups, "sign-up")}
-        {event.proposer && ` · idea by ${event.proposer}`}
+      <span className="hidden sm:block">
+        <Badge>{EVENT_TYPE_LABELS[event.type]}</Badge>
       </span>
-      {canEdit && (
-        <span className="ml-auto flex gap-1">
+      <span className="justify-self-end sm:justify-self-start">
+        <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
+      </span>
+      <span className="col-span-2 text-xs text-gray-500 sm:col-span-1" title={event.proposer ? `idea by ${event.proposer}` : undefined}>
+        {plural(event.helpersNeeded, "helper")} · {plural(event.signups, "sign-up")}
+      </span>
+      {canEdit ? (
+        <span className="col-span-2 flex gap-1 sm:col-span-1 sm:justify-self-end">
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
             Edit
           </Button>
@@ -226,6 +114,8 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
             Remove
           </ActionButton>
         </span>
+      ) : (
+        <span className="hidden sm:block" />
       )}
     </li>
   );
@@ -272,7 +162,7 @@ export function AddEventForm({ cycleId, defaultStart }: { cycleId: string; defau
       <Field label="Helpers needed" htmlFor="new-helpers">
         <Input id="new-helpers" type="number" min={0} max={50} value={v.helpers_needed} onChange={(e) => setV({ ...v, helpers_needed: Number(e.target.value) })} />
       </Field>
-      <Field label="Location" htmlFor="new-location">
+      <Field label="Location name" htmlFor="new-location" hint="The full address is entered on the event page">
         <Input id="new-location" value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
       </Field>
       <div className="flex items-end gap-2">

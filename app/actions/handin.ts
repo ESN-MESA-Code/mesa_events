@@ -12,6 +12,14 @@ export async function setPayoutDetails(input: unknown) {
   return run(A.setPayoutDetails, input);
 }
 
+export async function setMyPayoutDetails(input: unknown) {
+  return run(A.setMyPayoutDetails, input);
+}
+
+export async function deleteMyPayoutDetails(input: unknown) {
+  return run(A.deleteMyPayoutDetails, input);
+}
+
 export async function withdrawReceipt(input: unknown) {
   return run(A.withdrawReceipt, input);
 }

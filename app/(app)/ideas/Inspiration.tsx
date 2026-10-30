@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Select } from "@/components/ui";
 import { EVENT_TYPES, EVENT_TYPE_LABELS, type EventType } from "@/lib/labels";
 import { BIG_TURNOUT, SEASONS, ideaFromEvent, searchInspiration, teaser, type IdeaPrefill, type PastEvent } from "@/lib/inspiration";
 import { formatDate, monthLabel } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { IdeaForm } from "./IdeaForm";
+
+/** Events per "page" of the infinite scroll. */
+const PAGE = 12;
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: monthLabel(`2000-${String(i + 1).padStart(2, "0")}-01`).replace(" 2000", "") }));
 
@@ -22,7 +25,25 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
   const [when, setWhen] = useState("");
   const [bigTurnout, setBigTurnout] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const { results, total } = useMemo(() => searchInspiration(pool, { query, type, when, bigTurnout }), [pool, query, type, when, bigTurnout]);
+  // How far the member scrolled, for the current search (a new search or filter starts at the first page).
+  const filterKey = JSON.stringify([query, type, when, bigTurnout]);
+  const [page, setPage] = useState({ key: filterKey, limit: PAGE });
+  const limit = page.key === filterKey ? page.limit : PAGE;
+  const loadMore = () => setPage((p) => ({ key: filterKey, limit: (p.key === filterKey ? p.limit : PAGE) + PAGE }));
+  const { results, total, groups } = useMemo(() => searchInspiration(pool, { query, type, when, bigTurnout }, limit), [pool, query, type, when, bigTurnout, limit]);
+  const more = results.length < groups;
+  const sentinel = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll: the next page loads when the end of the list comes into view.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !more || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => entries.some((x) => x.isIntersecting) && loadMore(), { rootMargin: "400px" });
+    io.observe(el);
+    return () => io.disconnect();
+    // loadMore follows from filterKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [more, results.length, filterKey]);
 
   return (
     <div className="space-y-6">
@@ -77,8 +98,8 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
             </label>
           </div>
           <p className="text-xs text-gray-500" data-testid="inspiration-count">
-            {query ? `${plural(total, "match", "matches")}` : "The most recent events"}
-            {results.length ? ` – ${plural(results.length, "event")} shown, repeats grouped` : ""}
+            {query ? `${plural(total, "match", "matches")}` : "The most recent events first"}
+            {results.length ? ` – ${results.length} of ${plural(groups, "event")} shown, repeats grouped` : ""}
           </p>
           {!results.length ? (
             <EmptyState>Nothing found – try another word or fewer filters.</EmptyState>
@@ -135,6 +156,13 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
                 </li>
               ))}
             </ul>
+          )}
+          {more && (
+            <div ref={sentinel} className="flex justify-center pt-2" data-testid="inspiration-more">
+              <Button type="button" variant="outline" size="sm" onClick={loadMore}>
+                Load more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

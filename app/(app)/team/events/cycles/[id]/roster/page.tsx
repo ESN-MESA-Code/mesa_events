@@ -4,13 +4,12 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { cycleLabel, formatDateTime } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { findConflicts } from "@/lib/allocation";
-import { Alert, Badge, PageHeader } from "@/components/ui";
-import { ActionButton } from "@/components/ActionButton";
-import { confirmAllocation } from "@/app/actions/planning";
+import { Alert, Badge } from "@/components/ui";
+import { AllocationControls } from "../CycleControls";
 import { RosterBoard, type BoardEvent, type BoardPerson } from "./RosterBoard";
 import { plural } from "@/lib/plural";
 
@@ -50,6 +49,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
     return {
       id: e.id,
       title: e.title,
+      startsAt: e.starts_at,
       when: formatDateTime(e.starts_at),
       helpersNeeded: e.helpers_needed,
       status: e.status,
@@ -62,21 +62,24 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
   );
   const editable = hasRole(viewer.roles, "events") && ["allocated", "confirmed"].includes(cycle.status);
 
+  const canEdit = hasRole(viewer.roles, "events");
+
   return (
     <>
-      <PageHeader title={`Roster – ${cycleLabel(cycle.month)}`} description="Drag people between events and roles, or use “Move to…”. Changes save at once.">
-        <div className="flex items-center gap-3 self-center">
-          <Badge tone={cycle.status === "confirmed" ? "green" : "blue"}>{CYCLE_STATUS_LABELS[cycle.status]}</Badge>
-          <Link href={`/team/events/cycles/${id}`} className="text-sm text-esn hover:underline">
-            ← Schedule
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h2 className="mr-auto text-lg font-semibold text-gray-900">Roster</h2>
+        <Badge tone={cycle.status === "confirmed" ? "green" : "blue"}>{CYCLE_STATUS_LABELS[cycle.status]}</Badge>
+        {canEdit && <AllocationControls cycleId={id} status={cycle.status} />}
+      </div>
+      {["planning", "form_open"].includes(cycle.status) && (
+        <Alert tone="info" className="mb-4">
+          The allocation runs once the volunteer form is closed.{" "}
+          <Link href={`/team/events/cycles/${id}/form`} className="underline">
+            Go to the volunteer form
           </Link>
-          {editable && cycle.status === "allocated" && (
-            <ActionButton action={confirmAllocation} input={{ cycle_id: id }} variant="success" size="default" confirm="Confirm the roster?">
-              Confirm roster
-            </ActionButton>
-          )}
-        </div>
-      </PageHeader>
+        </Alert>
+      )}
+      {editable && <p className="mb-4 text-sm text-gray-500">Drag people between events and roles. Changes save at once.</p>}
       {conflicts.length > 0 && (
         <Alert tone="warning" className="mb-4">
           {plural(conflicts.length, "time conflict")}:{" "}
@@ -90,7 +93,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
           The roster is confirmed: changes here update the Chat spaces and are announced to the OC.
         </Alert>
       )}
-      <RosterBoard events={boardEvents} people={[...people.values()].sort((a, b) => a.name.localeCompare(b.name))} editable={editable} />
+      {cycle.status !== "planning" && cycle.status !== "form_open" && cycle.status !== "form_closed" && <RosterBoard events={boardEvents} people={[...people.values()].sort((a, b) => a.name.localeCompare(b.name))} editable={editable} />}
     </>
   );
 }

@@ -35,6 +35,8 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
   if (hasRole(roles, "events") || exec) team.push({ href: "/team/events", label: "Events" });
   if (hasRole(roles, "comms") || exec) team.push({ href: "/team/comms", label: "Comms" });
   if (hasRole(roles, "finance") || exec) team.push({ href: "/team/finance", label: "Finance" });
+  // Uploading to ESN Activities is the executive board's (round 2026-10-30).
+  if (exec) team.push({ href: "/team/esn-activities", label: "ESN Activities" });
   if (hasRole(roles, "admin")) team.push({ href: "/admin", label: "Admin" });
   return { personal, team };
 }

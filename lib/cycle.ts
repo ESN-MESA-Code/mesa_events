@@ -60,6 +60,26 @@ const LABELS: Record<StepId, string> = {
 };
 export const STEP_ORDER: StepId[] = ["ideas", "schedule", "form", "allocation", "roster", "descriptions", "handin", "done"];
 
+/** The page of a cycle where a step is done – the stepper links there. */
+export function stepHref(cycleId: string, step: StepId): string {
+  const base = `/team/events/cycles/${cycleId}`;
+  switch (step) {
+    case "ideas":
+    case "schedule":
+      return base;
+    case "form":
+      return `${base}/form`;
+    case "allocation":
+    case "roster":
+      return `${base}/roster`;
+    case "descriptions":
+      return `${base}/descriptions`;
+    case "handin":
+    case "done":
+      return `${base}/hand-in`;
+  }
+}
+
 export function cycleProgress(f: CycleFacts): CycleProgress {
   let current: StepId;
   let action: string;

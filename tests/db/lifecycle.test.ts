@@ -95,6 +95,10 @@ describe("deadlines before the month's events (A5)", () => {
 
   it("refuses a description deadline after the first event starts", async () => {
     const events = await actionContext(USERS.events);
+    // Only once the roster is confirmed (round 2026-10-30).
+    const early = await D.setDescriptionDeadline(events, { cycle_id: cycleId, deadline: `${M}-08T20:00` });
+    expect(early.ok ? "" : early.message).toBe("Set the description deadline once the roster is confirmed");
+    await admin.from("planning_cycles").update({ status: "confirmed" }).eq("id", cycleId);
     const late = await D.setDescriptionDeadline(events, { cycle_id: cycleId, deadline: `${M}-10T19:30` });
     expect(late).toMatchObject({ ok: false });
     expect(late.ok ? "" : late.message).toBe(`The description deadline must be by 10 January ${Y}, 19:00 at the latest – when the month's first event starts`);
@@ -112,6 +116,8 @@ describe("deadlines before the month's events (A5)", () => {
     const moved = await db.from("events").update({ starts_at: `${M}-03T18:00:00Z` }).eq("id", eventIds[1]);
     expect(moved.error?.message).toMatch(/before the month's description deadline/);
     expect((await db.from("events").update({ starts_at: `${M}-21T18:00:00Z` }).eq("id", eventIds[1])).error).toBeNull();
+    // Back to planning for the form test below.
+    await admin.from("planning_cycles").update({ status: "planning" }).eq("id", cycleId);
   });
 
   it("refuses a volunteer form deadline after the month's first day", async () => {
@@ -119,5 +125,52 @@ describe("deadlines before the month's events (A5)", () => {
     const late = await P.openForm(events, { cycle_id: cycleId, closes_at: `${M}-02T00:00` });
     expect(late.ok ? "" : late.message).toBe(`The volunteer form must close by 1 January ${Y}, 23:59 at the latest – the first day of the month its events take place in`);
     expect((await P.openForm(events, { cycle_id: cycleId, closes_at: `${M}-01T23:59` })).ok).toBe(true);
+  });
+});
+
+describe("the description deadline is binding (round 2026-10-30)", () => {
+  const Y = 2100 + Math.floor(Math.random() * 800);
+  const M = `${Y}-03`;
+  let cycleId: string;
+  let late: string;
+  let onTime: string;
+
+  beforeAll(async () => {
+    const { data, error } = await admin.from("planning_cycles").insert({ month: `${M}-01`, status: "confirmed" }).select("id").single();
+    if (error) throw new Error(error.message);
+    cycleId = data!.id;
+    late = (await createEvent({ title: "No description", cycle_id: cycleId, status: "confirmed", starts_at: `${M}-20T18:00:00Z`, oc: USERS.oc })).id;
+    onTime = (await createEvent({ title: "Description in", cycle_id: cycleId, status: "confirmed", starts_at: `${M}-21T18:00:00Z`, oc: USERS.oc })).id;
+    await admin.from("descriptions").upsert({ event_id: onTime, status: "submitted", submitted_at: new Date().toISOString(), submitted_by: "oc@esnmesa.org" });
+  });
+  afterAll(async () => {
+    await admin.from("events").delete().eq("cycle_id", cycleId);
+    await admin.from("planning_cycles").delete().eq("id", cycleId);
+  });
+
+  it("is set to a time ahead, and locked once it has passed", async () => {
+    const events = await actionContext(USERS.events);
+    const past = await D.setDescriptionDeadline(events, { cycle_id: cycleId, deadline: "2020-01-01T10:00" });
+    expect(past.ok ? "" : past.message).toBe("The description deadline must lie in the future");
+    expect((await D.setDescriptionDeadline(events, { cycle_id: cycleId, deadline: `${M}-10T20:00` })).ok).toBe(true);
+    // It passed (the clock moved on): no more changes, also not removing it.
+    await admin.from("planning_cycles").update({ description_deadline: new Date(Date.now() - 60_000).toISOString() }).eq("id", cycleId);
+    for (const deadline of [`${M}-12T20:00`, null]) {
+      const r = await D.setDescriptionDeadline(events, { cycle_id: cycleId, deadline });
+      expect(r.ok ? "" : r.message).toBe("The description deadline has passed – it can no longer be changed");
+    }
+  });
+
+  it("cancels the events whose description was not submitted by then, and tells their space", async () => {
+    await admin.from("planning_cycles").update({ description_deadline: new Date(Date.now() - 60_000).toISOString() }).eq("id", cycleId);
+    const { data: n } = await admin.rpc("cancel_overdue_descriptions");
+    expect(n).toBeGreaterThanOrEqual(1);
+    const { data: rows } = await admin.from("events").select("id, status, cancel_reason, cancelled_by").in("id", [late, onTime]);
+    expect(rows!.find((r) => r.id === late)).toMatchObject({ status: "cancelled", cancel_reason: "Description not submitted by the deadline", cancelled_by: "description deadline" });
+    expect(rows!.find((r) => r.id === onTime)!.status).not.toBe("cancelled");
+    const { data: jobs } = await admin.from("jobs").select("kind").eq("event_id", late);
+    expect(jobs!.map((j) => j.kind)).toContain("chat.event_status");
+    // Nothing more to do on a second run.
+    expect((await admin.rpc("cancel_overdue_descriptions")).data).toBe(0);
   });
 });

@@ -61,8 +61,8 @@ export interface EsnFormInput {
   address?: EventAddress | null;
   /** The published description (what Comms approved), or null. */
   published: DescriptionFields | null;
-  /** The current classification (type and objectives can change without a new publication). */
-  classification: Pick<DescriptionFields, "esnType" | "esnObjectives"> | null;
+  /** The current ESN details (type, objectives, goal, ratings – they change without a new publication). */
+  classification: Pick<DescriptionFields, "esnType" | "esnObjectives" | "esnGoal" | "esnAccess" | "esnSustain"> | null;
   /** Registration link (pretix), when there is one. */
   link?: string;
   report: EventReport | null;
@@ -109,7 +109,19 @@ export const MISSING = {
   price: "price (still TBA) – fee / funding",
 } as const;
 
-/** The goal: the hook and the first two sentences of the intro (at most 600 characters). */
+/** Ratings "2,2,2,1" → [2, 2, 2, 1] when complete and valid (0–3 each), else null. */
+export function parseRatings(raw: string | null | undefined, n: number): number[] | null {
+  const parts = String(raw ?? "").split(",").map((x) => x.trim());
+  if (parts.length !== n || parts.some((x) => !/^[0-3]$/.test(x))) return null;
+  return parts.map(Number);
+}
+
+/** The labels of the ratings, as the ESN form asks them. */
+export const ACCESS_LABELS = ["Noise level", "Amount of people", "Accessibility of the location", "Terrain"] as const;
+export const SUSTAIN_LABELS = ["Zero waste", "Sustainable travel"] as const;
+export const RATING_LABELS = ["N/A", "Low", "Medium", "High"] as const;
+
+/** The suggested goal: the hook and the first two sentences of the intro (at most 600 characters). */
 export function esnGoal(d: Pick<DescriptionFields, "hook" | "intro">): string {
   const intro = paragraph(d.intro)
     .split(/(?<=[.!?])\s+/)
@@ -154,13 +166,13 @@ export function buildEsnFormData(i: EsnFormInput): EsnFormData {
     link: i.link ?? "",
     types: type ? [type.id] : [],
     objectives: cls ? esnObjectiveIds(cls) : [],
-    goal: d ? esnGoal(d) : "",
+    goal: oneLine(i.classification?.esnGoal ?? "") || (d ? esnGoal(d) : ""),
     description: d ? `<p>${renderDescription(d).html}</p>` : "",
     audience: [...ESN_IDS.audience],
     funding: [fee ? ESN_IDS.fundingFee : ESN_IDS.fundingOrganiser],
     fee,
-    access: ratings ? [...ratings.access] : [2, 2, 2, 1],
-    sustain: ratings ? [...ratings.sustain] : [1, 2],
+    access: parseRatings(i.classification?.esnAccess, 4) ?? (ratings ? [...ratings.access] : [2, 2, 2, 1]),
+    sustain: parseRatings(i.classification?.esnSustain, 2) ?? (ratings ? [...ratings.sustain] : [1, 2]),
     local: r ? r.local_participants : 0,
     intl: r ? r.intl_participants : 0,
     coord: r ? r.organizers : 0,

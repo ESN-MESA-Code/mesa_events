@@ -27,6 +27,7 @@ const complete = {
   closing: "see you there!",
   esnType: "10",
   esnObjectives: "413,426",
+  esnGoal: "Bring internationals and locals together over a quiz night.",
 };
 
 describe("descriptions", () => {

@@ -84,7 +84,8 @@ export function eventStage(i: StageInput): StageView {
   const marks: StageView["marks"] = [];
   if (i.late && current === "write") marks.push("late");
   if (i.missed) marks.push("missed");
-  const needsComms = current === "review" || current === "approved" || (current === "esn" && i.esn === "ready") || (current === "write" && i.late);
+  // ESN Activities is the executive board's (round 2026-10-30), not Comms' work.
+  const needsComms = current === "review" || current === "approved" || (current === "write" && i.late);
   return { steps, current, position, filter, needsComms, marks };
 }
 

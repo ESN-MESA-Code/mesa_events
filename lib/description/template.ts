@@ -20,14 +20,16 @@ export const CONFIG = {
   VENUE_SUGGESTIONS: ["LMU Main Building", "TUM Main Campus", "Marienplatz", "Englischer Garten"],
 } as const;
 
-export const STEP_IDS = ["basics", "intro", "program", "extras"] as const;
+// "esn": what ESN Activities needs beyond the text (round 2026-10-30) – shown below the preview.
+export const STEP_IDS = ["basics", "intro", "program", "extras", "esn"] as const;
 export type StepId = (typeof STEP_IDS)[number];
 
 export const STEP_FIELDS: Record<StepId, Array<keyof DescriptionFields>> = {
   basics: ["title", "dateIso", "time", "venue", "price", "priceNote"],
   intro: ["hook", "intro"],
   program: ["program", "bring"],
-  extras: ["importantHeading", "important", "weather", "closing", "esnType", "esnObjectives"],
+  extras: ["importantHeading", "important", "weather", "closing"],
+  esn: ["esnType", "esnObjectives", "esnGoal", "esnAccess", "esnSustain"],
 };
 
 export interface DescriptionFields {
@@ -49,6 +51,11 @@ export interface DescriptionFields {
   /** ESN Activities classification: saved, not part of the published text. */
   esnType: string;
   esnObjectives: string;
+  /** ESN Activities: the goal of the event (1–3 sentences). */
+  esnGoal: string;
+  /** ESN Activities ratings, 0 = N/A … 3 = high: "noise,people,location,terrain" and "zeroWaste,travel"; empty = the type's defaults. */
+  esnAccess: string;
+  esnSustain: string;
 }
 
 export const TEXT_FIELDS = [
@@ -67,6 +74,9 @@ export const TEXT_FIELDS = [
   "closing",
   "esnType",
   "esnObjectives",
+  "esnGoal",
+  "esnAccess",
+  "esnSustain",
 ] as const;
 
 /** Fields that make up the published text (the ESN classification is not part of it). */
@@ -93,6 +103,9 @@ export function emptyFields(title = ""): DescriptionFields {
     closing: "",
     esnType: "",
     esnObjectives: "",
+    esnGoal: "",
+    esnAccess: "",
+    esnSustain: "",
   };
 }
 
@@ -344,6 +357,10 @@ export function validateEsn(d: DescriptionFields): string[] {
   const errors: string[] = [];
   if (!esnType(d.esnType)) errors.push("Pick the ESN activity type (needed for ESN Activities).");
   if (!esnObjectiveIds(d).length) errors.push("Pick at least one ESN objective.");
+  const goal = oneLine(d.esnGoal);
+  if (!goal) errors.push("Describe the goal of the event (needed for ESN Activities).");
+  else if (goal.length < 20) errors.push("The goal is very short – say in a sentence what the event wants to achieve.");
+  else if (goal.length > 600) errors.push("Keep the goal under 600 characters.");
   return errors;
 }
 
@@ -401,12 +418,14 @@ export function validateStep(d: DescriptionFields, step: StepId, todayIso?: stri
     }
     case "extras": {
       required(d.closing, "Finish the closing sentence “We can’t wait to …”.");
-      errors.push(...validateEsn(d));
       if (oneLine(d.importantHeading) && !bullets(d.important).length) {
         warnings.push("The important-info heading has no bullet points, so that section is left out.");
       }
       break;
     }
+    case "esn":
+      errors.push(...validateEsn(d));
+      break;
   }
   // Hard limit for the whole description, checked on every text step.
   if (step === "intro" || step === "program" || step === "extras") {

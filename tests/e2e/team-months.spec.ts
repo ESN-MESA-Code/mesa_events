@@ -18,6 +18,7 @@ const fields = (title: string) => ({
   closing: "see you",
   esnType: "10",
   esnObjectives: "413,426",
+  esnGoal: "Bring internationals and locals together.",
 });
 
 test("Comms: a month by stage, filters, inline actions, switching months", async ({ page, as, baseURL }) => {
@@ -42,7 +43,9 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   const review = await ev("Review me", "submitted", 10);
   const publish = await ev("Publish me", "approved", 11);
   await admin.from("events").update({ chat_space_requested_at: new Date().toISOString(), chat_space_name: `spaces/FAKEMONTH${tag.toUpperCase()}` }).eq("id", publish.id);
-  const late = await ev("Late one", "draft", 12);
+  // Submitted once, sent back: late, but not cancelled at the deadline (never-submitted ones are, round 2026-10-30).
+  const late = await ev("Late one", "changes_requested", 12);
+  await admin.from("descriptions").update({ submitted_at: hoursFromNow(-30) }).eq("event_id", late.id);
   const waiting = await ev("Waiting one", "published", 13);
   const nextYear = await ev("Next year", "submitted", 5, other);
   // Happened last week, report in: ready for ESN Activities (no cycle: this month).
@@ -91,7 +94,8 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   await page.goto("/team/comms");
   await expect(page).toHaveURL(new RegExp(`month=${month}`));
 
-  // This month: the event that happened is ready for ESN Activities; the link by hand.
+  // This month: the event that happened is ready for ESN Activities; the executive board pastes the link (round 2026-10-30).
+  await as(USERS.executive);
   const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit" }).format(new Date(happened.starts_at));
   await page.goto(`/team/comms?month=${thisMonth}&show=esn`);
   const h = row(happened.id);
@@ -105,6 +109,7 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   await expect(row(happened.id).getByRole("link", { name: "View on ESN Activities" })).toBeVisible();
 
   // Phones: the track is the current stage and "n of 7"; nothing scrolls sideways.
+  await as(USERS.comms);
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto(`/team/comms?month=${month}&show=all`);
   await expect(row(review.id).getByTestId("stage-compact")).toHaveText("In review 2 of 7");
@@ -124,7 +129,7 @@ test("Events: the month's cycle and events; planning a new month from the list",
   await as(USERS.events);
   await page.goto(`/team/events?month=${month}`);
   await expect(page.getByTestId("month-stepper").locator('[aria-current="step"]')).toHaveText(/Descriptions$/);
-  await expect(page.getByTestId("month-next")).toHaveAttribute("href", `/team/events/cycles/${cycle!.id}`);
+  await expect(page.getByTestId("month-next")).toHaveAttribute("href", `/team/events/cycles/${cycle!.id}/descriptions`);
   await expect(page.getByTestId(`month-event-${short.id}`).getByTestId("staffing")).toHaveText("OC ✓ · 0/2 helpers");
   await expect(page.getByTestId(`month-event-${full.id}`).getByTestId("description")).toHaveText("Description: Waiting for Comms review");
   await expect(page.getByTestId("month-events").locator("> li")).toHaveCount(2);

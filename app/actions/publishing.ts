@@ -8,6 +8,10 @@ export async function createPost(input: unknown) {
   return run(A.createPost, input);
 }
 
+export async function planEverywhere(input: unknown) {
+  return run(A.planEverywhere, input);
+}
+
 export async function addToPost(input: unknown) {
   return run(A.addToPost, input);
 }
@@ -26,6 +30,10 @@ export async function movePost(input: unknown) {
 
 export async function editPost(input: unknown) {
   return run(A.editPost, input);
+}
+
+export async function confirmPost(input: unknown) {
+  return run(A.confirmPost, input);
 }
 
 export async function publishPostNow(input: unknown) {

@@ -61,6 +61,25 @@ export const setPayoutDetails = defineAction(z.object({ claim_id: uuid }).and(pa
   dbError(error);
 }, { revalidate: [PAGES.me, PAGES.event, PAGES.finance, PAGES.home] });
 
+/** The member's own IBAN or PayPal, on their profile (round 2026-10-30); copied onto their open claims. */
+export const setMyPayoutDetails = defineAction(payout, async (ctx, i) => {
+  const { data, error } = await ctx.supabase.rpc("set_my_payout_details", {
+    method: i.payout_method,
+    account_holder: i.account_holder,
+    iban: i.payout_method === "bank" ? i.iban : undefined,
+    paypal_email: i.payout_method === "paypal" ? i.paypal_email : undefined,
+  });
+  dbError(error);
+  return { claims: (data as number) ?? 0 };
+}, { revalidate: [PAGES.all, PAGES.me, PAGES.event, PAGES.finance] });
+
+/** Deletes them from the profile and from the claims Finance has not checked yet. */
+export const deleteMyPayoutDetails = defineAction(z.object({}), async (ctx) => {
+  const { data, error } = await ctx.supabase.rpc("delete_my_payout_details");
+  dbError(error);
+  return { claims: (data as number) ?? 0 };
+}, { revalidate: [PAGES.all, PAGES.me, PAGES.event, PAGES.finance] });
+
 export const withdrawReceipt = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   dbError((await ctx.supabase.rpc("withdraw_receipt", { claim: i.claim_id })).error);
 }, { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] });
