@@ -83,6 +83,9 @@ export const PAGES = {
   esn: "/team/esn-activities",
   schedule: "/team/comms/schedule",
   finance: ["/team/finance", "layout"],
+  internal: "/team/internal",
+  internalEvent: ["/internal/[id]", "page"],
+  officeHours: ["/office-hours", "layout"],
   admin: "/admin",
 } as const satisfies Record<string, RevalidateTarget>;
 

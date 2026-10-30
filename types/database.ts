@@ -105,6 +105,52 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"calendar_feeds": {
+                  Row: {
+                    "created_at": string,"last_used_at": string | null,"profile_id": string,"token_hash": string,"token_prefix": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"last_used_at"?: string | null,"profile_id": string,"token_hash": string,"token_prefix": string
+                  }
+                  Update: {
+                    "created_at"?: string,"last_used_at"?: string | null,"profile_id"?: string,"token_hash"?: string,"token_prefix"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "calendar_feeds_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"cash_reports": {
+                  Row: {
+                    "card_price_external_cents": number | null,"card_price_internal_cents": number | null,"checked_at": string | null,"checked_by": string | null,"closed_at": string | null,"closed_by": string | null,"closing_cents": number | null,"closing_counted_at": string | null,"closing_counted_by": string | null,"closing_counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"esncards_external": number,"esncards_internal": number,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"opening_cents": number | null,"opening_counted_at": string | null,"opening_counted_by": string | null,"opening_counts": NonNullable<Json>,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Update: {
+                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cash_reports_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "cash_reports_internal_event_id_fkey"
+      columns: ["internal_event_id"]
+isOneToOne: true
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"description_versions": {
                   Row: {
                     "created_at": string,"created_by": string | null,"event_id": string,"fields": NonNullable<Json>,"id": number,"kind": string,"text": string | null,"version": number
@@ -443,6 +489,112 @@ isOneToOne: false
                   }
                   Update: {
                     "chat_id"?: string,"created_at"?: string,"deleted"?: boolean,"edits"?: number,"id"?: never,"kind"?: string,"message_id"?: number,"photo"?: string | null,"text"?: string,"thread_id"?: number | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"finance_categories": {
+                  Row: {
+                    "active": boolean,"created_at": string,"direction": string,"id": string,"name": string,"sort": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"created_at"?: string,"direction": string,"id"?: string,"name": string,"sort"?: number
+                  }
+                  Update: {
+                    "active"?: boolean,"created_at"?: string,"direction"?: string,"id"?: string,"name"?: string,"sort"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"finance_entries": {
+                  Row: {
+                    "amount_cents": number,"beleg_received": boolean,"beleg_ref": string,"booked_on": string,"cash_report_id": string | null,"category_id": string,"counterparty": string,"created_at": string,"created_by": string | null,"description": string,"direction": string,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"payment_method": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents": number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on": string,"cash_report_id"?: string | null,"category_id": string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description": string,"direction": string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "amount_cents"?: number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on"?: string,"cash_report_id"?: string | null,"category_id"?: string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description"?: string,"direction"?: string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "finance_entries_cash_report_id_fkey"
+      columns: ["cash_report_id"]
+isOneToOne: true
+      referencedRelation: "cash_reports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "finance_entries_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "finance_categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "finance_entries_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "finance_entries_internal_event_id_fkey"
+      columns: ["internal_event_id"]
+isOneToOne: false
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"internal_event_people": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"internal_event_id": string,"profile_id": string,"role": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"internal_event_id": string,"profile_id": string,"role": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"internal_event_id"?: string,"profile_id"?: string,"role"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "internal_event_people_internal_event_id_fkey"
+      columns: ["internal_event_id"]
+isOneToOne: false
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "internal_event_people_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"internal_events": {
+                  Row: {
+                    "capacity": number | null,"created_at": string,"created_by": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"kind": Database["public"]['Enums']["internal_kind"],"location": string,"note": string,"presentation_url": string | null,"series_id": string | null,"starts_at": string,"status": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind": Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind"?: Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"internal_kind_settings": {
+                  Row: {
+                    "default_minutes": number,"default_start": string,"default_title": string,"description": string,"helpers_needed": number,"kind": Database["public"]['Enums']["internal_kind"],"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "default_minutes": number,"default_start": string,"default_title": string,"description"?: string,"helpers_needed"?: number,"kind": Database["public"]['Enums']["internal_kind"],"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "default_minutes"?: number,"default_start"?: string,"default_title"?: string,"description"?: string,"helpers_needed"?: number,"kind"?: Database["public"]['Enums']["internal_kind"],"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     
@@ -909,11 +1061,25 @@ isOneToOne: false
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"book_cash_report":
+{ Args: { "category": string,"report": string }; Returns: string
+                           },
+"bump_esncards":
+{ Args: { "card": string,"delta": number,"report": string }; Returns: Json
+                           },
+"calendar_feed_items":
+{ Args: { "token": string }; Returns: {
+              "cancelled": boolean,"description": string,"ends_at": string,"kind": string,"location": string,"path": string,"starts_at": string,"title": string,"uid": string,"updated_at": string
+            }[]
+                           },
 "can_edit_description":
 { Args: { "event": string }; Returns: boolean
                            },
 "can_read_event":
 { Args: { "event": string }; Returns: boolean
+                           },
+"can_read_internal_event":
+{ Args: { "internal_event": string }; Returns: boolean
                            },
 "cancel_event":
 { Args: { "event": string,"reason"?: string }; Returns: undefined
@@ -925,6 +1091,9 @@ isOneToOne: false
 { Args: { "event": string }; Returns: {
               "email": string,"full_name": string,"kind": string
             }[]
+                           },
+"check_cash_report":
+{ Args: { "report": string }; Returns: undefined
                            },
 "check_reimbursement":
 { Args: { "approved": number,"claim": string,"note"?: string }; Returns: undefined
@@ -960,6 +1129,9 @@ isOneToOne: false
 "clear_volunteer_response":
 { Args: { "cycle": string,"profile": string,"reason": string }; Returns: undefined
                            },
+"close_cash_report":
+{ Args: { "report": string }; Returns: undefined
+                           },
 "close_volunteer_form":
 { Args: { "cycle": string }; Returns: undefined
                            },
@@ -977,6 +1149,9 @@ isOneToOne: false
                            },
 "confirm_post":
 { Args: { "post": string }; Returns: undefined
+                           },
+"create_calendar_feed":
+{ Args: Record<PropertyKey, never>; Returns: string
                            },
 "create_esn_token":
 { Args: { "label": string,"valid_days"?: number }; Returns: string
@@ -1039,6 +1214,9 @@ isOneToOne: false
 "enqueue_job":
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
                            },
+"ensure_cash_report":
+{ Args: { "event"?: string,"internal_event"?: string }; Returns: string
+                           },
 "esn_api_link":
 { Args: { "event": string,"hash": string,"url": string }; Returns: undefined
                            },
@@ -1097,6 +1275,15 @@ isOneToOne: false
 "is_executive":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"is_internal_oc":
+{ Args: { "internal_event": string }; Returns: boolean
+                           },
+"is_internal_planner":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"is_internal_staff":
+{ Args: { "internal_event": string }; Returns: boolean
+                           },
 "is_list_organiser":
 { Args: { "event": string }; Returns: boolean
                            },
@@ -1108,6 +1295,11 @@ isOneToOne: false
                            },
 "is_workspace_member":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"leaderboard":
+{ Args: { "semester": string }; Returns: {
+              "full_name": string,"helper_count": number,"newbie": boolean,"oc_count": number,"profile_id": string
+            }[]
                            },
 "mark_beleg_received":
 { Args: { "claim": string }; Returns: undefined
@@ -1188,6 +1380,9 @@ isOneToOne: false
 "remove_from_post":
 { Args: { "event": string,"post": string }; Returns: undefined
                            },
+"reopen_cash_report":
+{ Args: { "report": string }; Returns: undefined
+                           },
 "reopen_event":
 { Args: { "event": string }; Returns: string
                            },
@@ -1212,6 +1407,9 @@ isOneToOne: false
 "review_description":
 { Args: { "comment": string,"decision": string,"event": string,"rendered"?: string }; Returns: undefined
                            },
+"revoke_calendar_feed":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "revoke_esn_token":
 { Args: { "token": string }; Returns: undefined
                            },
@@ -1220,6 +1418,9 @@ isOneToOne: false
                            },
 "save_allocation":
 { Args: { "cycle": string,"rows": Json }; Returns: number
+                           },
+"save_cash_count":
+{ Args: { "counts": Json,"phase": string,"report": string }; Returns: number
                            },
 "save_description":
 { Args: { "event": string,"patch": Json }; Returns: {
@@ -1232,8 +1433,17 @@ isOneToOne: false
 "schedule_photo_jobs":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"sees_board_meetings":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"set_cash_note":
+{ Args: { "note": string,"report": string }; Returns: undefined
+                           },
 "set_channel_enabled":
 { Args: { "channel": string,"enabled": boolean }; Returns: undefined
+                           },
+"set_esncard_prices":
+{ Args: { "external_cents": number,"internal_cents": number }; Returns: undefined
                            },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
@@ -1249,6 +1459,9 @@ isOneToOne: false
                            },
 "sign_in":
 { Args: { "esn_card"?: boolean,"event": string,"exchange_program"?: string,"first_name": string,"kiosk"?: boolean,"last_name": string,"nationality"?: string,"notice_version": string,"terms_version": string,"university"?: string }; Returns: undefined
+                           },
+"sign_up_internal":
+{ Args: { "internal_event": string }; Returns: string
                            },
 "signins_close_at":
 { Args: { "event_date": string }; Returns: string
@@ -1295,6 +1508,9 @@ isOneToOne: false
 "unmark_esn_uploaded":
 { Args: { "event": string }; Returns: undefined
                            },
+"withdraw_internal":
+{ Args: { "internal_event": string }; Returns: undefined
+                           },
 "withdraw_receipt":
 { Args: { "claim": string }; Returns: undefined
                            },
@@ -1303,7 +1519,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "app_role": "events"|"comms"|"finance"|"treasurer"|"executive"|"admin","cycle_status": "planning"|"form_open"|"form_closed"|"allocated"|"confirmed","event_status": "draft"|"scheduled"|"understaffed"|"confirmed"|"cancelled"|"dropped"|"completed","event_type": "standard"|"special"|"day_trip"|"weekend_trip"
+            "app_role": "events"|"comms"|"finance"|"treasurer"|"executive"|"admin"|"hr"|"vice_president"|"newbie","cycle_status": "planning"|"form_open"|"form_closed"|"allocated"|"confirmed","event_status": "draft"|"scheduled"|"understaffed"|"confirmed"|"cancelled"|"dropped"|"completed","event_type": "standard"|"special"|"day_trip"|"weekend_trip","internal_kind": "internal"|"stammtisch"|"tuesday_talk"|"board_meeting"|"office_hour"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1419,7 +1635,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "app_role": ["events", "comms", "finance", "treasurer", "executive", "admin"],"cycle_status": ["planning", "form_open", "form_closed", "allocated", "confirmed"],"event_status": ["draft", "scheduled", "understaffed", "confirmed", "cancelled", "dropped", "completed"],"event_type": ["standard", "special", "day_trip", "weekend_trip"]
+            "app_role": ["events", "comms", "finance", "treasurer", "executive", "admin", "hr", "vice_president", "newbie"],"cycle_status": ["planning", "form_open", "form_closed", "allocated", "confirmed"],"event_status": ["draft", "scheduled", "understaffed", "confirmed", "cancelled", "dropped", "completed"],"event_type": ["standard", "special", "day_trip", "weekend_trip"],"internal_kind": ["internal", "stammtisch", "tuesday_talk", "board_meeting", "office_hour"]
           }
         }
 } as const

@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { LOCAL_ENV } from "./local-supabase.mjs";
 import { importArchive } from "./bot-archive.mjs";
+import { seedInternal, wipeInternal } from "./seed-demo-internal.mjs";
 
 const db = createClient(LOCAL_ENV.NEXT_PUBLIC_SUPABASE_URL, LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const DEMO = "demo@esnmesa.org";
@@ -59,11 +60,13 @@ async function wipe() {
     const folders = check(await db.from("event_photo_folders").select("folder_id").in("event_id", ids).not("folder_id", "is", null), "photo folders");
     if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id)), "delete drive folders");
     // Finance records keep events from being deleted: remove those first.
+    await wipeInternal(db, ids);
     const claims = check(await db.from("reimbursements").select("id, receipt_id").in("event_id", ids), "claims");
     if (claims.length) check(await db.from("reimbursements").delete().in("id", claims.map((c) => c.id)), "delete claims");
     check(await db.from("receipts").delete().in("event_id", ids), "delete receipts");
     check(await db.from("events").delete().in("id", ids), "delete events");
   }
+  if (!ids.length) await wipeInternal(db, []);
   check(await db.from("event_ideas").delete().like("title", "[demo]%"), "delete ideas");
   if (cycles.length) check(await db.from("planning_cycles").delete().in("id", cycles), "delete cycles");
   return ids.length;
@@ -163,6 +166,9 @@ async function main() {
   const games = await ev({ title: "Board Game Night", type: "standard", status: "completed", starts_at: at(-20, 19), helpers_needed: 1, price_cents: 0 }, [[U.volunteer1, "oc"], [U.member, "helper"]]);
   check(await db.from("attendance_lists").update({ signed_off_at: at(-19, 10), signed_off_by: "volunteer1@esnmesa.org", headcount: 31 }).eq("event_id", games), "games sign-off");
   await photoFolder(games, at(-20, 19), "Board Game Night", 22, at(-18, 10));
+
+  // Internal events, office hours, cash boxes and the ledger (round 2026-10-30).
+  const internal = await seedInternal(db, U, { crawl, alps, games });
   await place(games, "Café Gans am Wasser", "Siegfriedstraße 24", "80803");
   const gamesFields = { title: "Board Game Night", dateIso: at(-20, 19).slice(0, 10), time: "19:00", venue: "Café Gans am Wasser, Siegfriedstraße 24, 80803 München", price: "free", hook: "an evening of board games", intro: "Bring your favourite game or learn a new one. Snacks are on us!", program: "Games for everyone\nSnacks", bring: "A game if you like", closing: "play with you", esnType: "10", esnObjectives: "413,426", esnGoal: "A low-threshold evening where internationals and locals meet over board games." };
   check(await db.from("descriptions").upsert({ event_id: games, status: "published", published_at: at(-24, 12), published_by: "comms@esnmesa.org", fields: gamesFields, approved_fields: gamesFields }), "games description");
@@ -326,6 +332,9 @@ async function main() {
   console.log(`  Crawl:  http://localhost:3000/events/${crawl}/hand-in (receipts; Finance: /team/finance)`);
   console.log(`  Café:   http://localhost:3000/events/${cafe}/attendance (list open)  form: http://localhost:3000/event/${cafeToken}`);
   console.log(`  Comms:  http://localhost:3000/team/comms and /team/comms/schedule (reviews, publishing, three channels)`);
+  console.log(`  Office: http://localhost:3000/office-hours/${internal.officeNow} (running now, cash box; oc@ / helper@)`);
+  console.log(`  HR:     http://localhost:3000/team/internal (hr@ / vp@: the semester ${internal.semester.from} – ${internal.semester.to})`);
+  console.log(`  Money:  http://localhost:3000/team/finance/ledger and /team/finance/cash`);
 }
 
 main().catch((err) => {

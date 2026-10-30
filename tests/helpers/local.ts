@@ -36,6 +36,8 @@ export const USERS = {
   volunteer2: { id: "a0000000-0000-4000-8000-00000000000b", email: "volunteer2@esnmesa.org", name: "Victor Volunteer" },
   newcomer: { id: "a0000000-0000-4000-8000-00000000000c", email: "newcomer@esnmesa.org", name: "Nora Newcomer" },
   signout: { id: "a0000000-0000-4000-8000-00000000000d", email: "signout@esnmesa.org", name: "Sam Signout" },
+  hr: { id: "a0000000-0000-4000-8000-00000000000e", email: "hr@esnmesa.org", name: "Hana HR" },
+  vp: { id: "a0000000-0000-4000-8000-00000000000f", email: "vp@esnmesa.org", name: "Valentin Vice" },
 } as const;
 
 export type SeedUser = (typeof USERS)[keyof typeof USERS];

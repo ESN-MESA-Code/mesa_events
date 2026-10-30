@@ -13,6 +13,7 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, Pag
 import { ClaimStatusBadge, EventStatusBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
+import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -24,8 +25,8 @@ const STEP_TONE: Record<NextStep["kind"], string> = {
 };
 
 // "What's next for me": the open volunteer form, my events with their next
-// step, open slots, my claims that need something, and one card per team
-// queue for team members.
+// step, open slots, the internal calendar, my claims that need something,
+// the semester's leaderboard, and one card per team queue for team members.
 export default async function HomePage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
@@ -167,6 +168,8 @@ export default async function HomePage() {
               </CardContent>
             </Card>
 
+            <InternalCalendarCard viewerId={viewer.id} now={now} />
+
             {needs.length > 0 && (
               <Card>
                 <CardHeader>
@@ -205,6 +208,8 @@ export default async function HomePage() {
             )}
           </div>
         </div>
+
+        <LeaderboardCard viewerId={viewer.id} now={now} />
 
         {(isEvents || isComms || isFinance || isExec) && (
           <section aria-label="Team queues" className="space-y-3">

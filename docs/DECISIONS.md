@@ -709,3 +709,73 @@ review).
 - **Shown where reimbursements are**: "My reimbursements" names the account (masked) or warns that
   none is saved; the receipt form says where it will be paid; the avatar has a dot and the menu
   says "missing" while nothing is saved. Not written to the activity log (the Events team reads it).
+
+## 2026-10-30 – Internal events, office hours, cash boxes, finance ledger, leaderboard, iCal
+
+- **Three new roles from Google groups:** `hr` (`GROUP_HR`), `vice_president`
+  (`GROUP_VICE_PRESIDENT`) and `newbie` (`GROUP_NEWBIES`), synced like every role. None of them is
+  "team" (`is_team()` and `isTeam()` leave them out): HR and the VP see what members see plus what
+  they plan; newbies are members. Planning internal events is `is_internal_planner()` = HR or VP;
+  executives read the planner.
+- **Internal events are their own table, not `events`.** Internal events, Stammtisch, Tuesday
+  Talks, executive board meetings and office hours are not ESN activities: no cycle, volunteer
+  form, description, Chat space, attendance, publishing or ESN Activities. Putting them in
+  `events` would have leaked into every one of those queries. `internal_events.kind` decides what
+  a date has (`lib/internal.ts`): sign-ups (internal), OC + helpers (Stammtisch, office hour), a
+  presentation link (Tuesday Talk, board meeting), a cash box (Stammtisch, office hour). The kind
+  never changes after creation (trigger).
+- **Executive board meetings are visible to executives and the planners only**, in RLS
+  (`can_read_internal_event()`), so also their people, the calendar, Home and the iCal feed.
+- **Defaults per kind** (`internal_kind_settings`: title, time, length, helpers, text) are edited
+  by the planners; the office hour text is the kind's text, so every office hour shows the same
+  description.
+- **Planning a whole semester** (user request): the planner opens on the semester (WiSe
+  October–March, SoSe April–September, as the photo folders), six month calendars with drag and
+  drop (a kind from the palette onto a day at its default time; a date to another day keeping its
+  times), the OC/helper roster of all coming Stammtisch and office hours of the semester (members
+  dragged onto slots, a duty count per member), and "Repeat" over the semester: weekday, every week
+  or the 1st–4th / last of each month, a preview of the dates with already planned ones unticked
+  and holidays to untick. Repeated dates share a `series_id`; "Delete this and later" removes the
+  rest of a series. A month view stays for detail work.
+- **Sign-ups:** members sign themselves up to internal events through `sign_up_internal()`
+  (upcoming, scheduled, within the capacity, row-locked) and withdraw before the start; OC and
+  helpers are assigned by the planners only (the brief: "HR and VP manage scheduling and
+  assignment").
+- **One cash box model for office hours and events** (`cash_reports`, one per office hour /
+  Stammtisch or per ESN event that uses the box): counts per euro note and coin before and after
+  (validated in the database, totals computed there), ESNcards sold (internal = members,
+  external) counted atomically from several phones (`bump_esncards()`), a note on what was sold,
+  and the OC's sign-off (`close_cash_report()`, needs both counts) that freezes it. Finance marks
+  it checked, reopens it, or books its takings (after − before) into the ledger once
+  (`book_cash_report()`; a booked box cannot be reopened until the entry is removed). The staff of
+  the event/office hour count it; Events (event boxes), the planners (office hour boxes), Finance
+  and executives read it; nobody writes the table directly.
+- **ESNcard prices** are Finance's setting (`set_esncard_prices()`, stored in `app_settings`) and
+  copied onto a box when it starts, so the "expected cash" and the difference stay right when the
+  price changes later. The expectation assumes every card was paid in cash.
+- **The ledger** (`finance_entries`, `finance_categories`): Finance books other income and spending
+  with categories (seeded: event revenue, ESNcard sales, cash box takings, membership fees,
+  sponsoring; event costs, merchandise, ESNcards, office, travel, bank fees, other), optionally per
+  event, with how it was paid (MESA bank account by default), the Beleg reference and whether the
+  paper Beleg is filed. Categories are never deleted, only hidden. Finance edits and deletes
+  entries (stamped `updated_by`); there is no activity-log trigger on purpose – the log is
+  readable by the event's staff, and ledger amounts are Finance's.
+- **Finance overview per semester** (`lib/finance.ts`): balance = income − spending −
+  reimbursements paid − reimbursements checked (due). Claims not yet checked and cash boxes not
+  booked are shown next to the balance, not in it (they would count twice once booked or
+  checked). Per event: ledger income and spending, claims, the balance and unbooked cash.
+- **Leaderboard on Home:** OC and helper slots of ESN events that took place this semester
+  (confirmed or completed, or under-staffed and run; not cancelled, not ahead), top 3 places with
+  ties, once for active members and once for newbies (user: newbies are the newbies group, not a
+  date). Computed by `leaderboard()` (definer, members only) because rosters of other events are
+  not always readable by every member.
+- **Calendar subscription (iCal):** one personal feed per member at
+  `/api/calendar/<token>.ics` (public path; the token is the authentication, like the ESN
+  Activities tokens): shown once, stored as SHA-256, replaced or turned off by its owner, refused
+  when the owner lost access (left the Workspace or the rules changed). It holds what the owner
+  may see – scheduled ESN events (cancelled ones as `STATUS:CANCELLED`) and internal events, board
+  meetings only for the executive board – from half a year back, with their role ("You are the
+  OC."). Google Calendar, Apple Calendar/Outlook (webcal://) and a download link are offered. A
+  public feed for non-members was not built: P1 events are internal.
+- **The planner, office hours and finance pages are server-rendered with small client islands**,
+  as the other pages; the drag and drop reuses dnd-kit with the pointer and keyboard sensors.

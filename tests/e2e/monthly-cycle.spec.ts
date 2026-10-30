@@ -107,6 +107,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   const quizId = await eventId(quiz);
   await test.step("Chat spaces are created by the jobs", async () => {
+    // "Roster confirmed" is also a step of the cycle's stepper: wait for the confirmation itself.
+    await expect.poll(async () => (await admin.from("events").select("chat_space_requested_at").eq("id", quizId).single()).data?.chat_space_requested_at ?? null).not.toBeNull();
     await runJobs(baseURL!);
     const { data: ev } = await admin.from("events").select("chat_space_name").eq("id", quizId).single();
     const { data: members } = await admin.from("fake_chat_members").select("email").eq("space", ev!.chat_space_name!);

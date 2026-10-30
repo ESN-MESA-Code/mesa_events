@@ -5,7 +5,7 @@ const labels = (items: { label: string }[]) => items.map((i) => i.label);
 
 describe("navigation", () => {
   it("members: personal pages only, Volunteer only while a form is open", () => {
-    expect(labels(navItems([]).personal)).toEqual(["Home", "Calendar", "My events", "Ideas"]);
+    expect(labels(navItems([]).personal)).toEqual(["Home", "Calendar", "My events", "Ideas", "Office hours"]);
     expect(navItems([]).team).toEqual([]);
     const open = navItems([], { open: true, submitted: false }).personal.at(-1);
     expect(open).toEqual({ href: "/volunteer", label: "Volunteer", badge: "1" });
@@ -15,7 +15,9 @@ describe("navigation", () => {
   it("team pages are their own group; executives see all of them (incl. Finance), not Admin", () => {
     expect(labels(navItems(["events"]).team)).toEqual(["Events"]);
     expect(labels(navItems(["treasurer"]).team)).toEqual(["Finance"]);
-    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance", "ESN Activities"]);
+    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance", "Internal", "ESN Activities"]);
+    expect(labels(navItems(["hr"]).team)).toEqual(["Internal"]);
+    expect(labels(navItems(["vice_president"]).team)).toEqual(["Internal"]);
     expect(labels(navItems(["admin"]).team)).toEqual(["Admin"]);
     expect(labels(navItems(["executive"]).personal)).not.toContain("Finance");
   });

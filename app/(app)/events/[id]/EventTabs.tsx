@@ -19,7 +19,7 @@ export function EventBreadcrumb({ fallback }: { fallback: string }) {
   );
 }
 
-export function EventTabs({ id, notes }: { id: string; notes: Partial<Record<string, string>> }) {
+export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Record<string, string>>; cash: boolean }) {
   const pathname = usePathname();
   const from = useSearchParams().get("from");
   const tabs = [
@@ -27,6 +27,8 @@ export function EventTabs({ id, notes }: { id: string; notes: Partial<Record<str
     { href: `/events/${id}/description`, label: "Description" },
     { href: `/events/${id}/attendance`, label: "Attendance" },
     { href: `/events/${id}/hand-in`, label: "Hand-in" },
+    // The cash box (round 2026-10-30): staff, Events, Finance and executives.
+    ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash box" }] : []),
   ];
   return (
     <nav aria-label="Event" className="border-b border-gray-200">

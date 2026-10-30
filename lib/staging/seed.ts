@@ -1232,6 +1232,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     const oldPosts = check(await db.from("publication_post_events").select("post_id").in("event_id", chunk), "old posts").map((p) => p.post_id);
     for (const id of new Set(oldPosts)) check(await db.from("jobs").delete().like("idempotency_key", `telegram.publish_post:${id}:%`), "old post jobs");
     if (oldPosts.length) check(await db.from("publication_posts").delete().in("id", [...new Set(oldPosts)]), "old posts");
+    check(await db.from("finance_entries").delete().in("event_id", chunk), "old ledger entries");
+    check(await db.from("cash_reports").delete().in("event_id", chunk), "old cash boxes");
     check(await db.from("reimbursements").delete().in("event_id", chunk), "old claims");
     check(await db.from("receipts").delete().in("event_id", chunk), "old receipts");
     check(await db.from("jobs").delete().in("event_id", chunk), "old jobs");
@@ -1239,6 +1241,15 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     check(await db.from("event_ideas").delete().in("event_id", chunk), "old linked ideas");
     check(await db.from("events").delete().in("id", chunk), "old events");
   }
+  // Internal events, cash boxes and ledger entries of the local demo seed (round 2026-10-30).
+  const internal = check(await db.from("internal_events").select("id").in("created_by", tags), "old internal events").map((e) => e.id);
+  for (let i = 0; i < internal.length; i += 100) {
+    const chunk = internal.slice(i, i + 100);
+    check(await db.from("finance_entries").delete().in("internal_event_id", chunk), "old internal ledger entries");
+    check(await db.from("cash_reports").delete().in("internal_event_id", chunk), "old internal cash boxes");
+    check(await db.from("internal_events").delete().in("id", chunk), "old internal events");
+  }
+  check(await db.from("finance_entries").delete().in("created_by", tags), "old ledger entries");
   // The seed's messages in the fake Telegram channel.
   check(await db.from("fake_telegram_messages").delete().eq("chat_id", TELEGRAM_CHAT).gte("message_id", TELEGRAM_IDS[0]).lte("message_id", TELEGRAM_IDS[1]), "old Telegram messages");
   // Event folders of an earlier run that stopped half-way.

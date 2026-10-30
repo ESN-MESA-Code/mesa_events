@@ -61,7 +61,18 @@ export async function removeTestData(db) {
     if (folders.length) check(await db.from("fake_drive_folders").delete().in("id", folders.map((f) => f.folder_id)), "drive folders");
   }
 
+  // Internal events, meetings and office hours the tests tagged (round 2026-10-30), with their cash boxes and ledger entries.
+  const internalIds = check(await db.from("internal_events").select("id").eq("created_by", TEST_TAG), "tagged internal events").map((e) => e.id);
+  for (const part of chunks(internalIds)) {
+    check(await db.from("finance_entries").delete().in("internal_event_id", part), "internal ledger entries");
+    check(await db.from("cash_reports").delete().in("internal_event_id", part), "internal cash boxes");
+    check(await db.from("internal_events").delete().in("id", part), "internal events");
+  }
+  check(await db.from("finance_entries").delete().eq("created_by", TEST_TAG), "tagged ledger entries");
+
   for (const part of chunks(eventIds)) {
+    check(await db.from("finance_entries").delete().in("event_id", part), "event ledger entries");
+    check(await db.from("cash_reports").delete().in("event_id", part), "event cash boxes");
     check(await db.from("reimbursements").delete().in("event_id", part), "claims");
     check(await db.from("receipts").delete().in("event_id", part), "receipts");
     check(await db.from("jobs").delete().in("event_id", part), "jobs");

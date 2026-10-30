@@ -1,5 +1,43 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-10-30 (2): Internal events, office hours, cash boxes, finance ledger, leaderboard, iCal
+
+Status: **implemented and tested locally; committed on the local branch
+`feature/internal-events-finance`, not merged, nothing pushed.** Decisions: `docs/DECISIONS.md`
+("2026-10-30 – Internal events …"). New migrations `20261030001000`–`20261030001400`; new seed
+members `hr@` and `vp@` (`supabase/seed.sql`).
+
+| Item | What changed | Tests |
+|---|---|---|
+| Roles | `hr`, `vice_president`, `newbie` from Google groups (`GROUP_HR`, `GROUP_VICE_PRESIDENT`, `GROUP_NEWBIES`); not "team" | Unit: navigation; RLS matrix with HR and VP as roles |
+| iCal | Personal feed link on /calendar (shown once, hashed, replace / turn off), `/api/calendar/<token>.ics`, Google / webcal / download | Unit: escaping, folding, UTC, cancelled; DB: visibility, revoke, lost access; E2E: link → feed |
+| Internal events | `internal_events` (internal, Stammtisch, Tuesday Talk, board meeting, office hour), people, defaults per kind; pages `/internal/[id]`, sign-up; board meetings only for the executive board | DB: planners only, kinds, sign-ups, capacity; RLS matrix; E2E: sign-up |
+| Planner | `/team/internal`: semester view (six months) or month, drag a kind onto a day, move dates, roster of the semester's Stammtisch and office hours (members onto slots), Repeat over the semester (every / 1st–4th / last weekday, holidays to untick), defaults per kind | Unit: semesters, repeat dates; E2E: drag and drop, roster, repeat |
+| Office hours | `/office-hours` and `/office-hours/[id]`: the same text, who is on duty, the cash box with ESNcards internal / external, the OC's sign-off | DB: staff only, counts validated, atomic counter, sign-off rules; E2E: count, sell, sign off |
+| Event cash box | "Cash box" tab on events (staff, Events, Finance, executives): same counting and sign-off | DB: event box, no ESNcards there |
+| Finance | Tabs; `/team/finance/ledger`: per-semester balance, per event, by category, booking income/spending with Beleg, categories; `/team/finance/cash`: every box, ESNcard totals, prices, check/book | Unit: totals, per event; DB: ledger RLS, booking once, reopen rules |
+| Home | Internal calendar card; leaderboard (OC / helped this semester, active members and newbies) | Unit: ranking; DB: what counts, newbies by group |
+| Demo | `seed:demo` plans the semester (office hours, Stammtisch, talks, board meetings, bowling), an office hour running now, signed-off boxes, ledger entries, a newbie | `seed:demo` twice |
+
+### Checks (this round)
+
+| Check | Result |
+|---|---|
+| `npm test` (unit) | **478 passed** |
+| `npm run test:db` | **2,977 passed** (18 files; RLS matrix now 13 roles) |
+| `npm run build:local` + `npm run test:e2e` | **62 passed**, 1 skipped (as before), incl. `internal.spec.ts` |
+| `npm run test:bundle` | **20 passed** |
+| `npm run lint`, `npm run typecheck`, `npm run gen:actions -- --check` | clean |
+
+Fixed on the way: `monthly-cycle.spec.ts` checked "Roster confirmed", which is also a step label of
+the cycle's stepper, and could run the jobs before the confirmation – it now waits for the
+confirmation in the database (it failed when the server was warm).
+
+Not done / limits: the migrations were applied incrementally to the local database, not from a
+fresh `npm run supabase:reset`; the staging demo (`seed:staging`) has no internal events and no
+HR/VP personas yet; the ESNcard "expected cash" assumes every card was paid in cash; there is no
+public (non-member) calendar feed.
+
 ## Round 2026-10-30: User requests (deadlines, navigation, schedule, Comms, addresses, payouts)
 
 Status: **implemented and tested locally; committed on local `main`, nothing pushed.** Decisions: `docs/DECISIONS.md`

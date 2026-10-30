@@ -4,11 +4,13 @@
 // draft event D. Built once per test file with the service role.
 import { USERS, admin, as, anonClient, createCycle, createEvent, daysFromNow, type Db, type SeedUser } from "../helpers/local";
 
-export const ROLES = ["anon", "newcomer", "member", "oc", "helper", "events", "comms", "finance", "treasurer", "executive", "admin"] as const;
+export const ROLES = ["anon", "newcomer", "member", "oc", "helper", "events", "comms", "finance", "treasurer", "executive", "admin", "hr", "vp"] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Members who accepted the rules (everyone but anon and the newcomer). */
-export const MEMBERS: Role[] = ["member", "oc", "helper", "events", "comms", "finance", "treasurer", "executive", "admin"];
+export const MEMBERS: Role[] = ["member", "oc", "helper", "events", "comms", "finance", "treasurer", "executive", "admin", "hr", "vp"];
+/** HR and the Vice President plan internal events (public.is_internal_planner()). */
+export const PLANNERS: Role[] = ["hr", "vp"];
 /** public.is_team(): Events, Comms, Finance (incl. Treasurer) and executives. */
 export const TEAM: Role[] = ["events", "comms", "finance", "treasurer", "executive"];
 export const NOBODY: Role[] = [];
@@ -24,6 +26,8 @@ export const ROLE_USER: Record<Exclude<Role, "anon">, SeedUser> = {
   treasurer: USERS.treasurer,
   executive: USERS.executive,
   admin: USERS.admin,
+  hr: USERS.hr,
+  vp: USERS.vp,
 };
 
 export async function clientFor(role: Role): Promise<Db> {

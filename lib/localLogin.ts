@@ -25,6 +25,8 @@ export const LOCAL_USERS: LocalUser[] = [
   { email: "finance@esnmesa.org", label: "Finance team" },
   { email: "treasurer@esnmesa.org", label: "Treasurer" },
   { email: "executive@esnmesa.org", label: "Executive" },
+  { email: "hr@esnmesa.org", label: "HR (internal events)" },
+  { email: "vp@esnmesa.org", label: "Vice President (internal events)" },
   { email: "admin@esnmesa.org", label: "Admin (IT)" },
   { email: "newcomer@esnmesa.org", label: "Newcomer (rules not accepted)" },
 ];

@@ -34,7 +34,9 @@ from (values
   ('a0000000-0000-4000-8000-00000000000a'::uuid, 'volunteer1@esnmesa.org', 'Vera Volunteer'),
   ('a0000000-0000-4000-8000-00000000000b'::uuid, 'volunteer2@esnmesa.org', 'Victor Volunteer'),
   ('a0000000-0000-4000-8000-00000000000c'::uuid, 'newcomer@esnmesa.org', 'Nora Newcomer'),
-  ('a0000000-0000-4000-8000-00000000000d'::uuid, 'signout@esnmesa.org', 'Sam Signout')
+  ('a0000000-0000-4000-8000-00000000000d'::uuid, 'signout@esnmesa.org', 'Sam Signout'),
+  ('a0000000-0000-4000-8000-00000000000e'::uuid, 'hr@esnmesa.org', 'Hana HR'),
+  ('a0000000-0000-4000-8000-00000000000f'::uuid, 'vp@esnmesa.org', 'Valentin Vice')
 ) as seeded (id, email, full_name);
 
 insert into auth.identities (
@@ -57,7 +59,9 @@ insert into public.role_members (email, role, source) values
   ('finance@esnmesa.org', 'finance', 'group'),
   ('treasurer@esnmesa.org', 'treasurer', 'group'),
   ('executive@esnmesa.org', 'executive', 'group'),
-  ('admin@esnmesa.org', 'admin', 'group');
+  ('admin@esnmesa.org', 'admin', 'group'),
+  ('hr@esnmesa.org', 'hr', 'group'),
+  ('vp@esnmesa.org', 'vice_president', 'group');
 
 -- The local job runner: pg_cron calls `npm run dev:local` on the host.
 -- 'environment': a demo database, so the staging seed may create demo members

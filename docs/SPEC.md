@@ -39,6 +39,8 @@ Locally, seed users per role.
 | Finance team | Track receipts and reimbursements, payout batches |
 | Treasurer (Finance) | Only person who may edit reimbursement rules; approves weekend-trip "further expenses" beforehand |
 | Executive | See everything incl. names on closed attendance lists (as MESAttendance) |
+| HR, Vice President | Plan internal events, Stammtisch, Tuesday Talks, executive board meetings and office hours for the semester; assign their OC and helpers (round 2026-10-30) |
+| Newbie (newbies group) | A member with their own leaderboard on Home |
 | Admin (IT) | Settings, role mapping |
 
 ## Monthly workflow (P1)
@@ -69,6 +71,19 @@ docs/BRIEF-2026-10-29-publishing.md):
 15. **Publishing**: status per event and channel (Chat, Telegram, Instagram, pretix, ESN
     Activities; channels as data); Telegram posts by the platform at their planned time
     (re-publishing edits them); a drag-and-drop schedule board per month for Comms.
+
+Added in the round of 2026-10-30 (decisions in docs/DECISIONS.md, "Internal events …"):
+
+16. **Calendar subscription**: a personal, revocable iCal feed of everything the member may see.
+17. **Internal events** (not ESN activities): internal events members sign up to, Stammtisch (OC
+    and helpers), Tuesday Talks and executive board meetings (presentation link; board meetings
+    only for the executive board), office hours (OC and helpers, the same text). HR and the Vice
+    President plan a whole semester by drag and drop and "Repeat"; Home shows an internal calendar.
+18. **Cash boxes**: office hours (ESNcards sold internal/external) and events that sell drinks or
+    the like count the box before and after; the OC signs off; Finance checks and books it.
+19. **Finance ledger**: other income and spending with categories, an event's revenue, Belege paid
+    from the MESA account; a per-semester overview with reimbursements and cash boxes, per event.
+20. **Leaderboard** on Home: most events as OC / helped this semester, active members and newbies.
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 

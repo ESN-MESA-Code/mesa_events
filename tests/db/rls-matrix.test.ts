@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin } from "../helpers/local";
 import { MEMBERS, NOBODY, ROLES, TEAM, buildWorld, clientFor, destroyWorld, type Role, type World } from "./world";
 import { SPECS_EXTRA, cleanupExtra, cleanupPublishing } from "./rls-specs";
+import { SPECS_INTERNAL, cleanupInternal } from "./rls-specs-internal";
 import type { Database } from "@/types/database";
 
 export type Table = keyof Database["public"]["Tables"];
@@ -224,7 +225,7 @@ const FOUNDATION: Spec[] = [
   ),
 ];
 
-const SPECS: Spec[] = [...FOUNDATION, ...SPECS_EXTRA];
+const SPECS: Spec[] = [...FOUNDATION, ...SPECS_EXTRA, ...SPECS_INTERNAL];
 
 let world: World;
 beforeAll(async () => {
@@ -233,6 +234,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cleanupExtra();
   await cleanupPublishing();
+  await cleanupInternal(world);
   await admin.from("role_members").delete().like("email", "rlstest-%");
   await admin.from("activity_log").delete().in("action", ["test", "t", "changed", "forged"]);
   await admin.from("jobs").delete().like("idempotency_key", "rls.%");

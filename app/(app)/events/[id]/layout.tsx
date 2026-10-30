@@ -4,13 +4,15 @@ import { formatDateTime, formatDue, nowMs } from "@/lib/dates";
 import { EVENT_TYPE_LABELS } from "@/lib/labels";
 import { TAB_LABEL, nextStep } from "@/lib/checklist";
 import { checklistInput } from "@/lib/eventStatus";
+import { hasRole } from "@/lib/roles";
 import { Badge } from "@/components/ui";
 import { EventStatusBadge } from "@/components/status";
 import { EventBreadcrumb, EventTabs, NextStepBanner } from "./EventTabs";
 
 export default async function EventLayout({ params, children }: { params: Promise<{ id: string }>; children: React.ReactNode }) {
   const { id } = await params;
-  const { event, myAssignment, supabase, cycle } = await loadEventForPage(id);
+  const { event, myAssignment, supabase, cycle, viewer, isEvents } = await loadEventForPage(id);
+  const cash = !!myAssignment || isEvents || hasRole(viewer.roles, "finance") || viewer.roles.includes("executive");
 
   // The OC's (or helper's) one next step, on every tab.
   const step = myAssignment ? nextStep(await checklistInput(supabase, event, cycle?.description_deadline ?? null), myAssignment.role as "oc" | "helper") : null;
@@ -44,7 +46,7 @@ export default async function EventLayout({ params, children }: { params: Promis
         </Suspense>
       )}
       <Suspense>
-        <EventTabs id={id} notes={notes} />
+        <EventTabs id={id} notes={notes} cash={cash} />
       </Suspense>
       {children}
     </div>

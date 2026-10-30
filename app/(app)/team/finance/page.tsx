@@ -6,6 +6,7 @@ import { formatCents, formatDate, formatDateTime, monthLabel, nowMs } from "@/li
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
+import { FinanceTabs } from "@/components/FinanceTabs";
 import { payBatch } from "@/app/actions/handin";
 import { ClaimsTable, type ClaimRow } from "./ClaimsTable";
 import { PreapprovalDecision, TripBudgetForm } from "./FinanceClient";
@@ -64,10 +65,8 @@ export default async function FinancePage() {
     <>
       <PageHeader title="Finance" description="Receipts, reimbursements and monthly payouts. The paper Beleg is mandatory.">
         {!canAct && <Badge className="self-center" data-testid="read-only">Read-only (executive)</Badge>}
-        <Link href="/team/finance/policies" className="text-sm text-esn hover:underline self-center">
-          Reimbursement rules →
-        </Link>
       </PageHeader>
+      <FinanceTabs current="claims" />
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-4" data-testid="finance-figures">
           {[

@@ -6,8 +6,9 @@
 
 // Pages open without login (proxy.ts); everything else needs a member.
 // /api/esn: the ESN Activities script, with a personal access token instead of a session.
+// /api/calendar: the calendar subscription (iCal), with a personal feed token instead of a session.
 // /staging: the staging demo sign-in (behind its access code; 404 elsewhere).
-const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs", "/api/esn", "/robots.txt", "/staging"];
+const PUBLIC_PATHS = ["/login", "/auth", "/event", "/impressum", "/privacy", "/datenschutz", "/terms", "/api/jobs", "/api/esn", "/api/calendar", "/robots.txt", "/staging"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

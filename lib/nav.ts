@@ -1,4 +1,4 @@
-import { hasRole, type AppRole } from "@/lib/roles";
+import { hasRole, isInternalPlanner, type AppRole } from "@/lib/roles";
 
 export interface NavItem {
   href: string;
@@ -28,6 +28,7 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
     { href: "/calendar", label: "Calendar" },
     { href: "/me", label: "My events" },
     { href: "/ideas", label: "Ideas" },
+    { href: "/office-hours", label: "Office hours" },
   ];
   if (volunteer.open) personal.push({ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" });
   const exec = roles.includes("executive");
@@ -35,6 +36,8 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
   if (hasRole(roles, "events") || exec) team.push({ href: "/team/events", label: "Events" });
   if (hasRole(roles, "comms") || exec) team.push({ href: "/team/comms", label: "Comms" });
   if (hasRole(roles, "finance") || exec) team.push({ href: "/team/finance", label: "Finance" });
+  // Internal events, meetings and office hours are planned by HR and the Vice President (round 2026-10-30).
+  if (isInternalPlanner(roles) || exec) team.push({ href: "/team/internal", label: "Internal" });
   // Uploading to ESN Activities is the executive board's (round 2026-10-30).
   if (exec) team.push({ href: "/team/esn-activities", label: "ESN Activities" });
   if (hasRole(roles, "admin")) team.push({ href: "/admin", label: "Admin" });

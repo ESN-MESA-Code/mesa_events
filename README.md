@@ -39,7 +39,8 @@ Open http://localhost:3000 and pick a member under **Local test sign-in**. Every
 **Home** ("what's next for me": the open volunteer form, their events with the next step and
 deadline, open slots, claims that need something, and a card per team queue for team members) – one seeded account
 per role (member, OC and helper of the demo events, volunteers, Events, Comms, Finance,
-Treasurer, executive, admin, and a newcomer who has not accepted the confidentiality rules). The
+Treasurer, executive, HR, Vice President, admin, and a newcomer who has not accepted the
+confidentiality rules). The
 local sign-in exists only in development against a Supabase on your machine; production builds
 compile it out (tested).
 
@@ -143,10 +144,13 @@ Supabase + Vercel or a VPS (`docker-compose.staging.yml`), presenting and resett
 ```
 app/(app)/            member area: Home (/), calendar, ideas, volunteer, my events, event pages, no-access
   events/[id]/        overview (roster, claims, checklist), description, attendance, hand-in
-  team/events|comms|finance/   team dashboards, cycles and roster, payouts, rules
+  team/events|comms|finance/   team dashboards, cycles and roster, payouts, rules, ledger, cash boxes
+  team/internal/      HR and Vice President: plan internal events, meetings, office hours (semester)
+  internal/[id]  office-hours/[id]   internal event / office hour (cash box, ESNcards)
   admin/              roles, settings, jobs
 app/event/[token]     public attendance form    app/kiosk/[id]   form on an organiser's device
 app/api/jobs/run      job runner (secret)      .github/workflows/ci.yml   CI (not pushed)
+app/api/calendar/[token]   personal iCal feed (token instead of a session)
 app/actions/          generated "use server" exports of lib/actions
 lib/actions/          server actions: zod input, role checks from the database
 lib/allocation.ts     deterministic OC/helper allocation
