@@ -4,18 +4,21 @@ import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
 import { formatCents, formatDate, formatDateTime, monthLabel, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
+import { cn } from "@/lib/utils";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { FinanceTabs } from "@/components/FinanceTabs";
 import { payBatch } from "@/app/actions/handin";
 import { ClaimsTable, type ClaimRow } from "./ClaimsTable";
+import { findRule, ruleText, type ClaimRole, type ExpenseKind, type Rule } from "@/lib/reimbursement";
 import { PreapprovalDecision, TripBudgetForm } from "./FinanceClient";
 
 export const metadata: Metadata = { title: "Finance" };
 
 // Finance's overview: open receipts and claims (Beleg, check, payout),
 // monthly payout batches, pre-approvals (Treasurer) and trip budgets.
-export default async function FinancePage() {
+export default async function FinancePage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { status: shown } = await searchParams;
   // Executives oversee Finance read-only (no bank details, no actions).
   const viewer = await requirePageRole(["finance"], { executiveMayRead: true, page: "Finance" });
   const isTreasurer = viewer.roles.includes("treasurer");
@@ -23,7 +26,7 @@ export default async function FinancePage() {
   const supabase = await createSessionClient();
   const now = new Date(nowMs()).toISOString();
 
-  const [{ data: claims }, { data: batches }, { data: preapprovals }, { data: trips }] = await Promise.all([
+  const [{ data: claims }, { data: batches }, { data: preapprovals }, { data: trips }, { data: rules }] = await Promise.all([
     supabase
       .from("reimbursements")
       .select(
@@ -34,7 +37,10 @@ export default async function FinancePage() {
     supabase.from("payout_batches").select("id, month, status, paid_at, reimbursements(approved_cents)").order("month", { ascending: false }).limit(12),
     supabase.from("preapprovals").select("id, description, estimated_cents, status, created_at, profiles:requester_id(full_name), events(title)").eq("status", "requested").order("created_at"),
     supabase.from("events").select("id, title, starts_at, trip_budgets(amount_cents)").eq("type", "weekend_trip").gte("starts_at", now).order("starts_at"),
+    // The rules of every version, so a capped claim can say why (usability review #22).
+    supabase.from("reimbursement_rules").select("event_type, expense_kind, oc_rate_bp, helper_rate_bp, oc_cap_cents, helper_cap_cents, per_day, reimbursement_policies(version)"),
   ]);
+  const rulesOf = (version: number) => (rules ?? []).filter((x) => (x.reimbursement_policies as { version: number } | null)?.version === version) as unknown as Rule[];
 
   const rows: ClaimRow[] = (claims ?? []).map((c) => {
     const r = c.receipts as unknown as { expense_kind: string; vendor: string; amount_cents: number; purchased_on: string; beleg_received_at: string | null; beleg_received_by: string | null };
@@ -55,6 +61,10 @@ export default async function FinancePage() {
       flags: c.flags,
       category: c.category,
       policyVersion: c.policy_version,
+      rule: (() => {
+        const rule = e && r ? findRule(rulesOf(c.policy_version), e.type as Exclude<Rule["event_type"], "any">, r.expense_kind as ExpenseKind) : null;
+        return rule ? ruleText(rule, c.claimant_role as ClaimRole) : null;
+      })(),
       payoutMethod: c.payout_method,
       beleg: r?.beleg_received_at ? `${formatDateTime(r.beleg_received_at)} · ${r.beleg_received_by}` : null,
     };
@@ -69,25 +79,33 @@ export default async function FinancePage() {
       <FinanceTabs current="claims" />
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-4" data-testid="finance-figures">
-          {[
-            ["Belege missing", rows.filter((r) => r.status === "not_submitted").length],
-            ["To check", rows.filter((r) => r.status === "beleg_received").length],
-            ["Waiting for payout", rows.filter((r) => r.status === "checked").length],
-            ["Open amount", formatCents(open.reduce((s, r) => s + (r.approved ?? r.suggested), 0))],
-          ].map(([label, value]) => (
-            <Card key={label} className="p-4">
+          {/* Each figure filters the table below (usability review #22). */}
+          {(
+            [
+              ["Belege missing", rows.filter((r) => r.status === "not_submitted").length, "not_submitted"],
+              ["To check", rows.filter((r) => r.status === "beleg_received").length, "beleg_received"],
+              ["Waiting for payout", rows.filter((r) => r.status === "checked").length, "checked"],
+              ["Open amount", formatCents(open.reduce((s, r) => s + (r.approved ?? r.suggested), 0)), "open"],
+            ] as const
+          ).map(([label, value, status]) => (
+            <Link
+              key={label}
+              href={`/team/finance?status=${status}#claims`}
+              aria-current={(shown ?? "open") === status ? "true" : undefined}
+              className={cn("rounded-xl border bg-white p-4 shadow-sm hover:border-esn", (shown ?? "open") === status ? "border-esn ring-1 ring-esn" : "border-gray-200")}
+            >
               <p className="text-xs text-gray-500">{label}</p>
               <p className="text-xl font-semibold tabular-nums">{value}</p>
-            </Card>
+            </Link>
           ))}
         </div>
 
-        <Card>
+        <Card id="claims" className="scroll-mt-4">
           <CardHeader>
             <CardTitle>Receipts and claims</CardTitle>
           </CardHeader>
           <CardContent>
-            <ClaimsTable rows={rows} readOnly={!canAct} />
+            <ClaimsTable key={shown ?? "open"} rows={rows} readOnly={!canAct} initialStatus={shown} />
           </CardContent>
         </Card>
 

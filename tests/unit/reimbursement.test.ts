@@ -2,6 +2,7 @@
 // allowances, pre-approval, trip budgets and policy versioning.
 import { describe, expect, it } from "vitest";
 import {
+  ruleText,
   claimSteps,
   SPEC_RULES,
   findRule,
@@ -223,5 +224,16 @@ describe("payout line and receipt status (review 2026-10-29 B1, B2)", () => {
     expect(receiptsStatus({ mine: 0, myMissing: 0, all: 0, allMissing: 0, onTeam: true })).toBe("Yours: no receipts · Rest of the team: no receipts");
     // Team members who are not on the event see the event's counts.
     expect(receiptsStatus({ mine: 0, myMissing: 0, all: 3, allMissing: 2, onTeam: false })).toBe("Receipts registered: 3 receipts, 2 Belege outstanding");
+  });
+});
+
+describe("the rule behind a capped claim (usability review #22)", () => {
+  it("says rate and cap for the claimant's role", () => {
+    const ticket = SPEC_RULES.find((x) => x.event_type === "standard" && x.expense_kind === "ticket")!;
+    expect(ruleText(ticket, "helper")).toBe("Helper: 50 %, max € 8.00");
+    expect(ruleText(ticket, "oc")).toBe("OC: 100 %, max € 16.00");
+    const food = SPEC_RULES.find((x) => x.event_type === "weekend_trip" && x.expense_kind === "food_allowance")!;
+    expect(ruleText(food, "helper")).toBe("Helper: 100 %, max € 8.00 per day");
+    expect(ruleText(SPEC_RULES.find((x) => x.expense_kind === "ancillary")!, "oc")).toBe("OC: 100 %");
   });
 });

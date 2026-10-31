@@ -6,7 +6,7 @@ import { Button, Input, Select } from "@/components/ui";
 import { ActionButton, useAction } from "@/components/ActionButton";
 import { ClaimStatusBadge } from "@/components/status";
 import { checkReimbursement, markBelegReceived, payEarly, rejectReimbursement } from "@/app/actions/handin";
-import { CATEGORY_LABELS, EXPENSE_KIND_LABELS, STATUS_LABELS, mayPayEarly, type Category, type ClaimStatus, type ExpenseKind } from "@/lib/reimbursement";
+import { CATEGORY_LABELS, EXPENSE_KIND_LABELS, FLAG_LABELS, STATUS_LABELS, mayPayEarly, type Category, type ClaimStatus, type ExpenseKind, type Flag } from "@/lib/reimbursement";
 import { formatCents, parseEuroToCents } from "@/lib/dates";
 
 export interface ClaimRow {
@@ -25,46 +25,64 @@ export interface ClaimRow {
   flags: string[];
   category: string;
   policyVersion: number;
+  /** "Helper: 50 %, max € 8.00" – why a claim may be capped. */
+  rule: string | null;
   payoutMethod: string | null;
   beleg: string | null;
 }
 
 
+/**
+ * Approve at the suggested amount in one click, another amount, or reject
+ * with a reason (usability review #22: the verb says what happens, Reject
+ * looks dangerous).
+ */
 function CheckForm({ row }: { row: ClaimRow }) {
   const { run, pending, error, setError } = useAction();
   const [amount, setAmount] = useState((row.suggested / 100).toFixed(2));
   const [mode, setMode] = useState<"none" | "check" | "reject">("none");
   const [reason, setReason] = useState("");
+  const noPayout = row.payoutMethod ? undefined : "No bank or PayPal details yet";
   if (mode === "none") {
     return (
-      <span className="flex gap-1">
-        <Button size="sm" onClick={() => setMode("check")} disabled={!row.payoutMethod} title={row.payoutMethod ? undefined : "No bank or PayPal details yet"}>
-          Check
+      <span className="flex flex-wrap gap-1">
+        <Button
+          size="sm"
+          variant="success"
+          disabled={pending || !row.payoutMethod}
+          title={noPayout}
+          onClick={() => run(checkReimbursement, { claim_id: row.id, approved_cents: row.suggested }, undefined, `Approved ${formatCents(row.suggested)} for ${row.claimant} – it joins the month's payout.`)}
+        >
+          Approve {formatCents(row.suggested)}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setMode("reject")}>
-          Reject
+        <Button size="sm" variant="ghost" onClick={() => setMode("check")} disabled={!row.payoutMethod} title={noPayout}>
+          Other amount…
         </Button>
+        <Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" onClick={() => setMode("reject")}>
+          Reject…
+        </Button>
+        {error && <span className="w-full text-xs text-red-600">{error}</span>}
       </span>
     );
   }
+  const cents = parseEuroToCents(amount);
   return (
     <form
       className="flex flex-wrap items-center gap-1"
       onSubmit={(e) => {
         e.preventDefault();
-        if (mode === "reject") return run(rejectReimbursement, { claim_id: row.id, reason });
-        const cents = parseEuroToCents(amount);
+        if (mode === "reject") return run(rejectReimbursement, { claim_id: row.id, reason }, undefined, `Rejected – ${row.claimant} sees your reason.`);
         if (cents === null) return setError("Enter an amount.");
-        run(checkReimbursement, { claim_id: row.id, approved_cents: cents });
+        run(checkReimbursement, { claim_id: row.id, approved_cents: cents }, undefined, `Approved ${formatCents(cents)} for ${row.claimant} – it joins the month's payout.`);
       }}
     >
       {mode === "check" ? (
         <Input aria-label="Amount to pay" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-8 w-20" />
       ) : (
-        <Input aria-label="Reason" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 w-40" />
+        <Input aria-label="Reason for rejecting" placeholder="Reason (the claimant sees it)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 w-56" required />
       )}
-      <Button size="sm" variant={mode === "check" ? "success" : "destructive"} disabled={pending}>
-        {mode === "check" ? "Approve" : "Reject"}
+      <Button size="sm" variant={mode === "check" ? "success" : "destructive"} disabled={pending || (mode === "reject" && !reason.trim()) || (mode === "check" && cents === null)}>
+        {mode === "check" ? `Approve ${cents === null ? "" : formatCents(cents)}` : "Reject the claim"}
       </Button>
       <Button size="sm" type="button" variant="ghost" onClick={() => setMode("none")}>
         ×
@@ -76,9 +94,9 @@ function CheckForm({ row }: { row: ClaimRow }) {
 
 const col = createColumnHelper<ClaimRow>();
 
-export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; readOnly?: boolean }) {
+export function ClaimsTable({ rows, readOnly = false, initialStatus }: { rows: ClaimRow[]; readOnly?: boolean; initialStatus?: string }) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [status, setStatus] = useState("open");
+  const [status, setStatus] = useState(initialStatus && (initialStatus === "all" || initialStatus === "open" || initialStatus in STATUS_LABELS) ? initialStatus : "open");
   const [search, setSearch] = useState("");
 
   const data = useMemo(
@@ -122,7 +140,12 @@ export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; read
         cell: (c) => (
           <span className="tabular-nums whitespace-nowrap">
             {formatCents(c.getValue())}
-            {c.row.original.flags.length > 0 && <span className="block text-[11px] text-amber-700">{c.row.original.flags.join(", ").replace(/_/g, " ")}</span>}
+            {c.row.original.flags.length > 0 && (
+              <span className="block text-[11px] text-amber-700" title={c.row.original.rule ?? undefined}>
+                {c.row.original.flags.map((f) => FLAG_LABELS[f as Flag] ?? f.replace(/_/g, " ")).join(", ")}
+                {c.row.original.flags.includes("capped") && c.row.original.rule && ` (${c.row.original.rule})`}
+              </span>
+            )}
           </span>
         ),
       }),
@@ -144,13 +167,18 @@ export function ClaimsTable({ rows, readOnly = false }: { rows: ClaimRow[]; read
             {readOnly ? null : (
               <>
             {r.status === "not_submitted" && (
-              <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline">
+              <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline" done={`Beleg from ${r.claimant} received.`}>
                 Beleg received
               </ActionButton>
             )}
             {r.status === "beleg_received" && <CheckForm row={r} />}
             {r.status === "checked" && mayPayEarly(r.approved) && (
-              <ActionButton action={payEarly} input={{ claim_id: r.id }} variant="outline" confirm="Pay this claim now, outside the monthly batch?">
+              <ActionButton
+                action={payEarly}
+                input={{ claim_id: r.id }}
+                variant="outline"
+                confirm={{ title: `Pay ${formatCents(r.approved)} to ${r.claimant} now?`, body: "Outside the monthly batch. Mark it paid once the transfer is done; the bank details are deleted afterwards.", confirmLabel: "Pay early" }}
+              >
                 Pay early
               </ActionButton>
             )}

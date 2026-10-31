@@ -231,9 +231,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     const row = page.getByTestId(`claim-${vendor}`);
     await row.getByRole("button", { name: "Beleg received" }).click();
     await expect(row).toContainText("Beleg received");
-    await row.getByRole("button", { name: "Check" }).click();
-    await expect(row.getByLabel("Amount to pay")).toHaveValue("10.00");
-    await row.getByRole("button", { name: "Approve" }).click();
+    // One click at the suggested amount (usability review #22).
+    await row.getByRole("button", { name: "Approve € 10.00" }).click();
     await expect(row).toContainText("Checked – waiting for payout");
 
     const { data: claim } = await admin.from("reimbursements").select("batch_id").eq("event_id", quizId).single();

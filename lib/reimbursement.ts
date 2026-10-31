@@ -95,6 +95,22 @@ export function kindsFor<T extends Pick<Rule, "event_type" | "expense_kind">>(ru
 
 export type Flag = "needs_preapproval" | "no_trip_budget" | "over_trip_budget" | "capped";
 
+/** What a flag on a claim means, for Finance (usability review #22). */
+export const FLAG_LABELS: Record<Flag, string> = {
+  capped: "capped by the rule",
+  needs_preapproval: "needs the Treasurer's pre-approval",
+  no_trip_budget: "no trip budget set",
+  over_trip_budget: "over the trip budget",
+};
+
+/** "Helper: 50 %, max € 8.00" – the rule a claim was calculated with, for one role. */
+export function ruleText(rule: Pick<Rule, "oc_rate_bp" | "helper_rate_bp" | "oc_cap_cents" | "helper_cap_cents" | "per_day">, role: ClaimRole): string {
+  const rate = role === "oc" ? rule.oc_rate_bp : rule.helper_rate_bp;
+  const cap = role === "oc" ? rule.oc_cap_cents : rule.helper_cap_cents;
+  const euros = (c: number) => `€ ${Math.floor(c / 100)}.${String(c % 100).padStart(2, "0")}`;
+  return `${role === "oc" ? "OC" : "Helper"}: ${rate / 100} %${cap === null ? "" : `, max ${euros(cap)}${rule.per_day ? " per day" : ""}`}`;
+}
+
 export interface Suggestion {
   suggestedCents: number;
   flags: Flag[];
