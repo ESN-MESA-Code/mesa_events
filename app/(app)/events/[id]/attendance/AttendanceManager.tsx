@@ -22,14 +22,17 @@ export function AttendanceManager({
   canOrganise,
   ocEmail,
   isExecutive,
+  attendanceUrl,
 }: {
   event: Event;
   canSignOff: boolean;
   canOrganise: boolean;
   ocEmail: string | null;
   isExecutive: boolean;
+  /** The public sign-in form's absolute address, from the server (usability review #24: no hydration mismatch). */
+  attendanceUrl: string;
 }) {
-  const { participants, loading: loadingParticipants } = useParticipants(event.id);
+  const { participants, loading: loadingParticipants, error: participantsError, live } = useParticipants(event.id);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [signingOff, setSigningOff] = useState(false);
   const [headcount, setHeadcount] = useState("");
@@ -58,7 +61,6 @@ export function AttendanceManager({
 
   const state = listState(event);
   const canSeeNames = state !== "closed" || isExecutive;
-  const attendanceUrl = typeof window !== "undefined" ? `${window.location.origin}/event/${event.public_token}` : `/event/${event.public_token}`;
   const locked = (stats?.signins ?? 0) > 0;
   const finishBelow = state === "open" && canSignOff && !event.signed_off_at;
 
@@ -199,7 +201,7 @@ export function AttendanceManager({
                   Sign-ins open at {formatDateTime(signinsOpenAt(event.event_date))}.
                 </p>
               )}
-              <QRCodeDisplay url={attendanceUrl} size={220} />
+              <QRCodeDisplay url={attendanceUrl} size={220} title={event.title} />
               {state === "open" && (
                 <div className="mt-6 pt-4 border-t border-gray-200 w-full text-center">
                   <Link href={`/kiosk/${event.id}`} className="inline-block bg-esn text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-esn-dark">
@@ -244,7 +246,15 @@ export function AttendanceManager({
         ) : loadingParticipants ? (
           <p className="text-gray-500 text-sm">Loading participants…</p>
         ) : (
-          <AttendanceTable participants={participants} />
+          <>
+            {participantsError && (
+              <Alert tone="error" className="mb-3">
+                {participantsError}
+              </Alert>
+            )}
+            {!live && state === "open" && !participantsError && <p className="mb-2 text-xs text-gray-500">No live connection – the list updates every 15 seconds.</p>}
+            <AttendanceTable participants={participants} />
+          </>
         )}
       </Card>
     </div>

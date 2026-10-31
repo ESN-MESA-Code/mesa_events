@@ -56,18 +56,21 @@ export default function EventSummary({ event, stats }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Only figures that say something; each one says what it is (usability review #26). */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Figure label="Sign-ins" value={signins} />
-        <Figure
-          label="Counted by organiser"
-          value={event.headcount ?? "–"}
-          hint="Entered with the sign-off"
-        />
-        <Figure label="On organiser's device" value={stats?.kiosk ?? 0} hint="Kiosk sign-ins" />
-        <Figure
-          label="Signed in between"
-          value={signins ? `${time(stats!.first_signin)}–${time(stats!.last_signin)}` : "–"}
-        />
+        {event.headcount !== null ? (
+          <Figure label="Counted by the OC" value={event.headcount} hint="People the OC counted at the event, entered with the sign-off" />
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">The OC enters a headcount when signing the list off.</div>
+        )}
+        {(stats?.kiosk ?? 0) > 0 && <Figure label="On the OC's phone (kiosk)" value={stats!.kiosk} hint="Signed in on the organiser's device instead of their own" />}
+        {signins > 0 && (
+          <Figure
+            label={signins === 1 || time(stats!.first_signin) === time(stats!.last_signin) ? "Signed in at" : "First – last sign-in"}
+            value={time(stats!.first_signin) === time(stats!.last_signin) ? time(stats!.first_signin) : `${time(stats!.first_signin)}–${time(stats!.last_signin)}`}
+          />
+        )}
       </div>
 
       {event.headcount !== null && event.headcount !== signins && (

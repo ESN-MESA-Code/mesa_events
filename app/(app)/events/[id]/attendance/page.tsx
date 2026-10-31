@@ -3,6 +3,8 @@ import { loadEventForPage } from "@/lib/events";
 import { Alert, Card, CardContent, EmptyState } from "@/components/ui";
 import { AttendanceManager } from "./AttendanceManager";
 import type { Event as ListEvent } from "@/types/attendance";
+import { headers } from "next/headers";
+import { appBaseUrl } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Attendance" };
 
@@ -43,6 +45,9 @@ export default async function AttendanceTabPage({ params }: { params: Promise<{ 
     headcount: list.headcount,
   };
   const ocEmail = (oc?.profiles as { email: string } | null)?.email ?? null;
+  // The sign-in link as participants open it: the configured base URL, else this request's own (local runs).
+  const h = await headers();
+  const base = process.env.APP_BASE_URL ? appBaseUrl() : `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
 
   return (
     <div className="space-y-4">
@@ -56,6 +61,7 @@ export default async function AttendanceTabPage({ params }: { params: Promise<{ 
           canOrganise={isStaff || isEvents}
           ocEmail={ocEmail}
           isExecutive={viewer.roles.includes("executive")}
+          attendanceUrl={`${base}/event/${list.public_token}`}
         />
       </CardContent>
     </div>
