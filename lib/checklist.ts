@@ -124,16 +124,16 @@ export interface NextStep {
 }
 
 /**
- * The one thing the OC (or a helper) should do next for this event, in the
- * order the event needs it.
- */
-/**
  * At the description deadline, events whose description was never submitted
  * are cancelled (round 2026-10-30); the OC is told so wherever the deadline
  * shows (usability review #1).
  */
 export const DEADLINE_CANCELS = "after that the event is cancelled";
 
+/**
+ * The one thing the OC (or a helper) should do next for this event, in the
+ * order the event needs it.
+ */
 export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const started = Date.parse(i.startsAt) <= i.now;
   // Only the member's own Belege are theirs to hand in; the rest of the team's are waited for (usability review #5).
