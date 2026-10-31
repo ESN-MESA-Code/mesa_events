@@ -203,6 +203,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.getByRole("button", { name: "Finish & sign off" }).click();
     await page.getByRole("spinbutton").fill("12");
     await page.getByRole("button", { name: "Sign off & close sign-ins" }).click();
+    await page.getByTestId("confirm-yes").click();
     await expect(page.getByTestId("list-state")).toHaveText("✓ Signed off");
   });
 

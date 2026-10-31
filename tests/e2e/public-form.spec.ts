@@ -90,6 +90,7 @@ test("the OC sees the name live and signs the list off; kiosk records under thei
   await page.getByRole("button", { name: "Finish & sign off" }).click();
   await page.getByRole("spinbutton").fill("3");
   await page.getByRole("button", { name: "Sign off & close sign-ins" }).click();
+  await page.getByTestId("confirm-yes").click();
   await expect(page.getByTestId("list-state")).toHaveText("✓ Signed off");
   await expect(page.getByText("The list is closed: only executives see the names now.")).toBeVisible();
 });

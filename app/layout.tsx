@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 import LegalFooter from "@/components/LegalFooter";
 import { StagingBanner } from "@/components/StagingBanner";
+import { FeedbackProvider } from "@/components/Feedback";
 import { isStaging, isStagingBuild, stagingSignInEnabled } from "@/lib/staging";
 
 // A staging build says so in every tab title.
@@ -21,7 +22,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="en">
       <body className="antialiased bg-gray-50 min-h-screen font-sans flex flex-col">
         {isStaging() && <StagingBanner signIn={stagingSignInEnabled()} />}
-        <div className="flex-1">{children}</div>
+        <FeedbackProvider>
+          <div className="flex-1">{children}</div>
+        </FeedbackProvider>
         <LegalFooter />
       </body>
     </html>

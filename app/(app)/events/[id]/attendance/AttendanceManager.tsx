@@ -12,6 +12,7 @@ import { Alert, Button, Card, Input, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { setRiskNotice, signOffList } from "@/app/actions/attendance";
 import type { Event, EventStats } from "@/types/attendance";
+import { plural } from "@/lib/plural";
 
 // MESAttendance's event page, inside the event: the list's state, sign-off,
 // summary for Finance, QR code and kiosk, and the live names.
@@ -36,7 +37,7 @@ export function AttendanceManager({
   const [risk, setRisk] = useState(event.risk_notice ?? "");
   const [copied, setCopied] = useState(false);
   const [, setTick] = useState(0);
-  const { run, pending, error, setError } = useAction();
+  const { run, pending, error, setError, confirm } = useAction();
 
   const fetchStats = useCallback(async () => {
     const { data } = await supabase.rpc("event_summary", { event: event.id });
@@ -59,6 +60,43 @@ export function AttendanceManager({
   const canSeeNames = state !== "closed" || isExecutive;
   const attendanceUrl = typeof window !== "undefined" ? `${window.location.origin}/event/${event.public_token}` : `/event/${event.public_token}`;
   const locked = (stats?.signins ?? 0) > 0;
+  const finishBelow = state === "open" && canSignOff && !event.signed_off_at;
+
+  // Closing the list cannot be undone: the dialog says how many signed in (usability review #6).
+  const signOffForm = (
+    <form
+      className="rounded-lg border border-esn/30 bg-esn/5 p-4 space-y-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const counted = Number(headcount);
+        if (headcount.trim() === "" || !Number.isInteger(counted) || counted < 0 || counted > 10000) {
+          setError("Please enter how many people you counted.");
+          return;
+        }
+        const signins = stats?.signins ?? participants.length;
+        const ok = await confirm({
+          title: `Close the list with ${plural(signins, "sign-in")}?`,
+          body: `You counted ${counted}. Participants can't sign in afterwards, and only executives see the names from then on.`,
+          confirmLabel: "Sign off & close",
+          danger: state === "open",
+        });
+        if (ok) run(signOffList, { event_id: event.id, headcount: counted }, () => setSigningOff(false), "Attendance list signed off.");
+      }}
+    >
+      <p className="text-sm font-semibold text-gray-900">Finish the event and sign the list off</p>
+      <p className="text-xs text-gray-600">After the sign-off nobody can sign in any more, and only executives see the names from then on.</p>
+      <label className="block">
+        <span className="block text-sm font-medium text-gray-700 mb-1">How many people did you count at the event?</span>
+        <Input type="number" inputMode="numeric" min={0} max={10000} value={headcount} onChange={(e) => setHeadcount(e.target.value)} className="w-32" />
+      </label>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" onClick={() => setSigningOff(false)}>
+          Cancel
+        </Button>
+        <Button disabled={pending}>{pending ? "Signing off…" : "Sign off & close sign-ins"}</Button>
+      </div>
+    </form>
+  );
 
   async function copyLink() {
     try {
@@ -72,7 +110,8 @@ export function AttendanceManager({
 
   return (
     <div className="space-y-6">
-      <Card id="sign-off" className="p-5 space-y-3 scroll-mt-4">
+      {/* The next step's anchor: the finish card below while sign-ins run. */}
+      <Card id={finishBelow ? undefined : "sign-off"} className="p-5 space-y-3 scroll-mt-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span
             data-testid="list-state"
@@ -84,6 +123,10 @@ export function AttendanceManager({
             <span className="text-xs text-gray-500">
               on {formatDateTime(event.signed_off_at)} by {event.signed_off_by} · {event.headcount} counted
             </span>
+          ) : state === "upcoming" ? (
+            <span className="text-xs text-gray-500">Opens {formatDateTime(signinsOpenAt(event.event_date))}. You sign it off after the event.</span>
+          ) : state === "open" ? (
+            <span className="text-xs text-gray-500">Participants can sign in now. Sign the list off at the bottom of the page once the event is over.</span>
           ) : canSignOff ? (
             !signingOff && (
               <Button size="sm" onClick={() => setSigningOff(true)}>
@@ -94,33 +137,8 @@ export function AttendanceManager({
             <span className="text-xs text-gray-500">Only the OC{ocEmail ? ` (${ocEmail})` : ""} can sign this list off.</span>
           )}
         </div>
-        {signingOff && (
-          <form
-            className="rounded-lg border border-esn/30 bg-esn/5 p-4 space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const counted = Number(headcount);
-              if (headcount.trim() === "" || !Number.isInteger(counted) || counted < 0 || counted > 10000) {
-                setError("Please enter how many people you counted.");
-                return;
-              }
-              run(signOffList, { event_id: event.id, headcount: counted }, () => setSigningOff(false));
-            }}
-          >
-            <p className="text-sm font-semibold text-gray-900">Finish the event and sign the list off</p>
-            <p className="text-xs text-gray-600">After the sign-off nobody can sign in any more, and only executives see the names from then on.</p>
-            <label className="block">
-              <span className="block text-sm font-medium text-gray-700 mb-1">How many people did you count at the event?</span>
-              <Input type="number" inputMode="numeric" min={0} max={10000} value={headcount} onChange={(e) => setHeadcount(e.target.value)} className="w-32" />
-            </label>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setSigningOff(false)}>
-                Cancel
-              </Button>
-              <Button disabled={pending}>{pending ? "Signing off…" : "Sign off & close sign-ins"}</Button>
-            </div>
-          </form>
-        )}
+        {/* Before and during the event there is nothing to sign off here; finishing sits at the bottom (usability review #6). */}
+        {signingOff && state === "closed" && signOffForm}
 
         {event.risk_notice && !riskOpen && (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
@@ -192,6 +210,23 @@ export function AttendanceManager({
               )}
             </>
           )}
+        </Card>
+      )}
+
+      {finishBelow && (
+        <Card id="sign-off" className="p-5 space-y-3 scroll-mt-4" data-testid="finish-card">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="mr-auto">
+              <h2 className="text-lg font-semibold">Event over?</h2>
+              <p className="text-sm text-gray-600">Signing off closes the list – nobody can sign in afterwards. Otherwise it closes 24 hours after the start.</p>
+            </div>
+            {!signingOff && (
+              <Button size="sm" variant="outline" onClick={() => setSigningOff(true)}>
+                Finish &amp; sign off
+              </Button>
+            )}
+          </div>
+          {signingOff && signOffForm}
         </Card>
       )}
 
