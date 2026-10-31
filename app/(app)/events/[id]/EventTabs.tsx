@@ -7,6 +7,7 @@ import { backLink, withFrom } from "@/lib/breadcrumbs";
 import { stepLink, type NextStep } from "@/lib/checklist";
 import { DueLabel } from "@/components/status";
 import { StepIcon } from "@/components/StepIcon";
+import { TabBar } from "@/components/TabBar";
 
 /** "← My events" etc.: back to where the member came from (?from=…). */
 export function EventBreadcrumb({ fallback }: { fallback: string }) {
@@ -32,28 +33,7 @@ export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Reco
     // The cash box (round 2026-10-30): staff, Events, Finance and executives.
     ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash box" }] : []),
   ];
-  return (
-    <nav aria-label="Event" className="border-b border-gray-200">
-      <ul className="flex overflow-x-auto sm:gap-1">
-        {tabs.map((t) => {
-          const active = pathname === t.href;
-          const note = notes[t.label];
-          return (
-            <li key={t.href}>
-              <Link
-                href={withFrom(t.href, from)}
-                aria-current={active ? "page" : undefined}
-                className={cn("flex items-center gap-1 px-2 sm:px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap", active ? "border-esn text-esn" : "border-transparent text-gray-600 hover:text-gray-900")}
-              >
-                {t.label}
-                {note && <span className="h-2 w-2 rounded-full bg-esn-orange" title={note} aria-label={note} />}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
+  return <TabBar label="Event" tabs={tabs.map((t) => ({ href: withFrom(t.href, from), label: t.label, active: pathname === t.href, note: notes[t.label] }))} />;
 }
 
 /** "Your next step": to the tab where it is done, or down to it on that tab (review 2026-10-29 B4). */
