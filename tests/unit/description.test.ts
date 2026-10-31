@@ -2,6 +2,7 @@
 // rendering, the 4,096-character limit, TBA, validation, ESN fields, search.
 import { describe, expect, it } from "vitest";
 import {
+  changedSteps,
   CONFIG,
   applyEsnDefaults,
   bullets,
@@ -285,5 +286,14 @@ describe("template search (Search.gs)", () => {
     expect(r.rows.some((x) => x.rec.eventId === "3")).toBe(false);
     const expanded = searchTemplates(pool, "tegernsee", undefined, "hiking tegernsee");
     expect(expanded.rows.map((x) => x.rec.eventId)).toEqual(["2", "1"]);
+  });
+});
+
+describe("changes since the review (usability review #17)", () => {
+  it("names the steps whose fields changed", () => {
+    const before = filled();
+    expect(changedSteps(before, { ...before })).toEqual([]);
+    expect(changedSteps(before, { ...before, price: "12", program: "Something else" })).toEqual(["basics", "program"]);
+    expect(changedSteps(before, { ...before, esnGoal: `${before.esnGoal} More.` })).toEqual(["esn"]);
   });
 });

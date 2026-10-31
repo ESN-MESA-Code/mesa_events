@@ -60,6 +60,12 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
     return searchEntry(p.event_id, (p.events as { title: string } | null)?.title ?? f.title, f);
   });
   const templates = Object.fromEntries((published ?? []).map((p) => [p.event_id, coerceFields(p.approved_fields)]));
+  // After "changes requested": the version Comms saw, to show what changed since (usability review #17).
+  const lastReview = reviews?.[0];
+  const { data: reviewed } =
+    lastReview?.decision === "changes_requested"
+      ? await supabase.from("description_versions").select("fields").eq("event_id", id).eq("kind", "submitted").lte("created_at", lastReview.created_at).order("id", { ascending: false }).limit(1).maybeSingle()
+      : { data: null };
   const deadline = cycle?.description_deadline ?? null;
   const now = nowMs();
   const late = deadline !== null && Date.parse(deadline) < now && (!description || ["draft", "changes_requested"].includes(description.status));
@@ -99,6 +105,11 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
         place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
         eventPriceCents={event.price_cents}
+        lastRequest={
+          lastReview?.decision === "changes_requested"
+            ? { reviewer: lastReview.reviewer, comment: lastReview.comment, when: formatDateTime(lastReview.created_at), fields: reviewed ? coerceFields(reviewed.fields) : null }
+            : null
+        }
       />
     </div>
   );

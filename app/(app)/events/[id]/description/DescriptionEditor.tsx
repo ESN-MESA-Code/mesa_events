@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase/client";
 import {
   CONFIG,
   ESN_OBJECTIVES,
+  STEP_IDS,
+  changedSteps,
   ESN_TYPES,
   applyEsnDefaults,
   coerceFields,
@@ -63,9 +65,11 @@ interface Props {
   place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
   /** The price in the event's details (cents; null = TBA), compared with the post's (usability review #4). */
   eventPriceCents: number | null;
+  /** The last review when it asked for changes, with the version it saw (null: not kept). */
+  lastRequest: { reviewer: string; comment: string; when: string; fields: DescriptionFields | null } | null;
 }
 
-export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place, eventPriceCents }: Props) {
+export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place, eventPriceCents, lastRequest }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
@@ -223,6 +227,18 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   const postPrice = formatPrice(fields.price, "").value ?? "";
   const priceDiffers = postPrice !== eventPrice.label && !(eventPriceCents === null && !postPrice);
 
+  // What changed since Comms asked for changes (usability review #17).
+  const changed = useMemo(() => new Set(lastRequest?.fields ? changedSteps(lastRequest.fields, fields) : []), [lastRequest, fields]);
+  const openErrors = STEP_IDS.flatMap((step) => validation.errors[step].map((e) => ({ step, e })));
+  const reviewing = can.review && status === "submitted";
+
+  function approve() {
+    run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"), "Approved – it can be published now.");
+  }
+  function requestChanges() {
+    run(reviewDescription, { event_id: eventId, decision: "changes_requested", comment }, () => setStatus("changes_requested"), "Sent back to the OC with your comment.");
+  }
+
   const st = STATUS[status] ?? STATUS.draft;
   const tooLong = length > CONFIG.MAX_CHARS;
   const text = (key: keyof DescriptionFields, label: string, opts: { area?: boolean; hint?: string; placeholder?: string; rows?: number } = {}) => (
@@ -237,6 +253,38 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
 
   return (
     <div id="description" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] scroll-mt-4">
+      {/* Comms' decision at the top, staying in view (usability review #17). */}
+      {reviewing && (
+        <div className="sticky top-0 z-20 xl:col-span-2 rounded-xl border border-esn/30 bg-white/95 p-3 shadow-md backdrop-blur space-y-2" data-testid="review-bar">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-auto text-sm font-semibold text-esn-dark">Waiting for your review</span>
+            <Button variant="success" size="sm" disabled={pending || !validation.ok} onClick={approve}>
+              Approve
+            </Button>
+            <Button variant="outline" size="sm" disabled={pending || !comment.trim()} onClick={requestChanges}>
+              Request changes
+            </Button>
+          </div>
+          <Textarea aria-label="Review comment" placeholder="Comment (required when requesting changes)" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-0" />
+          {!validation.ok && <p className="text-xs text-amber-800">Approving needs the points listed under “Comms hand-off” fixed – fix typos yourself, or request changes.</p>}
+          {error && <Alert tone="error">{error}</Alert>}
+        </div>
+      )}
+      {lastRequest && (status === "submitted" || status === "changes_requested") && (
+        <Alert tone={status === "changes_requested" ? "warning" : "info"} className="xl:col-span-2" data-testid="last-request">
+          <p>
+            <strong>Changes requested</strong> by {lastRequest.reviewer}, {lastRequest.when}
+            {lastRequest.comment && <>: “{lastRequest.comment}”</>}
+          </p>
+          <p className="mt-1 text-xs">
+            {!lastRequest.fields
+              ? "The version Comms saw is not kept, so changes can't be shown."
+              : changed.size
+                ? `Changed since: ${[...changed].map((s) => STEP_TITLES[s]).join(", ")} (marked below).`
+                : "Nothing changed since then yet."}
+          </p>
+        </Alert>
+      )}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={st.tone} data-testid="description-status">
@@ -294,9 +342,10 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
         )}
 
         {TEXT_STEPS.map((step) => (
-          <Card key={step}>
+          <Card key={step} id={`step-${step}`} className={cn("scroll-mt-40", changed.has(step) && "ring-2 ring-esn/40")}>
             <CardHeader>
               <CardTitle>{STEP_TITLES[step]}</CardTitle>
+              {changed.has(step) && <Badge tone="blue">Changed since the review</Badge>}
               {validation.errors[step].length > 0 && <Badge tone="amber">{validation.errors[step].length} to fix</Badge>}
             </CardHeader>
             <CardContent className="space-y-3">
@@ -362,7 +411,8 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
         ))}
       </div>
 
-      <div className="space-y-4 h-fit">
+      {/* The preview stays in view while editing (usability review #16). */}
+      <div className={cn("space-y-4 h-fit xl:sticky xl:overflow-y-auto xl:pr-1", reviewing ? "xl:top-44 xl:max-h-[calc(100vh-12rem)]" : "xl:top-4 xl:max-h-[calc(100vh-2rem)]")} data-testid="preview-column">
         <Card>
           <CardHeader>
             <CardTitle>Preview (Chat post)</CardTitle>
@@ -382,9 +432,10 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
           </CardContent>
         </Card>
 
-        <Card data-testid="esn-details">
+        <Card data-testid="esn-details" id="step-esn" className={cn("scroll-mt-40", changed.has("esn") && "ring-2 ring-esn/40")}>
           <CardHeader>
             <CardTitle>{STEP_TITLES.esn}</CardTitle>
+            {changed.has("esn") && <Badge tone="blue">Changed since the review</Badge>}
             {validation.errors.esn.length > 0 && <Badge tone="amber">{validation.errors.esn.length} to fix</Badge>}
           </CardHeader>
           <CardContent className="space-y-3">
@@ -401,7 +452,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                   </Field>
                   <fieldset>
                     <legend className="text-sm font-medium text-gray-700 mb-1">Objectives</legend>
-                    <div className="grid sm:grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded border border-gray-200 p-2 text-xs">
+                    <div className="grid sm:grid-cols-2 gap-1 text-xs">
                       {ESN_OBJECTIVES.map(([value, label]) => {
                         const ids = esnObjectiveIds(fields);
                         return (
@@ -471,27 +522,12 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                 >
                   Submit for Comms review
                 </Button>
-                {!validation.ok && <p className="text-xs text-gray-500 mt-1">Fix the points marked in the form first.</p>}
+                {!validation.ok && <OpenErrors errors={openErrors} />}
               </div>
             )}
             {status === "submitted" && !can.review && <p className="text-gray-600">Waiting for the Comms team.</p>}
-            {can.review && status === "submitted" && (
-              <div className="space-y-2">
-                <Textarea aria-label="Review comment" placeholder="Comment (required when requesting changes)" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="success" disabled={pending || !validation.ok} onClick={() => run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"), "Approved – it can be published now.")}>
-                    Approve
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={pending || !comment.trim()}
-                    onClick={() => run(reviewDescription, { event_id: eventId, decision: "changes_requested", comment }, () => setStatus("changes_requested"), "Sent back to the OC with your comment.")}
-                  >
-                    Request changes
-                  </Button>
-                </div>
-              </div>
-            )}
+            {reviewing && <p className="text-gray-600">Approve or request changes in the bar at the top.</p>}
+            {reviewing && !validation.ok && <OpenErrors errors={openErrors} />}
             {can.review && status === "approved" && (
               <div>
                 <Button disabled={pending || !can.hasSpace} onClick={() => run(publishDescription, { event_id: eventId }, () => router.refresh(), "Publishing to the Chat space…")}>
@@ -501,7 +537,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                 {initial.publishRequested && <p className="text-xs text-gray-500 mt-1">Publishing is under way…</p>}
               </div>
             )}
-            {error && <Alert tone="error">{error}</Alert>}
+            {error && !reviewing && <Alert tone="error">{error}</Alert>}
             {reviews.length > 0 && (
               <ul className="border-t border-gray-100 pt-2 space-y-2" data-testid="reviews">
                 {reviews.map((r) => (
@@ -518,6 +554,24 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** The open errors next to the submit or approve button, each a link to its step (usability review #16). */
+function OpenErrors({ errors }: { errors: Array<{ step: StepId; e: string }> }) {
+  return (
+    <div className="mt-2 text-xs" data-testid="open-errors">
+      <p className="text-gray-600">Fix these first:</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+        {errors.map(({ step, e }) => (
+          <li key={`${step}-${e}`}>
+            <a href={`#step-${step}`} className="text-red-700 hover:underline">
+              {STEP_TITLES[step]}: {e}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

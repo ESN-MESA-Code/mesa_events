@@ -131,6 +131,14 @@ export function draftsDiffer(a: DescriptionFields | null, b: DescriptionFields |
 
 // ── Text helpers ────────────────────────────────────────────────────────────
 
+/**
+ * The steps whose fields differ between two versions (usability review #17):
+ * what the OC changed since Comms asked for changes.
+ */
+export function changedSteps(before: DescriptionFields, after: DescriptionFields): StepId[] {
+  return STEP_IDS.filter((step) => STEP_FIELDS[step].some((f) => String(before[f] ?? "").trim() !== String(after[f] ?? "").trim()));
+}
+
 export function oneLine(s: unknown): string {
   return String(s ?? "")
     .replace(/\s+/g, " ")
