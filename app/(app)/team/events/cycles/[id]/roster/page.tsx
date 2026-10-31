@@ -79,7 +79,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
           </Link>
         </Alert>
       )}
-      {editable && <p className="mb-4 text-sm text-gray-500">Drag people between events and roles. Changes save at once.</p>}
+      {editable && <p className="mb-4 text-sm text-gray-500">Drag people between events and roles.{cycle.status === "confirmed" ? "" : " Changes save at once."}</p>}
       {conflicts.length > 0 && (
         <Alert tone="warning" className="mb-4">
           {plural(conflicts.length, "time conflict")}:{" "}
@@ -90,10 +90,10 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
       )}
       {cycle.status === "confirmed" && editable && (
         <Alert tone="info" className="mb-4">
-          The roster is confirmed: changes here update the Chat spaces and are announced to the OC.
+          The roster is confirmed: changes here update the Chat spaces and are announced to the OC – each waits 10 seconds for Undo first.
         </Alert>
       )}
-      {cycle.status !== "planning" && cycle.status !== "form_open" && cycle.status !== "form_closed" && <RosterBoard events={boardEvents} people={[...people.values()].sort((a, b) => a.name.localeCompare(b.name))} editable={editable} />}
+      {cycle.status !== "planning" && cycle.status !== "form_open" && cycle.status !== "form_closed" && <RosterBoard events={boardEvents} people={[...people.values()].sort((a, b) => a.name.localeCompare(b.name))} editable={editable} confirmed={cycle.status === "confirmed"} />}
     </>
   );
 }

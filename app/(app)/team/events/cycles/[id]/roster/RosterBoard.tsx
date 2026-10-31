@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { Alert, Badge, Card } from "@/components/ui";
@@ -8,6 +8,8 @@ import { useAction } from "@/components/ActionButton";
 import { assign, moveAssignment, unassign } from "@/app/actions/planning";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, type EventStatus } from "@/lib/labels";
 import { staffingStatus } from "@/lib/allocation";
+import { berlinDate, formatShortDate } from "@/lib/dates";
+import { rosterLoad, HEAVY_LOAD } from "@/lib/rosterLoad";
 import { cn } from "@/lib/utils";
 
 export interface BoardPerson {
@@ -66,25 +68,84 @@ function Slot({ id, label, children, disabled }: { id: string; label: string; ch
   );
 }
 
-export function RosterBoard({ events, people, editable }: { events: BoardEvent[]; people: BoardPerson[]; editable: boolean }) {
+/** How long a change on a confirmed roster waits for Undo before it is saved and announced (usability review #20). */
+const UNDO_MS = 10_000;
+
+export function RosterBoard({ events, people, editable, confirmed }: { events: BoardEvent[]; people: BoardPerson[]; editable: boolean; confirmed: boolean }) {
   const cycleParam = useParams<{ id: string }>().id;
-  const { run, error } = useAction();
+  const { run, error, toast } = useAction();
   const [filter, setFilter] = useState("");
+  const [waiting, setWaiting] = useState(0);
+  const waitingRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const byId = new Map(people.map((p) => [p.id, p]));
+  // Who carries a lot, and who is on two events the same day (usability review #20).
+  const load = rosterLoad(events.map((e) => ({ id: e.id, day: berlinDate(e.startsAt), profileIds: e.assignments.map((a) => a.profileId) })));
+  const titleOf = new Map(events.map((e) => [e.id, e.title]));
+
+  // Leaving with a change still waiting would lose it.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (waitingRef.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  /** On a confirmed roster a change goes out to the OC and the Chat space: it waits for Undo first. */
+  function save(what: string, apply: () => void) {
+    if (!confirmed) {
+      apply();
+      return;
+    }
+    waitingRef.current++;
+    setWaiting(waitingRef.current);
+    const settle = () => {
+      waitingRef.current--;
+      setWaiting(waitingRef.current);
+    };
+    toast(`${what} – saved and announced in ${UNDO_MS / 1000} s.`, {
+      tone: "info",
+      duration: UNDO_MS,
+      action: { label: "Undo", onClick: settle },
+      onExpire: () => {
+        settle();
+        apply();
+      },
+    });
+  }
 
   function onDragEnd(e: DragEndEvent) {
     const data = e.active.data.current as DragData | undefined;
     const target = e.over?.id ? String(e.over.id) : null;
     if (!data || !target) return;
+    const who = (assignmentId: string) => {
+      for (const ev of events) {
+        const a = ev.assignments.find((x) => x.id === assignmentId);
+        if (a) return { name: byId.get(a.profileId)?.name ?? "Someone", from: ev };
+      }
+      return { name: "Someone", from: null };
+    };
     if (target === "pool") {
-      if (data.kind === "assignment") run(unassign, { assignment_id: data.assignmentId });
+      if (data.kind === "assignment") {
+        const w = who(data.assignmentId);
+        save(`${w.name} removed from ${w.from?.title ?? "the event"}`, () => run(unassign, { assignment_id: data.assignmentId }));
+      }
       return;
     }
     const [eventId, role] = target.split(":");
-    if (data.kind === "assignment") run(moveAssignment, { assignment_id: data.assignmentId, event_id: eventId, role });
-    else run(assign, { event_id: eventId, profile_id: data.profileId, role });
+    const label = `${titleOf.get(eventId) ?? "the event"} (${role === "oc" ? "OC" : "helper"})`;
+    if (data.kind === "assignment") {
+      const w = who(data.assignmentId);
+      save(`${w.name} moved to ${label}`, () => run(moveAssignment, { assignment_id: data.assignmentId, event_id: eventId, role }));
+    } else save(`${byId.get(data.profileId)?.name ?? "Someone"} added to ${label}`, () => run(assign, { event_id: eventId, profile_id: data.profileId, role }));
   }
+
+  /** "⚠ same day as Pub Quiz" for a chip. */
+  const clashNote = (profileId: string, eventId: string) => {
+    const others = load.get(profileId)?.sameDay.get(eventId) ?? [];
+    return others.length ? `same day as ${others.map((id) => titleOf.get(id)).join(", ")}` : null;
+  };
 
   const wishLabel = (p: BoardPerson, eventId: string) => {
     const w = p.wishes[eventId];
@@ -93,13 +154,17 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
   };
 
   // Drag and drop only (the "Move to…" menu is gone, round 2026-10-30); the keyboard sensor still moves chips without a mouse.
-  const PersonLine = ({ person, eventId, assignment }: { person: BoardPerson; eventId?: string; assignment?: BoardEvent["assignments"][number] }) => (
-    <div className="flex items-center gap-1.5">
-      <span className="font-medium text-gray-900 truncate">{person.name}</span>
-      {eventId && wishLabel(person, eventId) && <span className="text-[11px] text-gray-500 truncate">({wishLabel(person, eventId)})</span>}
-      {assignment?.source === "proposer" && <Badge tone="purple">idea</Badge>}
-    </div>
-  );
+  const PersonLine = ({ person, eventId, assignment }: { person: BoardPerson; eventId?: string; assignment?: BoardEvent["assignments"][number] }) => {
+    const clash = eventId ? clashNote(person.id, eventId) : null;
+    return (
+      <div className="flex flex-wrap items-center gap-x-1.5">
+        <span className="font-medium text-gray-900 truncate">{person.name}</span>
+        {eventId && wishLabel(person, eventId) && <span className="text-[11px] text-gray-500 truncate">({wishLabel(person, eventId)})</span>}
+        {assignment?.source === "proposer" && <Badge tone="purple">idea</Badge>}
+        {clash && <span className="w-full text-[11px] font-medium text-red-700">⚠ {clash}</span>}
+      </div>
+    );
+  };
 
   const shown = people.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase()));
 
@@ -108,6 +173,11 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
       {error && (
         <Alert tone="error" className="mb-4">
           {error}
+        </Alert>
+      )}
+      {waiting > 0 && (
+        <Alert tone="info" className="mb-4" data-testid="roster-waiting">
+          {waiting === 1 ? "1 change waits" : `${waiting} changes wait`} for Undo – the board updates once {waiting === 1 ? "it is" : "they are"} saved.
         </Alert>
       )}
       <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -122,11 +192,17 @@ export function RosterBoard({ events, people, editable }: { events: BoardEvent[]
           />
           <Slot id="pool" label="Volunteers" disabled={!editable}>
             {shown.map((p) => {
-              const count = events.reduce((n, e) => n + e.assignments.filter((a) => a.profileId === p.id).length, 0);
+              const l = load.get(p.id);
+              const count = l?.count ?? 0;
+              const days = [...new Set([...(l?.sameDay.keys() ?? [])].map((id) => events.find((e) => e.id === id)!.startsAt))].map((iso) => formatShortDate(iso));
               return (
                 <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable}>
                   <span className="font-medium">{p.name}</span>
-                  <span className="text-xs text-gray-500"> · {Object.keys(p.wishes).length} wishes · {count} assigned</span>
+                  <span className={cn("text-xs", count >= HEAVY_LOAD ? "font-semibold text-amber-700" : "text-gray-500")}>
+                    {" "}
+                    · {Object.keys(p.wishes).length} wishes · {count} assigned{count >= HEAVY_LOAD && " – a lot"}
+                  </span>
+                  {days.length > 0 && <span className="block text-[11px] font-medium text-red-700">⚠ two events on {[...new Set(days)].join(", ")}</span>}
                 </Chip>
               );
             })}
