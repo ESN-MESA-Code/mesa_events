@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { berlinTime, cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { addMonths, berlinTime, cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
 import { monthParam } from "@/lib/month";
 import { nextStep, type NextStep } from "@/lib/checklist";
 import { checklistInput, volunteerForms } from "@/lib/eventStatus";
@@ -251,8 +251,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <LeaderboardCard viewerId={viewer.id} now={now} />
-
+        {/* Work before the leaderboard (usability review #11). */}
         {(isEvents || isComms || isFinance || isExec) && (
           <section aria-label="Team queues" className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Team queues</h2>
@@ -263,6 +262,8 @@ export default async function HomePage() {
             </div>
           </section>
         )}
+
+        <LeaderboardCard viewerId={viewer.id} now={now} />
       </div>
     </>
   );
@@ -305,13 +306,16 @@ async function EventsQueue() {
     supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").order("month"),
     supabase.rpc("open_slots"),
   ]);
-  // Done cycles drop out (review 2026-10-29 A4).
+  // Done cycles drop out (review 2026-10-29 A4); only last month to two months ahead are listed, the rest behind "more" (usability review #11).
   const progress = (await cyclesWithProgress(supabase, cycles ?? [])).filter((c) => !c.progress.done);
+  const thisMonth = monthOf(new Date(nowMs()).toISOString());
+  const near = progress.filter((c) => c.month >= addMonths(thisMonth, -1) && c.month <= addMonths(thisMonth, 2));
+  const more = progress.length - near.length;
   return (
     <QueueCard title="Events team" href="/team/events" testId="queue-events">
-      {!progress.length && <p className="text-gray-500">No cycle running – start the next month.</p>}
+      {!near.length && <p className="text-gray-500">No cycle running – start the next month.</p>}
       <ul className="space-y-1.5">
-        {progress.map((c) => (
+        {near.map((c) => (
           <li key={c.id}>
             <Link href={`/team/events?month=${monthParam(c.month)}`} className="font-medium text-esn hover:underline">
               {cycleLabel(c.month)}
@@ -320,6 +324,11 @@ async function EventsQueue() {
           </li>
         ))}
       </ul>
+      {more > 0 && (
+        <Link href="/team/events" className="block text-xs text-esn hover:underline">
+          {plural(more, "more month")} on the Events page →
+        </Link>
+      )}
       <Figure label="Upcoming events short of people" value={(slots ?? []).length} tone="amber" />
     </QueueCard>
   );
