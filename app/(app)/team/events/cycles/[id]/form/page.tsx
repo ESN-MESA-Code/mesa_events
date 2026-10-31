@@ -9,6 +9,7 @@ import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ClearResponseButton } from "../ScheduleClient";
 import { FormControls } from "../CycleControls";
+import { CopyButton } from "@/components/CopyButton";
 
 export const metadata: Metadata = { title: "Volunteer form" };
 
@@ -24,14 +25,18 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
   const { data: cycle } = await supabase.from("planning_cycles").select("*").eq("id", id).maybeSingle();
   if (!cycle) notFound();
 
-  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }] = await Promise.all([
+  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }, { data: members }] = await Promise.all([
     supabase.from("events").select("id, title, starts_at, helpers_needed, status").eq("cycle_id", id).neq("status", "dropped").order("starts_at"),
     supabase.rpc("cycle_signups", { cycle: id }),
     supabase.rpc("cycle_responses", { cycle: id }),
     supabase.rpc("cycle_deadline_limits", { cycle: id }),
+    // Everyone who has signed in to the app, for "not answered yet" (usability review #19).
+    cycle.status === "form_open" ? supabase.from("profiles").select("id, full_name, email").order("full_name") : Promise.resolve({ data: [] }),
   ]);
   const formLatest = limitRows?.[0]?.form_latest ?? monthStartIso(cycle.month);
   const people = responses ?? [];
+  const answered = new Set(people.map((r) => r.profile_id));
+  const missing = (members ?? []).filter((m) => !answered.has(m.id));
   const perEvent = new Map<string, { oc: number; helper: number }>();
   for (const s of signups ?? []) {
     const c = perEvent.get(s.event_id) ?? { oc: 0, helper: 0 };
@@ -125,6 +130,18 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
                 </li>
               ))}
             </ul>
+            {cycle.status === "form_open" && missing.length > 0 && (
+              <details className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm" data-testid="not-answered">
+                <summary className="cursor-pointer font-medium text-amber-900">Not answered yet: {plural(missing.length, "member")}</summary>
+                <p className="mt-1 text-xs text-amber-900">Everyone who has signed in to the app at least once. Nudge them in the members&apos; Chat, or copy the addresses.</p>
+                <ul className="mt-2 columns-1 gap-4 text-xs text-gray-800 sm:columns-2">
+                  {missing.map((m) => (
+                    <li key={m.id}>{m.full_name || m.email}</li>
+                  ))}
+                </ul>
+                <CopyButton text={missing.map((m) => m.email).join(", ")} label="Copy their email addresses" />
+              </details>
+            )}
             {canEdit && cycle.status === "form_open" && (
               <p className="mt-2 text-xs text-gray-500">Answers are locked after submitting. Clear someone&apos;s answers (logged) when they made a mistake; they can then submit again.</p>
             )}

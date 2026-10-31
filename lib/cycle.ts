@@ -98,7 +98,7 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
       break;
     case "form_open":
       current = "form";
-      action = "Wait for answers, or close the form early";
+      action = "Nudge those who have not answered (volunteer form page), or close the form early";
       summary = `form open · ${plural(f.responses, "answer")}`;
       break;
     case "form_closed":
