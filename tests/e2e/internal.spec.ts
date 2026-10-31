@@ -99,9 +99,12 @@ test("a member signs up, sees the leaderboard and subscribes to the calendar", a
     await expect(page.getByTestId("sign-ups")).toContainText(USERS.member.name);
 
     await page.goto("/");
-    await expect(page.getByTestId("home-leaderboard")).toContainText("Active members");
-    await expect(page.getByTestId("home-leaderboard")).toContainText("Newbies");
+    await expect(page.getByTestId("home-leaderboard")).toContainText("Most office hours");
     await expect(page.getByTestId("home-internal")).toBeVisible();
+    await page.getByTestId("home-leaderboard").getByRole("link", { name: /See the leaderboard/ }).click();
+    await expect(page.getByTestId("leaderboard-office_hour_count")).toBeVisible();
+    await page.getByRole("link", { name: "Newbies" }).click();
+    await expect(page.getByTestId("leaderboard-newbies")).toBeVisible();
 
     await page.goto("/calendar?show=internal");
     await page.getByRole("button", { name: /calendar link/ }).click();

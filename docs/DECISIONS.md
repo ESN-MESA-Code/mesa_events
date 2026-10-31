@@ -806,3 +806,16 @@ choice:
   navigation stays (#29).
 - **The GDPR data processing notice on the public form stays fully visible** (#32): Art. 21(4)
   wants the right to object shown clearly and separately; only the participation terms fold.
+
+## 2026-10-31 – Leaderboard page with office hours
+
+- **Own page `/leaderboard`** (in the main navigation); Home keeps a teaser with each category's
+  leader in the viewer's group and a link. The page shows one semester at a time (earlier ones
+  browsable with ←/→, never a future one), totals, the viewer's places, and per category a podium
+  for the top three and a bar per member after that – everyone on the board, not only the top 3.
+- **Office hours as a third category:** OC or helper of an office hour that took place in the
+  semester and was not cancelled. `leaderboard()` returns `office_hour_count` (return type
+  changed: dropped and created again, migration `20261031000100`).
+- **Colours:** one per category (OC indigo `#4549B8`, helped cyan `#0091C8`, office hours orange
+  `#E06A12`), checked for colour-vision deficiency and contrast on white; names and numbers stay
+  in the gray text colours, ties share a step on the podium.

@@ -40,7 +40,7 @@ Locally, seed users per role.
 | Treasurer (Finance) | Only person who may edit reimbursement rules; approves weekend-trip "further expenses" beforehand |
 | Executive | See everything incl. names on closed attendance lists (as MESAttendance) |
 | HR, Vice President | Plan internal events, Stammtisch, Tuesday Talks, executive board meetings and office hours for the semester; assign their OC and helpers (round 2026-10-30) |
-| Newbie (newbies group) | A member with their own leaderboard on Home |
+| Newbie (newbies group) | A member with their own leaderboard |
 | Admin (IT) | Settings, role mapping |
 
 ## Monthly workflow (P1)
@@ -83,7 +83,8 @@ Added in the round of 2026-10-30 (decisions in docs/DECISIONS.md, "Internal even
     the like count the box before and after; the OC signs off; Finance checks and books it.
 19. **Finance ledger**: other income and spending with categories, an event's revenue, Belege paid
     from the MESA account; a per-semester overview with reimbursements and cash boxes, per event.
-20. **Leaderboard** on Home: most events as OC / helped this semester, active members and newbies.
+20. **Leaderboard** (own page `/leaderboard`, a teaser on Home): most events as OC / helped and most
+    office hours staffed per semester (earlier semesters browsable), active members and newbies.
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 

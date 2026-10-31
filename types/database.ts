@@ -1298,7 +1298,7 @@ isOneToOne: false
                            },
 "leaderboard":
 { Args: { "semester": string }; Returns: {
-              "full_name": string,"helper_count": number,"newbie": boolean,"oc_count": number,"profile_id": string
+              "full_name": string,"helper_count": number,"newbie": boolean,"oc_count": number,"office_hour_count": number,"profile_id": string
             }[]
                            },
 "mark_beleg_received":

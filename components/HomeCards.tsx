@@ -3,7 +3,8 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { berlinDate, berlinInputToIso, berlinTime, formatShortDate, monthOf } from "@/lib/dates";
 import { addDays, monthParam } from "@/lib/month";
 import { INTERNAL_KIND_DOTS, INTERNAL_KIND_LABELS, INTERNAL_KIND_TONES, internalPath, semesterFor, type InternalKind } from "@/lib/internal";
-import { leaderboards, type LeaderRow, type Ranked } from "@/lib/leaderboard";
+import { LEADER_CATEGORIES, leaderboards, type LeaderRow } from "@/lib/leaderboard";
+import { CATEGORY_STYLE } from "@/components/Leaderboard";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -105,60 +106,44 @@ export async function InternalCalendarCard({ viewerId, now }: { viewerId: string
   );
 }
 
-function Top({ title, rows, viewerId, unit }: { title: string; rows: Ranked[]; viewerId: string; unit: string }) {
-  return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
-      {!rows.length ? (
-        <p className="text-xs text-gray-400">Nobody yet – be the first!</p>
-      ) : (
-        <ol className="space-y-0.5 text-sm">
-          {rows.map((r) => (
-            <li key={r.id} className={cn("flex items-center gap-2", r.id === viewerId && "font-semibold text-esn-dark")}>
-              <span className="w-5 text-center" aria-label={`Place ${r.place}`}>
-                {["🥇", "🥈", "🥉"][r.place - 1] ?? `${r.place}.`}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {r.name}
-                {r.id === viewerId && " (you)"}
-              </span>
-              <span className="tabular-nums text-gray-600">
-                {r.count} {unit}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
 /**
- * The leaderboard (round 2026-10-30): who OC'd and who helped the most ESN
- * events this semester – active members and newbies (the newbies group)
- * apart, to motivate people to organise and help.
+ * The leaderboard teaser on Home (2026-10-31; the board has its own page):
+ * the leader of each category in the viewer's group and their own places.
  */
 export async function LeaderboardCard({ viewerId, now }: { viewerId: string; now: number }) {
   const supabase = await createSessionClient();
   const semester = semesterFor(berlinDate(new Date(now).toISOString()));
   const { data } = await supabase.rpc("leaderboard", { semester: semester.key });
-  const boards = leaderboards((data ?? []) as LeaderRow[]);
-  const section = (label: string, b: (typeof boards)["active"], testId: string) => (
-    <div className="space-y-3" data-testid={testId}>
-      <p className="text-sm font-semibold text-gray-800">{label}</p>
-      <Top title="Most events as OC" rows={b.oc} viewerId={viewerId} unit="OC" />
-      <Top title="Most events helped" rows={b.helper} viewerId={viewerId} unit="helped" />
-    </div>
-  );
+  const rows = (data ?? []) as LeaderRow[];
+  const newbie = rows.find((r) => r.profile_id === viewerId)?.newbie ?? false;
+  const board = leaderboards(rows, Infinity)[newbie ? "newbies" : "active"];
   return (
     <Card data-testid="home-leaderboard">
       <CardHeader>
-        <CardTitle>Leaderboard {semester.name}</CardTitle>
-        <span className="text-xs text-gray-500">events that took place</span>
+        <CardTitle>
+          <span aria-hidden>🏆 </span>Leaderboard {semester.name}
+        </CardTitle>
+        <Link href="/leaderboard" className="text-sm text-esn hover:underline">
+          See the leaderboard →
+        </Link>
       </CardHeader>
-      <CardContent className="grid gap-5 sm:grid-cols-2">
-        {section("Active members", boards.active, "leaderboard-active")}
-        {section("Newbies", boards.newbies, "leaderboard-newbies")}
+      <CardContent>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          {LEADER_CATEGORIES.map((c) => {
+            const leader = board[c.metric][0];
+            const me = board[c.metric].find((r) => r.id === viewerId);
+            return (
+              <li key={c.metric} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <span aria-hidden>{CATEGORY_STYLE[c.metric].icon} </span>
+                  {c.title}
+                </p>
+                <p className={cn("truncate font-medium", leader?.id === viewerId ? "text-esn-dark" : "text-gray-900")}>{leader ? `🥇 ${leader.name}${leader.id === viewerId ? " (you)" : ""} · ${c.unit(leader.count)}` : "Nobody yet – be the first!"}</p>
+                {me && me.place > 1 && <p className="text-xs text-esn-dark">You: place {me.place}</p>}
+              </li>
+            );
+          })}
+        </ul>
       </CardContent>
     </Card>
   );
