@@ -32,6 +32,7 @@ export function ProfileMenu({ name, email, roles, initials, hasPayout }: { name:
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Your profile: ${name}${hasPayout ? "" : " – payout details missing"}`}
+        title={hasPayout ? undefined : "Orange dot: no payout details yet – add your IBAN or PayPal in this menu"}
         className="relative flex items-center gap-2.5 rounded-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         data-testid="profile-button"
       >

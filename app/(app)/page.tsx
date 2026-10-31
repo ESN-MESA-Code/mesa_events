@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
 import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
 import { StepIcon } from "@/components/StepIcon";
+import { OrientationCard } from "@/components/Orientation";
 import { byUrgency, happeningNow } from "@/lib/myEvents";
 
 export const metadata: Metadata = { title: "Home" };
@@ -38,7 +39,7 @@ export default async function HomePage() {
   const isFinance = hasRole(viewer.roles, "finance");
   const isExec = viewer.roles.includes("executive");
 
-  const [forms, { data: assignments }, { data: slots }, { data: claims }] = await Promise.all([
+  const [forms, { data: assignments }, { data: slots }, { data: claims }, { count: everAssigned }, { data: payout }] = await Promise.all([
     volunteerForms(viewer.id),
     supabase
       .from("assignments")
@@ -51,6 +52,9 @@ export default async function HomePage() {
       .select("id, status, payout_method, suggested_cents, approved_cents, events(id, title), receipts(vendor, amount_cents)")
       .eq("claimant_id", viewer.id)
       .in("status", ["not_submitted", "beleg_received", "checked"]),
+    // A member who never had an event gets the orientation (usability review #14).
+    supabase.from("assignments").select("id", { count: "exact", head: true }).eq("profile_id", viewer.id),
+    supabase.from("profile_payout_details").select("profile_id").eq("profile_id", viewer.id).maybeSingle(),
   ]);
 
   // My events: upcoming, and recent ones whose hand-in is not finished.
@@ -96,6 +100,7 @@ export default async function HomePage() {
     <>
       <PageHeader title={`Hi ${viewer.name.split(" ")[0]}`} description="What's next for you." />
       <div className="space-y-6">
+        {!everAssigned && <OrientationCard formOpen={forms.some((f) => !f.submittedAt)} hasPayout={!!payout} />}
         {forms.map((f) =>
           f.submittedAt ? (
             <Alert key={f.id} tone="success" data-testid="home-volunteer">
