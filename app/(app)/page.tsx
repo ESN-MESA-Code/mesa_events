@@ -244,7 +244,7 @@ export default async function HomePage() {
                               </Link>
                             )}
                             {!c.payout_method && c.status === "not_submitted" && " · "}
-                            {c.status === "not_submitted" && "Hand the paper Beleg to Finance"}
+                            {c.status === "not_submitted" && "Hand the paper receipt to Finance"}
                           </p>
                         </li>
                       );
@@ -377,7 +377,7 @@ async function FinanceQueue() {
   const toPay = new Set((claims ?? []).filter((c) => c.status === "checked" && c.batch_id && open.has(c.batch_id)).map((c) => c.batch_id));
   return (
     <QueueCard title="Finance" href="/team/finance" testId="queue-finance">
-      <Figure label="Belege to receive" value={(claims ?? []).filter((c) => c.status === "not_submitted").length} tone="amber" />
+      <Figure label="Paper receipts to receive" value={(claims ?? []).filter((c) => c.status === "not_submitted").length} tone="amber" />
       <Figure label="Claims to check" value={(claims ?? []).filter((c) => c.status === "beleg_received").length} />
       <Figure label="Batches to pay" value={toPay.size} />
     </QueueCard>

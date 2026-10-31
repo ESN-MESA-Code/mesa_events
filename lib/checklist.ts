@@ -95,9 +95,9 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
     },
     {
       key: "receipts",
-      label: "Belege handed to Finance",
+      label: "Paper receipts handed to Finance",
       state: i.belegeMissing > 0 ? "todo" : i.receipts > 0 ? "done" : started ? "todo" : "later",
-      detail: i.receipts ? `${plural(i.receipts, "receipt")}${i.belegeMissing ? `, ${plural(i.belegeMissing, "Beleg", "Belege")} missing` : ""}` : "none registered",
+      detail: i.receipts ? `${plural(i.receipts, "receipt")}${i.belegeMissing ? `, ${plural(i.belegeMissing, "paper receipt")} missing` : ""}` : "none registered",
       tab: "hand-in",
     },
   ];
@@ -140,19 +140,19 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const mine = Math.min(i.myBelegeMissing, i.belegeMissing);
   const others = i.belegeMissing - mine;
   const othersWaiting: NextStep = {
-    label: `The rest of the team still has to hand in ${plural(others, "Beleg", "Belege")} – remind them in the Chat space`,
+    label: `The rest of the team still has to hand in ${plural(others, "paper receipt")} – remind them in the Chat space`,
     tab: "hand-in",
     anchor: "hand-in-status",
     kind: "waiting",
   };
   if (i.status === "cancelled" || i.status === "dropped") {
-    if (mine > 0) return { label: "Hand your Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
+    if (mine > 0) return { label: "Hand your paper receipts to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
     if (others > 0 && role === "oc") return othersWaiting;
     return { label: "Event cancelled – nothing left to do", tab: "", anchor: "event", kind: "done" };
   }
   if (role === "helper") {
     if (!started) return { label: "Help at the event – meeting point and plans are in the Chat space", tab: "", anchor: "chat-space", kind: "waiting" };
-    if (mine > 0) return { label: "Hand the paper Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
+    if (mine > 0) return { label: "Hand the paper receipts to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
     return { label: "Paid for something? Register the receipt", tab: "hand-in", anchor: "register-receipt", kind: "done" };
   }
   if (i.status === "understaffed" && !started) return { label: "Decide: run under-staffed or cancel?", tab: "", anchor: "decide", kind: "action" };
@@ -179,9 +179,9 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   return { label: "Hand-in complete", tab: "hand-in", anchor: "hand-in-status", kind: "done" };
 }
 
-/** "Upload the photos to Drive, write the event report and hand in your Belege" – what is still open. */
+/** "Upload the photos to Drive, write the event report and hand in your paper receipts" – what is still open. */
 function handInLabel(i: ChecklistInput, mine: number): string {
-  const parts = [!i.photosIn && "upload the photos to Drive", !i.reportIn && "write the event report", mine > 0 && "hand in your Belege"].filter((x): x is string => !!x);
+  const parts = [!i.photosIn && "upload the photos to Drive", !i.reportIn && "write the event report", mine > 0 && "hand in your paper receipts"].filter((x): x is string => !!x);
   const text = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

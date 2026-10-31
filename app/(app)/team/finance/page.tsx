@@ -73,7 +73,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader title="Finance" description="Receipts, reimbursements and monthly payouts. The paper Beleg is mandatory.">
+      <PageHeader title="Finance" description="Receipts, reimbursements and monthly payouts. The paper receipt (Beleg) is mandatory.">
         {!canAct && <Badge className="self-center" data-testid="read-only">Read-only (executive)</Badge>}
       </PageHeader>
       <FinanceTabs current="claims" />
@@ -82,7 +82,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           {/* Each figure filters the table below (usability review #22). */}
           {(
             [
-              ["Belege missing", rows.filter((r) => r.status === "not_submitted").length, "not_submitted"],
+              ["Paper receipts missing", rows.filter((r) => r.status === "not_submitted").length, "not_submitted"],
               ["To check", rows.filter((r) => r.status === "beleg_received").length, "beleg_received"],
               ["Waiting for payout", rows.filter((r) => r.status === "checked").length, "checked"],
               ["Open amount", formatCents(open.reduce((s, r) => s + (r.approved ?? r.suggested), 0)), "open"],

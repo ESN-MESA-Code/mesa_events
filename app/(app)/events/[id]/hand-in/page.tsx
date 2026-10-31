@@ -119,7 +119,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="space-y-6">
         <Alert tone="info">
-          The paper receipt (<strong>Beleg</strong>) is mandatory: register each receipt here, then hand the paper Beleg to Finance. Claims are paid
+          The paper receipt (<strong>Beleg</strong>) is mandatory: register each receipt here, then hand the paper receipt to Finance. Claims are paid
           monthly; above €100 Finance can pay earlier.
         </Alert>
 
@@ -131,7 +131,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             <CardContent>
               {!handInOpen ? (
                 <p className="text-sm text-gray-500" data-testid="receipts-later">
-                  Hand-in opens on the day of the event ({formatShortDate(event.starts_at)}). Keep every paper Beleg until then.
+                  Hand-in opens on the day of the event ({formatShortDate(event.starts_at)}). Keep every paper receipt until then.
                 </p>
               ) : kinds.length ? (
                 <ReceiptForm
@@ -183,7 +183,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                     >
                       {/* The steps above show the status; no badge repeating it (review 2026-10-29 B5). */}
                       <div className="flex flex-wrap items-center gap-3 text-xs">
-                        {c.status === "not_submitted" && <span className="text-amber-800">Beleg not handed in yet – bring the paper Beleg to Finance</span>}
+                        {c.status === "not_submitted" && <span className="text-amber-800">Paper receipt not handed in yet – bring it to Finance</span>}
                         {!c.payout_method && (
                           <Link href="/me/payout" className="text-amber-800 underline">
                             ⚠️ Add your IBAN or PayPal to your profile

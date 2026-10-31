@@ -182,8 +182,8 @@ export function bullets(s: unknown): string[] {
  */
 const EXAMPLE_LINES = new Set(["welcome and introductions", "the main part", "drinks afterwards"]);
 
-export function exampleLines(s: unknown): string[] {
-  return bullets(s).filter((l) => EXAMPLE_LINES.has(l.toLowerCase().replace(/[.!…]+$/, "")));
+export function exampleLines(text: unknown): string[] {
+  return bullets(text).filter((l) => EXAMPLE_LINES.has(l.toLowerCase().replace(/[.!…]+$/, "")));
 }
 
 export function hasEmoji(s: string): boolean {

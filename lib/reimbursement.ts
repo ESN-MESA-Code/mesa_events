@@ -162,8 +162,8 @@ export function mayPayEarly(approvedCents: number | null, thresholdCents = EARLY
 }
 
 export const STATUS_LABELS = {
-  not_submitted: "Beleg not handed in",
-  beleg_received: "Beleg received",
+  not_submitted: "Paper receipt not handed in",
+  beleg_received: "Paper receipt received",
   checked: "Checked – waiting for payout",
   paid: "Paid",
   rejected: "Rejected",
@@ -211,9 +211,9 @@ export function payoutLine(c: { status: ClaimStatus; payoutMethod: string | null
  * missing – counts only, never others' amounts.
  */
 export function receiptsStatus(r: { mine: number; myMissing: number; all: number; allMissing: number; onTeam: boolean }): string {
-  const belege = (n: number) => plural(n, "Beleg", "Belege");
+  const belege = (n: number) => plural(n, "paper receipt");
   const state = (count: number, missingCount: number, outstanding: string) =>
-    count === 0 ? "no receipts" : missingCount ? `${plural(count, "receipt")}, ${belege(missingCount)} ${outstanding}` : `${plural(count, "receipt")}, all Belege in`;
+    count === 0 ? "no receipts" : missingCount ? `${plural(count, "receipt")}, ${belege(missingCount)} ${outstanding}` : `${plural(count, "receipt")}, all paper receipts in`;
   if (!r.onTeam) return `Receipts registered: ${state(r.all, r.allMissing, "outstanding")}`;
   const others = Math.max(0, r.all - r.mine);
   const othersMissing = Math.max(0, r.allMissing - r.myMissing);
@@ -233,7 +233,7 @@ export interface ClaimProgressInput {
  */
 export function claimSteps(c: ClaimProgressInput): Array<{ label: string; state: "done" | "current" | "todo" | "failed"; at?: string | null }> {
   const order: ClaimStatus[] = ["not_submitted", "beleg_received", "checked", "paid"];
-  const labels = ["Registered", "Beleg received", "Checked", "Paid"];
+  const labels = ["Registered", "Paper receipt received", "Checked", "Paid"];
   const at = [null, c.belegReceivedAt ?? null, c.checkedAt ?? null, c.paidAt ?? null];
   if (c.status === "rejected") {
     const reached = c.checkedAt ? 2 : c.belegReceivedAt ? 1 : 0;

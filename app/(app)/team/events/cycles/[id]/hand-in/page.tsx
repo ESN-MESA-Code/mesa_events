@@ -28,7 +28,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     const h = of.get(e.id);
     const started = Date.parse(e.starts_at) <= now;
     const missing = h
-      ? [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean)
+      ? [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "paper receipt")].filter(Boolean)
       : [];
     return { ...e, started, missing };
   });

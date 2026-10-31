@@ -221,16 +221,16 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.locator("#r-holder").fill("Vera Volunteer");
     await page.locator("#r-iban").fill("DE89 3704 0044 0532 0130 00");
     await page.getByRole("button", { name: "Register receipt" }).click();
-    await expect(page.getByText("Registered. Now hand the paper Beleg to Finance.")).toBeVisible();
-    await expect(page.getByTestId("my-claims")).toContainText("Beleg not handed in");
+    await expect(page.getByText("Registered. Now hand the paper receipt to Finance.")).toBeVisible();
+    await expect(page.getByTestId("my-claims")).toContainText("Paper receipt not handed in");
   });
 
   await test.step("Finance receives the Beleg, checks the claim and pays the month's batch", async () => {
     await as(USERS.finance);
     await page.goto("/team/finance");
     const row = page.getByTestId(`claim-${vendor}`);
-    await row.getByRole("button", { name: "Beleg received" }).click();
-    await expect(row).toContainText("Beleg received");
+    await row.getByRole("button", { name: "Paper receipt received" }).click();
+    await expect(row).toContainText("Paper receipt received");
     // One click at the suggested amount (usability review #22).
     await row.getByRole("button", { name: "Approve € 10.00" }).click();
     await expect(row).toContainText("Checked – waiting for payout");

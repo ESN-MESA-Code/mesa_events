@@ -140,7 +140,7 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
                       const h = handInOf.get(e.id);
                       const started = Date.parse(e.starts_at) <= now;
                       const missing = h
-                        ? [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean)
+                        ? [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "paper receipt")].filter(Boolean)
                         : [!photosIn(e.event_photo_folders as never) && "photos"].filter(Boolean);
                       const confirmed = cycle.status === "confirmed";
                       const running = !["cancelled", "dropped"].includes(e.status);

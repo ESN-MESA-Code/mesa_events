@@ -196,14 +196,14 @@ describe("payouts", () => {
 
 describe("claim progress (review C7)", () => {
   const states = (s: Parameters<typeof claimSteps>[0]) => claimSteps(s).map((x) => `${x.label}:${x.state}`).join(" ");
-  it("Registered → Beleg received → Checked → Paid", () => {
-    expect(states({ status: "not_submitted" })).toBe("Registered:done Beleg received:current Checked:todo Paid:todo");
-    expect(states({ status: "beleg_received", belegReceivedAt: "x" })).toBe("Registered:done Beleg received:done Checked:current Paid:todo");
-    expect(states({ status: "checked" })).toBe("Registered:done Beleg received:done Checked:done Paid:current");
-    expect(states({ status: "paid" })).toBe("Registered:done Beleg received:done Checked:done Paid:done");
+  it("Registered → Paper receipt received → Checked → Paid", () => {
+    expect(states({ status: "not_submitted" })).toBe("Registered:done Paper receipt received:current Checked:todo Paid:todo");
+    expect(states({ status: "beleg_received", belegReceivedAt: "x" })).toBe("Registered:done Paper receipt received:done Checked:current Paid:todo");
+    expect(states({ status: "checked" })).toBe("Registered:done Paper receipt received:done Checked:done Paid:current");
+    expect(states({ status: "paid" })).toBe("Registered:done Paper receipt received:done Checked:done Paid:done");
   });
   it("a rejected claim fails where it stopped", () => {
-    expect(states({ status: "rejected", belegReceivedAt: "x" })).toBe("Registered:done Beleg received:done Rejected:failed Paid:todo");
+    expect(states({ status: "rejected", belegReceivedAt: "x" })).toBe("Registered:done Paper receipt received:done Rejected:failed Paid:todo");
     expect(states({ status: "rejected" })).toBe("Registered:done Rejected:failed Checked:todo Paid:todo");
   });
 });
@@ -219,11 +219,11 @@ describe("payout line and receipt status (review 2026-10-29 B1, B2)", () => {
   });
 
   it("shows one's own receipts and the rest of the team's apart, as counts", () => {
-    expect(receiptsStatus({ mine: 2, myMissing: 0, all: 3, allMissing: 1, onTeam: true })).toBe("Yours: 2 receipts, all Belege in · Rest of the team: 1 receipt, 1 Beleg outstanding");
-    expect(receiptsStatus({ mine: 1, myMissing: 1, all: 4, allMissing: 3, onTeam: true })).toBe("Yours: 1 receipt, 1 Beleg to hand in · Rest of the team: 3 receipts, 2 Belege outstanding");
+    expect(receiptsStatus({ mine: 2, myMissing: 0, all: 3, allMissing: 1, onTeam: true })).toBe("Yours: 2 receipts, all paper receipts in · Rest of the team: 1 receipt, 1 paper receipt outstanding");
+    expect(receiptsStatus({ mine: 1, myMissing: 1, all: 4, allMissing: 3, onTeam: true })).toBe("Yours: 1 receipt, 1 paper receipt to hand in · Rest of the team: 3 receipts, 2 paper receipts outstanding");
     expect(receiptsStatus({ mine: 0, myMissing: 0, all: 0, allMissing: 0, onTeam: true })).toBe("Yours: no receipts · Rest of the team: no receipts");
     // Team members who are not on the event see the event's counts.
-    expect(receiptsStatus({ mine: 0, myMissing: 0, all: 3, allMissing: 2, onTeam: false })).toBe("Receipts registered: 3 receipts, 2 Belege outstanding");
+    expect(receiptsStatus({ mine: 0, myMissing: 0, all: 3, allMissing: 2, onTeam: false })).toBe("Receipts registered: 3 receipts, 2 paper receipts outstanding");
   });
 });
 

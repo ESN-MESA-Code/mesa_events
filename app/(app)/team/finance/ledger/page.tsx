@@ -236,8 +236,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
                           {about && ` · ${about}`}
                           {e.counterparty && ` · ${e.counterparty}`}
                           {` · ${METHOD_LABELS[e.payment_method as keyof typeof METHOD_LABELS]}`}
-                          {e.beleg_ref && ` · Beleg ${e.beleg_ref}`}
-                          {e.direction === "expense" && !e.beleg_received && <span className="text-amber-700"> · Beleg missing</span>}
+                          {e.beleg_ref && ` · receipt ${e.beleg_ref}`}
+                          {e.direction === "expense" && !e.beleg_received && <span className="text-amber-700"> · paper receipt missing</span>}
                           {e.note && ` · ${e.note}`}
                         </span>
                       </span>

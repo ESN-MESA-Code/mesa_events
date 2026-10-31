@@ -185,7 +185,7 @@ export function ReceiptForm({
       )}
       {done && (
         <Alert tone="success" className="sm:col-span-2">
-          Registered. Now hand the paper Beleg to Finance.
+          Registered. Now hand the paper receipt to Finance.
         </Alert>
       )}
       <div className="sm:col-span-2">

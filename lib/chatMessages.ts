@@ -69,7 +69,7 @@ export function eventStatusMessage(kind: "cancelled" | "reopened", e: SpaceEvent
   if (kind === "cancelled") {
     return [
       `🚫 *${e.title}* on ${formatDateTime(e.starts_at)} is cancelled.${reason ? ` Reason: ${reason}` : ""}`,
-      "Receipts you already registered stay valid – hand the paper Belege to Finance as usual.",
+      "Receipts you already registered stay valid – hand the paper receipts to Finance as usual.",
       `Event page: ${eventUrl}${tell}`,
     ].join("\n");
   }

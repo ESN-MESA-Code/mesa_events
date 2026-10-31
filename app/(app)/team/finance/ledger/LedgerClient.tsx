@@ -117,12 +117,12 @@ export function EntryForm({ categories, events, today, initial, onDone }: { cate
             ))}
           </Select>
         </Field>
-        <Field label="Beleg no. / reference" htmlFor={`le-beleg-${id}`}>
+        <Field label="Receipt no. / reference" htmlFor={`le-beleg-${id}`}>
           <Input id={`le-beleg-${id}`} value={f.beleg_ref} onChange={(e) => set("beleg_ref", e.target.value)} maxLength={100} />
         </Field>
         <label className="flex items-center gap-2 self-end pb-2 text-sm">
           <input type="checkbox" checked={f.beleg_received} onChange={(e) => set("beleg_received", e.target.checked)} />
-          Paper Beleg filed
+          Paper receipt filed
         </label>
       </div>
       <Field label="Note (optional)" htmlFor={`le-note-${id}`}>

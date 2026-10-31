@@ -131,7 +131,7 @@ export const PERSONAS: Persona[] = [
     key: "finance",
     person: "priya",
     label: "Finance team",
-    sees: "Receipts and Belege, checks claims, monthly payout batches and early payouts.",
+    sees: "Receipts and paper receipts (Belege), checks claims, monthly payout batches and early payouts.",
     start: "/team/finance",
   },
   {

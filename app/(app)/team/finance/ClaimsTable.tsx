@@ -155,7 +155,7 @@ export function ClaimsTable({ rows, readOnly = false, initialStatus }: { rows: C
         cell: (c) => (
           <span>
             <ClaimStatusBadge status={c.getValue() as ClaimStatus} />
-            {c.row.original.beleg && <span className="block text-[11px] text-gray-500">Beleg {c.row.original.beleg}</span>}
+            {c.row.original.beleg && <span className="block text-[11px] text-gray-500">Paper receipt {c.row.original.beleg}</span>}
           </span>
         ),
       }),
@@ -167,8 +167,8 @@ export function ClaimsTable({ rows, readOnly = false, initialStatus }: { rows: C
             {readOnly ? null : (
               <>
             {r.status === "not_submitted" && (
-              <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline" done={`Beleg from ${r.claimant} received.`}>
-                Beleg received
+              <ActionButton action={markBelegReceived} input={{ claim_id: r.id }} variant="outline" done={`Paper receipt from ${r.claimant} received.`}>
+                Paper receipt received
               </ActionButton>
             )}
             {r.status === "beleg_received" && <CheckForm row={r} />}

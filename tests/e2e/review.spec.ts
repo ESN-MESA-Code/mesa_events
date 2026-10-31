@@ -169,7 +169,7 @@ test("executives read Finance without acting; bank details stay with Finance", a
     await expect(page).toHaveURL(/\/team\/finance$/);
     await expect(page.getByTestId("read-only")).toBeVisible();
     const row = page.getByTestId(`claim-${vendor}`);
-    await expect(row).toContainText("Beleg not handed in");
+    await expect(row).toContainText("Paper receipt not handed in");
     await expect(row.getByRole("button")).toHaveCount(0);
     await expect(page.getByText("DE89370400440532013000")).toHaveCount(0);
 
@@ -177,7 +177,7 @@ test("executives read Finance without acting; bank details stay with Finance", a
     await signInAs(context, baseURL!, USERS.finance);
     await page.goto("/team/finance");
     await expect(page.getByTestId("read-only")).toHaveCount(0);
-    await expect(page.getByTestId(`claim-${vendor}`).getByRole("button", { name: "Beleg received" })).toBeVisible();
+    await expect(page.getByTestId(`claim-${vendor}`).getByRole("button", { name: "Paper receipt received" })).toBeVisible();
   } finally {
     await admin.from("reimbursements").delete().eq("id", claim!.id);
     await admin.from("receipts").delete().eq("id", receipt!.id);
