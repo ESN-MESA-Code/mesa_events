@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
 import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
 import { StepIcon } from "@/components/StepIcon";
+import { byUrgency, happeningNow } from "@/lib/myEvents";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -41,7 +42,7 @@ export default async function HomePage() {
     volunteerForms(viewer.id),
     supabase
       .from("assignments")
-      .select("id, role, events(id, title, status, starts_at, location, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
+      .select("id, role, events(id, title, status, starts_at, ends_at, location, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
       .eq("profile_id", viewer.id)
       .eq("status", "active"),
     supabase.rpc("open_slots"),
@@ -58,6 +59,7 @@ export default async function HomePage() {
     title: string;
     status: EventStatus;
     starts_at: string;
+    ends_at: string | null;
     location: string | null;
     helpers_needed: number;
     chat_space_name: string | null;
@@ -74,9 +76,13 @@ export default async function HomePage() {
       return { ...a, step: nextStep(input, a.role) };
     })
   );
-  const myEvents = withSteps
-    .filter((a) => Date.parse(a.event.starts_at) > now - DAY || a.step.kind !== "done")
-    .sort((a, b) => a.event.starts_at.localeCompare(b.event.starts_at));
+  // Most urgent first (usability review #10): happening now, overdue, due soon, to do, waiting, done.
+  const myEvents = byUrgency(
+    withSteps.filter((a) => Date.parse(a.event.starts_at) > now - DAY || a.step.kind !== "done"),
+    (a) => a.event,
+    (a) => a.step,
+    now
+  ).map((a) => ({ ...a, live: happeningNow(a.event, now) }));
 
   const myIds = new Set(mine.map((a) => a.event.id));
   const claimable = (slots ?? []).filter((s) => !myIds.has(s.event_id));
@@ -126,16 +132,26 @@ export default async function HomePage() {
                 </EmptyState>
               )}
               <ul className="space-y-3" data-testid="home-my-events">
-                {myEvents.map(({ event, role, step }) => (
-                  <li key={event.id} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                {myEvents.map(({ event, role, step, live }) => (
+                  <li key={event.id} className={cn("rounded-lg border p-3 space-y-2", live ? "border-esn-orange/60 ring-1 ring-esn-orange/40" : "border-gray-200")}>
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/events/${event.id}?from=home`} className="font-medium text-gray-900 hover:text-esn break-words">
                         {event.title}
                       </Link>
                       <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
+                      {live && (
+                        <Badge tone="amber" data-testid="happening-now">
+                          ● Happening now
+                        </Badge>
+                      )}
                       {event.status !== "confirmed" && <EventStatusBadge status={event.status} />}
                       <span className="ml-auto text-xs text-gray-500">{formatDateTime(event.starts_at)}</span>
                     </div>
+                    {live && (
+                      <Link href={`/events/${event.id}/attendance?from=home`} className={cn(buttonVariants({ size: "sm" }), "w-full sm:w-auto")}>
+                        Happening now – open attendance (QR code)
+                      </Link>
+                    )}
                     <Link
                       href={`/events/${event.id}${step.tab ? `/${step.tab}` : ""}?from=home`}
                       className={cn("flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm hover:underline", STEP_TONE[step.kind])}

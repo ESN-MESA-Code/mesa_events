@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventGroup, groupEvents, handInState } from "@/lib/myEvents";
+import { byUrgency, eventGroup, groupEvents, handInState, happeningNow } from "@/lib/myEvents";
 
 // 29 Oct 2026, 08:00 Berlin (CET, UTC+1).
 const NOW = Date.parse("2026-10-29T07:00:00Z");
@@ -51,5 +51,26 @@ describe("handInState", () => {
   it("cancelled events: open only while Belege are missing", () => {
     expect(handInState("cancelled", { kind: "action" }).label).toBe("Hand-in open");
     expect(handInState("cancelled", { kind: "done" })).toEqual({ label: "Cancelled", tone: "red" });
+  });
+});
+
+describe("Home order (usability review #10)", () => {
+  const at = (h: number) => new Date(NOW + h * 3_600_000).toISOString();
+  const row = (name: string, startsIn: number, kind: "action" | "waiting" | "done", dueIn?: number) => ({ name, e: { starts_at: at(startsIn), ends_at: null }, step: { kind, due: dueIn === undefined ? undefined : at(dueIn) } });
+  it("happening now, overdue, due soon, to do, waiting, done", () => {
+    const list = [
+      row("done", 5, "done"),
+      row("waiting", 6, "waiting"),
+      row("todo", 1, "action", 24 * 7),
+      row("soon", 200, "action", 30),
+      row("overdue", 300, "action", -2),
+      row("live", -1, "action"),
+    ];
+    expect(byUrgency(list, (x) => x.e, (x) => x.step, NOW).map((x) => x.name)).toEqual(["live", "overdue", "soon", "todo", "waiting", "done"]);
+  });
+  it("an event without an end runs four hours", () => {
+    expect(happeningNow({ starts_at: at(-3), ends_at: null }, NOW)).toBe(true);
+    expect(happeningNow({ starts_at: at(-5), ends_at: null }, NOW)).toBe(false);
+    expect(happeningNow({ starts_at: at(-5), ends_at: at(1) }, NOW)).toBe(true);
   });
 });

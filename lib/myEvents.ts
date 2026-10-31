@@ -40,3 +40,32 @@ export function handInState(status: string, step: Pick<NextStep, "kind">): HandI
   }
   return step.kind === "action" ? { label: "Hand-in open", tone: "amber" } : { label: "Done", tone: "green" };
 }
+
+const HOUR = 3_600_000;
+/** Without an end time an event counts as running for this long. */
+const DEFAULT_LENGTH = 4 * HOUR;
+
+/** Running now: from its start until its end (or four hours later). */
+export function happeningNow(e: Timed, now: number): boolean {
+  const start = Date.parse(e.starts_at);
+  const end = e.ends_at ? Date.parse(e.ends_at) : start + DEFAULT_LENGTH;
+  return start <= now && now < end;
+}
+
+/**
+ * Home's order (usability review #10): happening now, overdue, due within
+ * 48 hours, other things to do, waiting on others, done – each by date.
+ */
+export function urgencyRank(e: Timed, step: Pick<NextStep, "kind" | "due">, now: number): number {
+  if (happeningNow(e, now)) return 0;
+  if (step.kind === "action") {
+    if (step.due && Date.parse(step.due) < now) return 1;
+    if (step.due && Date.parse(step.due) - now < 48 * HOUR) return 2;
+    return 3;
+  }
+  return step.kind === "waiting" ? 4 : 5;
+}
+
+export function byUrgency<T>(list: T[], timed: (x: T) => Timed, step: (x: T) => Pick<NextStep, "kind" | "due">, now: number): T[] {
+  return [...list].sort((a, b) => urgencyRank(timed(a), step(a), now) - urgencyRank(timed(b), step(b), now) || timed(a).starts_at.localeCompare(timed(b).starts_at));
+}
