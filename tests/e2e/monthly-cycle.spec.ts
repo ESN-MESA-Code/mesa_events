@@ -54,8 +54,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.getByRole("button", { name: "Add event" }).click();
     await expect(page.getByTestId("schedule")).toContainText(hike);
 
-    // The volunteer form has its own page; the cycle's steps lead there (round 2026-10-30).
-    await page.getByTestId("cycle-stepper").getByRole("link", { name: "Volunteer form" }).click();
+    // The volunteer form has its own page, a tab of the cycle (round 2026-10-30; usability review #18).
+    await page.getByRole("navigation", { name: "Cycle pages" }).getByRole("link", { name: "Volunteer form" }).click();
     await page.waitForURL(/\/form$/);
     await page.locator("#form-deadline").fill(`${month}-01T12:00`);
     await page.getByRole("button", { name: "Open volunteer form" }).click();

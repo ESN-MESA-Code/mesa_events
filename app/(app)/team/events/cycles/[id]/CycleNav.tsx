@@ -5,11 +5,14 @@ import { usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
 import { Stepper, type StepView } from "@/components/status";
+import { TabBar } from "@/components/TabBar";
 
 /**
  * The header of every cycle page: title, the month selector (switching
- * months keeps the page – schedule, form, roster …), the steps as links and
- * the next action. The step whose page is shown is outlined.
+ * months keeps the page – schedule, form, roster …), the steps as status
+ * only, the next action, and the pages as tabs (usability review #18: one
+ * "current" style each – the filled step is where the cycle is, the
+ * underlined tab is the page shown; the tab holding the current step has a dot).
  */
 export function CycleNav({
   cycleId,
@@ -30,9 +33,14 @@ export function CycleNav({
   const base = `/team/events/cycles/${cycleId}`;
   const sub = pathname.startsWith(base) ? pathname.slice(base.length) : "";
   const current = months.find((m) => m.id === cycleId)!;
-  // Several steps share a page (ideas + schedule, allocation + roster): outline the last of them reached.
-  const hereSteps = steps.filter((s) => s.href === pathname);
-  const here = hereSteps.find((s) => s.state === "current") ?? hereSteps.at(-1);
+  const tabs = [
+    { href: base, label: "Schedule" },
+    { href: `${base}/form`, label: "Volunteer form" },
+    { href: `${base}/roster`, label: "Roster" },
+    { href: `${base}/descriptions`, label: "Descriptions" },
+    { href: `${base}/hand-in`, label: "Hand-in" },
+  ];
+  const currentHref = steps.find((s) => s.state === "current")?.href;
 
   return (
     <div className="mb-6 space-y-4" data-testid="cycle-nav">
@@ -57,7 +65,7 @@ export function CycleNav({
       </div>
       <Card>
         <CardContent className="space-y-3 pt-5">
-          <Stepper steps={steps.map((s) => ({ ...s, here: s === here }))} label="Steps of this cycle – each opens its page" testId="cycle-stepper" />
+          <Stepper steps={steps.map((s) => ({ label: s.label, state: s.state, note: s.note }))} label="Steps of this cycle" testId="cycle-stepper" />
           <Link
             href={next.href}
             className={next.done ? "block text-sm text-emerald-700" : "block rounded-md border border-esn/30 bg-esn/5 px-3 py-2 text-sm hover:underline"}
@@ -69,6 +77,7 @@ export function CycleNav({
           </Link>
         </CardContent>
       </Card>
+      <TabBar label="Cycle pages" tabs={tabs.map((t) => ({ ...t, active: pathname === t.href, note: currentHref === t.href ? "The cycle's current step is here" : undefined }))} />
     </div>
   );
 }
