@@ -98,6 +98,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         templates={templates}
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
         place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
+        eventPriceCents={event.price_cents}
       />
     </div>
   );

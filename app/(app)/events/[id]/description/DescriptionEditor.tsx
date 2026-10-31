@@ -11,6 +11,7 @@ import {
   coerceFields,
   esnObjectiveIds,
   formatCount,
+  formatPrice,
   fromTemplate,
   renderDescription,
   validateAll,
@@ -59,9 +60,11 @@ interface Props {
   reviews: Array<{ id: string; reviewer: string; decision: string; comment: string; when: string }>;
   /** The event's venue name and address (the venue fields start from them). */
   place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
+  /** The price in the event's details (cents; null = TBA), compared with the post's (usability review #4). */
+  eventPriceCents: number | null;
 }
 
-export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place }: Props) {
+export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place, eventPriceCents }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
@@ -201,6 +204,16 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
     timer.current = setTimeout(flush, 50);
   }
 
+  // The event's price and the post's (usability review #4): two fields, so a difference is shown.
+  const eventPrice =
+    eventPriceCents === null
+      ? { label: "TBA", input: "TBA" }
+      : eventPriceCents === 0
+        ? { label: "FREE", input: "free" }
+        : { label: `€ ${(eventPriceCents / 100).toFixed(2)}`, input: (eventPriceCents / 100).toFixed(2) };
+  const postPrice = formatPrice(fields.price, "").value ?? "";
+  const priceDiffers = postPrice !== eventPrice.label && !(eventPriceCents === null && !postPrice);
+
   const st = STATUS[status] ?? STATUS.draft;
   const tooLong = length > CONFIG.MAX_CHARS;
   const text = (key: keyof DescriptionFields, label: string, opts: { area?: boolean; hint?: string; placeholder?: string; rows?: number } = {}) => (
@@ -287,11 +300,25 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     </Field>
                     {text("time", "Time", { hint: "19:30, 7pm, 19:30–22:00 or TBA" })}
                   </div>
-                  <VenueFields eventId={eventId} initial={place} canSaveEvent={place.canSaveEvent} onVenue={(v) => change("venue", v)} />
+                  <VenueFields eventId={eventId} initial={place} canSaveEvent={place.canSaveEvent} postVenue={fields.venue} onVenue={(v) => change("venue", v)} />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {text("price", "Price", { hint: "9.50, free or TBA" })}
+                    {text("price", "Price shown in the post", { hint: `9.50, free or TBA · event details: ${eventPrice.label}` })}
                     {text("priceNote", "Price note", { placeholder: "ESNcard holders € 7.50" })}
                   </div>
+                  {priceDiffers && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="price-mismatch">
+                      The post says <strong>{postPrice || "nothing"}</strong>, the event&apos;s details say <strong>{eventPrice.label}</strong>.{" "}
+                      {eventPriceCents !== null ? (
+                        <button type="button" className="font-semibold underline" onClick={() => change("price", eventPrice.input)}>
+                          Use {eventPrice.label} in the post
+                        </button>
+                      ) : (
+                        <>
+                          {place.canSaveEvent ? "Set the price under Overview → Edit details" : "The OC sets the price in the event's details"} once it is fixed.
+                        </>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
               {step === "intro" && (
