@@ -30,7 +30,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const supabase = await createSessionClient();
   const now = nowMs();
   const thisMonth = monthOf(new Date(now).toISOString());
-  const month = parseMonthParam(sp.month) ?? thisMonth;
+  // From the 25th on it opens on the next month (usability review #13).
+  const defaultMonth = Number(berlinDate(new Date(now).toISOString()).slice(8)) >= 25 ? addMonths(thisMonth, 1) : thisMonth;
+  const month = parseMonthParam(sp.month) ?? defaultMonth;
 
   const [{ data: events }, { data: internals }, { data: mine }, { data: mineInternal }, { data: slots }, { data: monthsRows }, { data: feed }] = await Promise.all([
     show === "internal"
@@ -58,7 +60,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // The months offered: a year back to the planned cycles ahead (and half a year of internal plans).
   const months = new Set<string>();
   for (let m = addMonths(thisMonth, -12); m <= addMonths(thisMonth, 6); m = addMonths(m, 1)) months.add(m);
-  for (const c of monthsRows ?? []) months.add(c.month);
+  // Planned cycles up to a year ahead (test cycles years ahead stay out).
+  for (const c of monthsRows ?? []) if (c.month <= addMonths(thisMonth, 12)) months.add(c.month);
   months.add(month);
   const myRole = new Map((mine ?? []).map((a) => [a.event_id, a.role]));
   const myInternal = new Map((mineInternal ?? []).map((p) => [p.internal_event_id, p.role]));
@@ -135,7 +138,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   .flat()
                   .map((day, i) =>
                     day ? (
-                      <div key={day} className={cn("min-h-24 rounded-md border border-gray-200 p-1 space-y-1", day < today ? "bg-gray-50" : "bg-white")}>
+                      <div key={day} className={cn("min-h-24 rounded-md border p-1 space-y-1", day < today ? "border-gray-100 bg-gray-50 opacity-60" : day === today ? "border-esn/40 bg-white" : "border-gray-200 bg-white")}>
                         <p className={cn("text-[11px] font-semibold tabular-nums", day === today ? "text-esn" : "text-gray-500")}>{Number(day.slice(8))}</p>
                         {list
                           .filter((e) => berlinDate(e.starts_at) === day)
