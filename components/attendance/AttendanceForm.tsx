@@ -471,8 +471,17 @@ export default function AttendanceForm({ event, texts, kiosk }: Props) {
               </div>
             )}
 
-            {/* Participation terms (legal/form-terms.en.md) */}
-            <div className="legal-box" dangerouslySetInnerHTML={{ __html: texts.terms }} />
+            {/* Participation terms (legal/form-terms.en.md), folded on phones' behalf (usability review #32):
+                the gist and the checkbox stay in view, the text opens with one tap. */}
+            <details className="legal-box group" data-testid="form-terms">
+              <summary className="cursor-pointer list-none text-xs text-gray-700 [&::-webkit-details-marker]:hidden">
+                <span className="font-bold uppercase tracking-wide">Participation terms</span> – you must be 18 or older and are responsible for your own
+                conduct; liability is limited.{" "}
+                <span className="font-medium text-esn underline group-open:hidden">Read the terms</span>
+                <span className="hidden font-medium text-esn underline group-open:inline">Hide the terms</span>
+              </summary>
+              <div className="mt-2 space-y-2 [&>h3:first-child]:hidden" dangerouslySetInnerHTML={{ __html: texts.terms }} />
+            </details>
 
             <div>
               <label className="flex items-start gap-3 cursor-pointer">
