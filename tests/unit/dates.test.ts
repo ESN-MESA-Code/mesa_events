@@ -5,6 +5,7 @@ import {
   berlinInputToIso,
   berlinTime,
   daysSpanned,
+  dueUrgency,
   formatCents,
   formatDateTime,
   isoToBerlinInput,
@@ -96,5 +97,15 @@ describe("money", () => {
     expect(formatCents(1250)).toBe("€ 12.50");
     expect(formatCents(5)).toBe("€ 0.05");
     expect(formatCents(null)).toBe("–");
+  });
+});
+
+describe("deadline urgency (usability review #1)", () => {
+  const now = Date.parse("2026-11-01T12:00:00Z");
+  it("amber within 48 hours, red within 24 hours or once passed", () => {
+    expect(dueUrgency("2026-11-04T12:00:00Z", now)).toBe("later");
+    expect(dueUrgency("2026-11-03T11:00:00Z", now)).toBe("soon");
+    expect(dueUrgency("2026-11-02T11:00:00Z", now)).toBe("urgent");
+    expect(dueUrgency("2026-10-31T12:00:00Z", now)).toBe("urgent");
   });
 });

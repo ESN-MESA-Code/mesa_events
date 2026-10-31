@@ -114,6 +114,8 @@ export interface NextStep {
   anchor: StepAnchor;
   /** Deadline (ISO). */
   due?: string;
+  /** What happens when the deadline passes ("after that the event is cancelled"). */
+  dueNote?: string;
   /** action: theirs to do · waiting: on someone else · done: nothing left. */
   kind: "action" | "waiting" | "done";
 }
@@ -122,6 +124,13 @@ export interface NextStep {
  * The one thing the OC (or a helper) should do next for this event, in the
  * order the event needs it.
  */
+/**
+ * At the description deadline, events whose description was never submitted
+ * are cancelled (round 2026-10-30); the OC is told so wherever the deadline
+ * shows (usability review #1).
+ */
+export const DEADLINE_CANCELS = "after that the event is cancelled";
+
 export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   const started = Date.parse(i.startsAt) <= i.now;
   const handInOpen = !i.photosIn || !i.reportIn || i.belegeMissing > 0;
@@ -138,7 +147,14 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
   if (i.status === "understaffed" && !started) return { label: "Decide: run under-staffed or cancel?", tab: "", anchor: "decide", kind: "action" };
   if (!started) {
     if (i.description === "missing" || i.description === "draft") {
-      return { label: "Write the description", tab: "description", anchor: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };
+      return {
+        label: "Write the description",
+        tab: "description",
+        anchor: "description",
+        due: i.descriptionDeadline ?? undefined,
+        dueNote: i.descriptionDeadline ? DEADLINE_CANCELS : undefined,
+        kind: "action",
+      };
     }
     if (i.description === "changes_requested") {
       return { label: "Fix the description (Comms asked for changes)", tab: "description", anchor: "description", due: i.descriptionDeadline ?? undefined, kind: "action" };

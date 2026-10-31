@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { cycleLabel, formatCents, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
 import { monthParam } from "@/lib/month";
 import { nextStep, type NextStep } from "@/lib/checklist";
 import { checklistInput, volunteerForms } from "@/lib/eventStatus";
@@ -10,7 +10,7 @@ import { hasRole } from "@/lib/roles";
 import type { EventStatus } from "@/lib/labels";
 import type { ClaimStatus } from "@/lib/reimbursement";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
-import { ClaimStatusBadge, EventStatusBadge } from "@/components/status";
+import { ClaimStatusBadge, DueLabel, EventStatusBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
 import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
@@ -133,7 +133,7 @@ export default async function HomePage() {
                         {step.kind === "action" ? "→ " : step.kind === "done" ? "✓ " : "… "}
                         {step.label}
                       </span>
-                      {step.due && <span className="text-xs opacity-80">{formatDue(step.due, now)}</span>}
+                      {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-xs" />}
                     </Link>
                   </li>
                 ))}

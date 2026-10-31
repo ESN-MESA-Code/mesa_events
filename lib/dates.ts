@@ -125,6 +125,15 @@ export function formatShortDate(iso: string): string {
   return format(new TZDate(new Date(iso).getTime(), TIME_ZONE), "EEE d MMM");
 }
 
+/**
+ * How close a deadline is (usability review #1): "soon" within 48 hours
+ * (amber), "urgent" within 24 hours or once passed (red).
+ */
+export function dueUrgency(iso: string, now = Date.now()): "later" | "soon" | "urgent" {
+  const left = Date.parse(iso) - now;
+  return left < 86_400_000 ? "urgent" : left < 2 * 86_400_000 ? "soon" : "later";
+}
+
 /** "due Sat 31 Oct, 23:59" or "was due …" once passed. */
 export function formatDue(iso: string, now = Date.now()): string {
   const when = format(new TZDate(new Date(iso).getTime(), TIME_ZONE), "EEE d MMM, HH:mm");

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { loadEventForPage } from "@/lib/events";
-import { formatDateTime, formatDue, nowMs } from "@/lib/dates";
+import { formatDateTime, nowMs } from "@/lib/dates";
 import { EVENT_TYPE_LABELS } from "@/lib/labels";
 import { TAB_LABEL, nextStep } from "@/lib/checklist";
 import { checklistInput } from "@/lib/eventStatus";
@@ -42,7 +42,7 @@ export default async function EventLayout({ params, children }: { params: Promis
       </div>
       {step && step.kind !== "done" && (
         <Suspense>
-          <NextStepBanner id={id} step={step} due={step.due ? formatDue(step.due, nowMs()) : null} />
+          <NextStepBanner id={id} step={step} now={nowMs()} />
         </Suspense>
       )}
       <Suspense>

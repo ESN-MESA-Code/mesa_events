@@ -3,7 +3,7 @@ import { loadEventForPage } from "@/lib/events";
 import { coerceFields, renderDescription } from "@/lib/description/template";
 import { prefillFromEvent } from "@/lib/description/prefill";
 import { searchEntry, type SearchEntry } from "@/lib/description/search";
-import { formatDateTime, nowMs } from "@/lib/dates";
+import { dueUrgency, formatDateTime, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { DescriptionEditor } from "./DescriptionEditor";
@@ -61,13 +61,24 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
   });
   const templates = Object.fromEntries((published ?? []).map((p) => [p.event_id, coerceFields(p.approved_fields)]));
   const deadline = cycle?.description_deadline ?? null;
-  const late = deadline !== null && Date.parse(deadline) < nowMs() && (!description || ["draft", "changes_requested"].includes(description.status));
+  const now = nowMs();
+  const late = deadline !== null && Date.parse(deadline) < now && (!description || ["draft", "changes_requested"].includes(description.status));
+  // Never submitted by the deadline: the event is cancelled (round 2026-10-30; usability review #1).
+  const notSubmitted = !description || description.status === "draft";
+  const urgency = deadline ? dueUrgency(deadline, now) : "later";
 
   return (
     <div className="space-y-4">
       {deadline && (
-        <Alert tone={late ? "error" : "info"}>
-          Descriptions for this month are due {formatDateTime(deadline)}.
+        <Alert tone={late || urgency === "urgent" ? "error" : urgency === "soon" ? "warning" : "info"} data-testid="description-deadline">
+          Descriptions for this month are due <strong>{formatDateTime(deadline)}</strong>.{" "}
+          {notSubmitted
+            ? Date.parse(deadline) < now
+              ? "The deadline has passed."
+              : "If this one is not submitted for Comms review by then, the event is cancelled automatically."
+            : description.status === "changes_requested"
+              ? "It was submitted, so it is not cancelled – but fix it soon, it counts as late after the deadline."
+              : null}
         </Alert>
       )}
       <DescriptionEditor

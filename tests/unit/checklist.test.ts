@@ -72,7 +72,7 @@ describe("next step", () => {
 
   it("the OC: decide, write, wait for Comms, sign off, hand in", () => {
     expect(step({ status: "understaffed" })).toMatchObject({ label: "Decide: run under-staffed or cancel?", tab: "", kind: "action" });
-    expect(step({})).toEqual({ label: "Write the description", tab: "description", anchor: "description", due: base.descriptionDeadline, kind: "action" });
+    expect(step({})).toEqual({ label: "Write the description", tab: "description", anchor: "description", due: base.descriptionDeadline, dueNote: "after that the event is cancelled", kind: "action" });
     expect(step({ description: "changes_requested" }).label).toMatch(/Fix the description/);
     expect(step({ description: "submitted" })).toMatchObject({ kind: "waiting" });
     expect(step({ description: "published" })).toMatchObject({ kind: "done", tab: "attendance" });
@@ -82,6 +82,13 @@ describe("next step", () => {
     expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1, reportIn: true })).toMatchObject({ label: "Hand in the Belege" });
     expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true })).toMatchObject({ label: "Write the event report", anchor: "hand-in-status" });
     expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, reportIn: true })).toMatchObject({ kind: "done" });
+  });
+
+  it("says what the description deadline means (usability review #1)", () => {
+    expect(step({ description: "missing" }).dueNote).toBe("after that the event is cancelled");
+    // Submitted once (changes requested): late, never cancelled.
+    expect(step({ description: "changes_requested" }).dueNote).toBeUndefined();
+    expect(step({ descriptionDeadline: null }).dueNote).toBeUndefined();
   });
 
   it("a helper: help, then hand in their Belege", () => {

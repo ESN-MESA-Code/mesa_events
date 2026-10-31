@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { loadEventForPage } from "@/lib/events";
-import { formatDue, nowMs } from "@/lib/dates";
-import { eventChecklist } from "@/lib/checklist";
+import { nowMs } from "@/lib/dates";
+import { DEADLINE_CANCELS, eventChecklist } from "@/lib/checklist";
+import { DueLabel } from "@/components/status";
 import { checklistInput } from "@/lib/eventStatus";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ export async function EventChecklist({ eventId }: { eventId: string }) {
                 <span className="hover:underline">{i.label}</span>
                 <span className="ml-auto text-xs text-gray-500">
                   {i.detail}
-                  {i.due && <span className={cn("block text-right", i.state === "late" ? "text-red-700" : "text-gray-600")}>{formatDue(i.due, nowMs())}</span>}
+                  {i.due && <DueLabel iso={i.due} now={nowMs()} note={i.key === "description" && ["missing", "draft"].includes(input.description) ? DEADLINE_CANCELS : undefined} className="block text-right" />}
                 </span>
               </Link>
             </li>

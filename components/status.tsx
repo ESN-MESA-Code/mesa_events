@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, type EventStatus } from "@/lib/labels";
 import { STATUS_LABELS, type ClaimStatus } from "@/lib/reimbursement";
 import { cn } from "@/lib/utils";
+import { dueUrgency, formatDue } from "@/lib/dates";
 
 export function EventStatusBadge({ status, className }: { status: EventStatus; className?: string }) {
   return (
@@ -106,5 +107,23 @@ export function Stepper({ steps, label, compact = false, testId }: { steps: Step
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * "due Mon 2 Nov, 19:00 – after that the event is cancelled": amber within
+ * 48 hours, red within 24 hours or once passed (usability review #1).
+ */
+export function DueLabel({ iso, now, note, className }: { iso: string; now: number; note?: string; className?: string }) {
+  const urgency = dueUrgency(iso, now);
+  return (
+    <span
+      className={cn(urgency === "urgent" ? "font-semibold text-red-700" : urgency === "soon" ? "font-semibold text-amber-700" : "opacity-80", className)}
+      data-urgency={urgency}
+      data-testid="due"
+    >
+      {formatDue(iso, now)}
+      {note && ` – ${note}`}
+    </span>
   );
 }

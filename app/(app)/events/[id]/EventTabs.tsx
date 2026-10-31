@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { backLink, withFrom } from "@/lib/breadcrumbs";
 import { stepLink, type NextStep } from "@/lib/checklist";
+import { DueLabel } from "@/components/status";
 
 /** "← My events" etc.: back to where the member came from (?from=…). */
 export function EventBreadcrumb({ fallback }: { fallback: string }) {
@@ -55,7 +56,7 @@ export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Reco
 }
 
 /** "Your next step": to the tab where it is done, or down to it on that tab (review 2026-10-29 B4). */
-export function NextStepBanner({ id, step, due }: { id: string; step: NextStep; due: string | null }) {
+export function NextStepBanner({ id, step, now }: { id: string; step: NextStep; now: number }) {
   const link = stepLink(id, step, usePathname());
   return (
     <Link
@@ -68,7 +69,7 @@ export function NextStepBanner({ id, step, due }: { id: string; step: NextStep; 
     >
       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
       <span className="font-semibold text-esn-dark">{step.label}</span>
-      {due && <span className="text-sm text-gray-600">{due}</span>}
+      {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-sm" />}
       <span className="ml-auto text-sm text-esn">{link.label}</span>
     </Link>
   );
