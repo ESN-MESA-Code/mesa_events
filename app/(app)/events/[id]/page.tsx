@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Event" };
 
 export default async function EventOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam } = await loadEventForPage(id);
+  const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam, cycle } = await loadEventForPage(id);
 
   const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }] = await Promise.all([
     supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
@@ -224,8 +224,11 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               </a>
             ) : event.chat_space_requested_at ? (
               <p className="text-gray-600">The space is being created…</p>
+            ) : cycle && cycle.status !== "confirmed" ? (
+              // Say which "confirmed" is meant (usability review #30): the event's status vs the month's roster.
+              <p className="text-gray-600">No space yet – it is created when the Events team confirms the month&apos;s roster{event.status === "confirmed" ? " (the event itself is already confirmed)" : ""}.</p>
             ) : (
-              <p className="text-gray-600">No space yet – it is created when the month&apos;s roster is confirmed.</p>
+              <p className="text-gray-600">No space yet, although the month&apos;s roster is confirmed – {isEvents ? "create it below." : "the Events team can create it."}</p>
             )}
             {isEvents && !event.chat_space_requested_at && !["draft", "dropped"].includes(event.status) && (
               <ActionButton action={requestChatSpace} input={{ event_id: id }} variant="outline" done="The Chat space is being created.">
