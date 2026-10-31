@@ -15,6 +15,7 @@ import { EsnUpload } from "@/components/EsnUpload";
 import { loadEsn } from "@/lib/esn/load";
 import type { EventReport } from "@/lib/esn/formData";
 import { hasRole } from "@/lib/roles";
+import { StepIcon } from "@/components/StepIcon";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
@@ -77,7 +78,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
         </CardHeader>
         <CardContent className="text-sm grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="handin-status">
           <p>
-            {list?.signed_off_at ? "✅" : "⬜"} Attendance list{" "}
+            <StepIcon kind={list?.signed_off_at ? "done" : started ? "todo" : "later"} /> Attendance list{" "}
             {list?.signed_off_at ? (
               `signed off (${list.headcount} counted)`
             ) : started ? (
@@ -89,11 +90,11 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             )}
           </p>
           <p>
-            {photosIn(photos) ? "✅" : "⬜"} Photos in Drive:{" "}
+            <StepIcon kind={photosIn(photos) ? "done" : started ? "todo" : "later"} /> Photos in Drive:{" "}
             {photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "ticked by hand" : started ? "none yet" : <span className="text-gray-500">– after the event</span>}
           </p>
           <p data-testid="report-status">
-            {report ? "✅" : "⬜"} Event report{" "}
+            <StepIcon kind={report ? "done" : started ? "todo" : "later"} /> Event report{" "}
             {report ? (
               "written"
             ) : started ? (
@@ -105,7 +106,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             )}
           </p>
           <p data-testid="receipts-status">
-            {s.receipts && !s.belege_missing ? "✅" : "⬜"}{" "}
+            <StepIcon kind={s.receipts && !s.belege_missing ? "done" : started ? "todo" : "later"} />{" "}
             {receiptsStatus({
               mine: (claims ?? []).length,
               myMissing: (claims ?? []).filter((c) => c.status === "not_submitted").length,
