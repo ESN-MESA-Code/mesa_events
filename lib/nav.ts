@@ -29,6 +29,7 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
     { href: "/me", label: "My events" },
     { href: "/ideas", label: "Ideas" },
     { href: "/office-hours", label: "Office hours" },
+    { href: "/leaderboard", label: "Leaderboard" },
   ];
   if (volunteer.open) personal.push({ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" });
   const exec = roles.includes("executive");

@@ -5,7 +5,7 @@ const labels = (items: { label: string }[]) => items.map((i) => i.label);
 
 describe("navigation", () => {
   it("members: personal pages only, Volunteer only while a form is open", () => {
-    expect(labels(navItems([]).personal)).toEqual(["Home", "Calendar", "My events", "Ideas", "Office hours"]);
+    expect(labels(navItems([]).personal)).toEqual(["Home", "Calendar", "My events", "Ideas", "Office hours", "Leaderboard"]);
     expect(navItems([]).team).toEqual([]);
     const open = navItems([], { open: true, submitted: false }).personal.at(-1);
     expect(open).toEqual({ href: "/volunteer", label: "Volunteer", badge: "1" });
