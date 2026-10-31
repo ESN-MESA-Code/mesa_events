@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { berlinTime, cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
 import { monthParam } from "@/lib/month";
 import { nextStep, type NextStep } from "@/lib/checklist";
 import { checklistInput, volunteerForms } from "@/lib/eventStatus";
@@ -14,6 +14,7 @@ import { ClaimStatusBadge, DueLabel, EventStatusBadge } from "@/components/statu
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
 import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
+import { StepIcon } from "@/components/StepIcon";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -40,7 +41,7 @@ export default async function HomePage() {
     volunteerForms(viewer.id),
     supabase
       .from("assignments")
-      .select("id, role, events(id, title, status, starts_at, helpers_needed, chat_space_name, chat_space_requested_at, planning_cycles(description_deadline))")
+      .select("id, role, events(id, title, status, starts_at, location, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
       .eq("profile_id", viewer.id)
       .eq("status", "active"),
     supabase.rpc("open_slots"),
@@ -52,7 +53,18 @@ export default async function HomePage() {
   ]);
 
   // My events: upcoming, and recent ones whose hand-in is not finished.
-  type Ev = { id: string; title: string; status: EventStatus; starts_at: string; helpers_needed: number; chat_space_name: string | null; chat_space_requested_at: string | null; planning_cycles: { description_deadline: string | null } | null };
+  type Ev = {
+    id: string;
+    title: string;
+    status: EventStatus;
+    starts_at: string;
+    location: string | null;
+    helpers_needed: number;
+    chat_space_name: string | null;
+    chat_space_url: string | null;
+    chat_space_requested_at: string | null;
+    planning_cycles: { description_deadline: string | null } | null;
+  };
   const mine = (assignments ?? [])
     .map((a) => ({ role: a.role as "oc" | "helper", event: a.events as unknown as Ev | null }))
     .filter((a): a is { role: "oc" | "helper"; event: Ev } => !!a.event && Date.parse(a.event.starts_at) > now - 45 * DAY && !["draft", "dropped"].includes(a.event.status));
@@ -129,12 +141,26 @@ export default async function HomePage() {
                       className={cn("flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm hover:underline", STEP_TONE[step.kind])}
                       data-testid="next-step"
                     >
-                      <span className="font-medium">
-                        {step.kind === "action" ? "→ " : step.kind === "done" ? "✓ " : "… "}
-                        {step.label}
-                      </span>
+                      <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
+                      <span className="font-medium">{step.label}</span>
                       {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-xs" />}
                     </Link>
+                    {/* A helper's way in before the event (usability review #9): when, where, the Chat space. */}
+                    {role === "helper" && step.anchor === "chat-space" && (
+                      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600" data-testid="helper-info">
+                        <span>
+                          Starts {berlinTime(event.starts_at)}
+                          {event.location && ` · ${event.location}`}
+                        </span>
+                        {event.chat_space_url ? (
+                          <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="font-medium text-esn hover:underline">
+                            Open the Chat space ↗
+                          </a>
+                        ) : (
+                          <span>{event.chat_space_requested_at ? "The Chat space is being created." : "The Chat space is created when the month's roster is confirmed."}</span>
+                        )}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>

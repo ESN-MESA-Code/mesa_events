@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { backLink, withFrom } from "@/lib/breadcrumbs";
 import { stepLink, type NextStep } from "@/lib/checklist";
 import { DueLabel } from "@/components/status";
+import { StepIcon } from "@/components/StepIcon";
 
 /** "← My events" etc.: back to where the member came from (?from=…). */
 export function EventBreadcrumb({ fallback }: { fallback: string }) {
@@ -68,7 +69,10 @@ export function NextStepBanner({ id, step, now }: { id: string; step: NextStep; 
       data-testid="next-step-banner"
     >
       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
-      <span className="font-semibold text-esn-dark">{step.label}</span>
+      <span className="flex items-center gap-1.5 font-semibold text-esn-dark">
+        <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
+        {step.label}
+      </span>
       {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-sm" />}
       <span className="ml-auto text-sm text-esn">{link.label}</span>
     </Link>

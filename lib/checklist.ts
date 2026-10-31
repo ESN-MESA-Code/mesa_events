@@ -151,7 +151,7 @@ export function nextStep(i: ChecklistInput, role: "oc" | "helper"): NextStep {
     return { label: "Event cancelled – nothing left to do", tab: "", anchor: "event", kind: "done" };
   }
   if (role === "helper") {
-    if (!started) return { label: "Help at the event – see the Chat space", tab: "", anchor: "chat-space", kind: "waiting" };
+    if (!started) return { label: "Help at the event – meeting point and plans are in the Chat space", tab: "", anchor: "chat-space", kind: "waiting" };
     if (mine > 0) return { label: "Hand the paper Belege to Finance", tab: "hand-in", anchor: "your-receipts", kind: "action" };
     return { label: "Paid for something? Register the receipt", tab: "hand-in", anchor: "register-receipt", kind: "done" };
   }
