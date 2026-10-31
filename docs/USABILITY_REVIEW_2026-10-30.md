@@ -211,3 +211,44 @@ The shared local database contains leftover test cycles (September 2244 … Octo
 "World A/World B" slots), probably from `test:db` runs. They clutter the month pickers and team
 queues. `npm run clean:test-data` exists. Even so, the month picker and team queues should not
 show cycles years in the future (see #11).
+
+## Status (2026-10-31, branch `ux/usability-review-fixes`)
+
+Fixed on the branch cut from `d6fd077`. "Partly" means part of the proposed fix needs a product
+decision or a migration and was left out; what is missing is said in the note. Decisions taken
+are in docs/DECISIONS.md ("2026-10-31 – Usability review fixes").
+
+| # | Status | Note | Commit |
+|---|---|---|---|
+| 1 | Fixed | Home, banner, checklist and Description tab say "– after that the event is cancelled" (for drafts); due date amber < 48 h, red < 24 h or overdue. | 16a3950 |
+| 2 | Fixed | The example programme is an error on submit and approval (client and server). The editor itself starts empty – the text came from the demo seed, which now gives each event its own programme except the hike. | 8a31405 |
+| 3 | Fixed | Fields kept separate (Comms may word the post's line): the editor shows when the post's venue differs from the venue fields, with "Use the fields in the post". | 5a82cd9 |
+| 4 | Fixed | "Price shown in the post" with the event's price as hint; a difference is flagged with "Use € 6.00 in the post". | 5a82cd9 |
+| 5 | Partly | Next steps count only the member's own missing paper receipts; only others' missing → waiting step "The rest of the team still has to hand in 1 paper receipt – remind them in the Chat space". Naming the person needs a new definer function and revisiting DECISIONS B2 (counts only, no names). | 1bab836 |
+| 6 | Fixed | No sign-off button before sign-ins open; while open it is a secondary button in an "Event over?" card at the bottom; the confirm dialog names the sign-in count. | 71a85f9 |
+| 7 | Fixed | Shared `role="status"` message region; main flows say what happened, other ActionButtons "Done.". | 60e496f |
+| 8 | Fixed | All 12 `confirm()` calls replaced by a styled dialog naming event, date and consequence; an empty volunteer form says the member is listed as unavailable for all events. | 60e496f |
+| 9 | Fixed | Helpers see start time, venue and a direct Chat space link on Home; clock icon for "waiting". | 65dd3dd |
+| 10 | Fixed | Home orders happening now, overdue, due < 48 h, to do, waiting, done; running events get a "Happening now" badge and an attendance button. | b792bc9 |
+| 11 | Fixed | Team queues above the leaderboard; the Events card lists last month to two months ahead, "n more months" links the rest. | 3e80692 |
+| 12 | Fixed | Next four weeks instead of the month, own ESN events included, the grid is no longer 28–31 links. | 0b45a25 |
+| 13 | Fixed | From the 25th the calendar opens on the next month; past days dimmed; month picker leaves out cycles more than a year ahead. | e62492a |
+| 14 | Fixed | Dismissible "How MESA events work" card for members without events; it and the avatar's tooltip explain the orange dot. | 506b16b |
+| 15 | Fixed | App header, EN/DE tabs (both texts stay on the page), list markers restored, sticky accept bar. | 93c7e68 |
+| 16 | Fixed | Sticky preview column on desktop, open errors as links next to Submit, objectives as a plain list. | 191cb83 |
+| 17 | Partly | Sticky review bar at the top; last "changes requested" comment and the steps changed since the reviewed version, marked on the cards. Per-field comments would need a new table: not done. The demo DB has no reviewed version yet (the seed now adds one for the Alps weekend; it shows after `seed:demo`). | 191cb83 |
+| 18 | Fixed | Cycle pages have tabs (Schedule · Volunteer form · Roster · Descriptions · Hand-in); the stepper is status only. | e82f29d |
+| 19 | Partly | Form page lists who has not answered (with "Copy their email addresses"); members choose with segmented buttons No · If needed · Happy to · Top choice. A "Remind members" Chat announcement needs a new outgoing job and a decision on the members' space: not done. | 4bf2a05, 60e496f |
+| 20 | Fixed | ≥ 3 assignments and same-day events flagged; on a confirmed roster a change waits 10 s with Undo before it is saved and announced. The Undo flow was not exercised in the browser (synthetic drags did not trigger dnd-kit) – check by hand. | a6194c8 |
+| 21 | Fixed | Problem rows marked (amber, red after the deadline), coloured description status, OC named, "Remind OC" per row. | 0d4650e |
+| 22 | Fixed | "Approve € 14.00" in one click (plus "Other amount…"), red "Reject…" needing a reason, "capped by the rule (Helper: 50 %, max € 8.00)", figures filter the table. | d95a179 |
+| 23 | Fixed | Shared tab bar: no vertical scrollbar, horizontal scroll with a fade on phones. | f805227 |
+| 24 | Fixed | QR link built on the server and passed down. | a594db7 |
+| 25 | Fixed | Failed fetch is reported; without Realtime the list polls every 15 s and says so. Not exercised with Realtime actually down – check by hand. | a594db7 |
+| 26 | Fixed | Only meaningful figures, explained; "Signed in at 00:08"; "Show QR full screen". | a594db7 |
+| 27 | Fixed | "Paper receipt" throughout; "Beleg" once as the explanation. | 1425d07 |
+| 28 | Fixed | One icon set (lucide) with text alternatives. | 9378bb9 |
+| 29 | Fixed | Unknown URLs render the member area's 404 with header and navigation. | 8d46a79, a49d2bc |
+| 30 | Fixed | Chat space card says whether the event or the month's roster is confirmed. | 354496c |
+| 31 | Fixed | "Withdraw idea" is an outlined red button with a confirm dialog. Not clicked in the browser: the demo data has no idea in "proposed". | 459f3ff |
+| 32 | Partly | Participation terms fold behind "Read the terms" (one line and the checkbox stay). The GDPR notice stays fully visible (Art. 21(4)); shortening or moving it needs a legal decision. | c94255a |

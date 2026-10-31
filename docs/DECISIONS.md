@@ -779,3 +779,30 @@ review).
   public feed for non-members was not built: P1 events are internal.
 - **The planner, office hours and finance pages are server-rendered with small client islands**,
   as the other pages; the drag and drop reuses dnd-kit with the pointer and keyboard sensors.
+
+## 2026-10-31 – Usability review fixes (docs/USABILITY_REVIEW_2026-10-30.md)
+
+Status per finding at the end of the review document. Decisions taken where the review left a
+choice:
+
+- **Feedback and confirmations are one mechanism** (`components/Feedback.tsx`, mounted in the
+  root layout): a `role="status"` message region and a styled `<dialog>` confirm that names the
+  thing, the date and the consequence. `useAction().run(…, done)` shows a message after an action;
+  `ActionButton` says "Done." unless given its own. No `window.confirm()` is left in the app.
+- **The post's venue and price stay separate from the event's** (#3, #4): Comms may word the
+  post's line differently (round 2026-10-30). The editor labels the price "Price shown in the
+  post" and warns when post and event differ, with one click to take the event's value.
+- **Example programme text is refused** (#2) like a missing field, on submit and on approval.
+- **Next steps count only the member's own missing paper receipts** (#5). The team part stays
+  counts only (B2 above): naming who is missing one needs a new definer function and revisiting
+  B2 – not done.
+- **Cycle pages have tabs; the stepper is status only** (#18). This replaces "the stepper is the
+  breadcrumb" (round 2026-10-30) on cycle pages; the Events dashboard's stepper keeps its links.
+- **Changes on a confirmed roster wait 10 s for Undo** in the browser before they are saved and
+  announced (#20); leaving the page meanwhile warns. Before confirmation they save at once.
+- **"Paper receipt"** in the English UI (#27); "Beleg" once as the explanation (hand-in, Finance).
+- **One icon set** (lucide, already a dependency) for steps and checklists (`StepIcon`).
+- **Unknown addresses render inside the member area** (`app/(app)/[...missing]`), so the
+  navigation stays (#29).
+- **The GDPR data processing notice on the public form stays fully visible** (#32): Art. 21(4)
+  wants the right to object shown clearly and separately; only the participation terms fold.
