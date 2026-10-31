@@ -4,6 +4,9 @@ import { safeNext } from "@/lib/auth";
 import { CONFIDENTIALITY_VERSION } from "@/lib/legal";
 import { legalHtml } from "@/lib/legalContent";
 import { getViewer } from "@/lib/supabase/session";
+import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
+import { LangTabs } from "@/components/LangTabs";
 
 export const metadata: Metadata = { title: "Confidentiality" };
 
@@ -24,18 +27,44 @@ export default async function ConfidentialityPage({ searchParams }: { searchPara
   if (!viewer) redirect(`/login?next=${encodeURIComponent(`/confidentiality?next=${next}`)}`);
   if (viewer.accepted) redirect(next);
 
+  // English and German as tabs, not stacked (usability review #15); the text is split at its rule (---).
+  const [en, rest = ""] = legalHtml("organiser-confidentiality").split(/<hr\s*\/?>/);
+  // The version line closes the German part but belongs to both.
+  const [de, version = ""] = rest.split(/(?=<p><em>Version)/);
+
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10">
-      <article className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-10">
-        <div className="legal-prose" dangerouslySetInnerHTML={{ __html: legalHtml("organiser-confidentiality") }} />
+    <>
+      <header className="bg-esn text-white shadow-md">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center">
+          <Link href="/" aria-label="ESN MESA Events – home">
+            <BrandMark product="Events" />
+          </Link>
+        </div>
+      </header>
+    <main className="max-w-3xl mx-auto px-4 py-8 sm:py-10">
+      <article className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="p-6 sm:p-10">
+          {de ? (
+            <LangTabs
+              versions={[
+                { lang: "en", label: "English", html: en },
+                { lang: "de", label: "Deutsch", html: de },
+              ]}
+            />
+          ) : (
+            <div className="legal-prose" dangerouslySetInnerHTML={{ __html: en }} />
+          )}
+          {version && <div className="legal-prose mt-4" dangerouslySetInnerHTML={{ __html: version }} />}
+        </div>
 
         {error && (
-          <p role="alert" className="mt-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+          <p role="alert" className="mx-6 sm:mx-10 mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
             {ERRORS[error] ?? ERRORS.failed}
           </p>
         )}
 
-        <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
+        {/* The decision stays in view while reading (usability review #15). */}
+        <div className="sticky bottom-0 rounded-b-xl bg-white/95 backdrop-blur px-6 sm:px-10 py-4 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
           <form action="/confidentiality/accept" method="post" className="flex-1">
             <input type="hidden" name="version" value={CONFIDENTIALITY_VERSION} />
             <input type="hidden" name="next" value={next} />
@@ -49,8 +78,9 @@ export default async function ConfidentialityPage({ searchParams }: { searchPara
             </button>
           </form>
         </div>
-        <p className="text-xs text-gray-500 mt-3">Signed in as {viewer.email}</p>
+        <p className="text-xs text-gray-500 px-6 sm:px-10 pb-4">Signed in as {viewer.email}</p>
       </article>
     </main>
+    </>
   );
 }

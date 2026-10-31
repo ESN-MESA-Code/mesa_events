@@ -44,6 +44,9 @@ body {
 .legal-prose ul {
   @apply list-disc pl-5 space-y-1;
 }
+.legal-prose ol {
+  @apply list-decimal pl-5 space-y-1;
+}
 .legal-prose a {
   @apply text-esn hover:underline break-words;
 }
