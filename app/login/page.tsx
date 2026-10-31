@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -66,12 +67,12 @@ function LoginForm() {
 
       {/* Staging builds only (a build-time constant): the demo sign-in behind the access code (tests/bundle). */}
       {process.env.NEXT_PUBLIC_APP_ENV === "staging" && (
-        <a
+        <Link
           href="/staging"
           className="mt-3 w-full flex items-center justify-center rounded-md border border-dashed border-amber-500 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
         >
           Demo sign-in (staging)
-        </a>
+        </Link>
       )}
 
       {/* NODE_ENV is a build-time constant: production builds drop this block entirely (tests/bundle). */}
