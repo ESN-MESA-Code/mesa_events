@@ -65,8 +65,21 @@ export default async function IdeasPage() {
                   </p>
                   {i.decision_note && <p className="text-xs text-gray-600">Events: {i.decision_note}</p>}
                   {i.status === "proposed" && (
-                    <ActionButton action={withdrawIdea} input={{ id: i.id }} variant="ghost" confirm="Withdraw this idea?">
-                      Withdraw
+                    // A real button that asks first (usability review #31).
+                    <ActionButton
+                      action={withdrawIdea}
+                      input={{ id: i.id }}
+                      variant="outline"
+                      className="text-red-700 hover:border-red-400 hover:text-red-800"
+                      confirm={{
+                        title: `Withdraw “${i.title}”?`,
+                        body: "The Events team no longer sees it for the schedule. To bring it back, propose it again.",
+                        confirmLabel: "Withdraw the idea",
+                        danger: true,
+                      }}
+                      done="Idea withdrawn."
+                    >
+                      Withdraw idea
                     </ActionButton>
                   )}
                 </li>
