@@ -15,7 +15,7 @@ export default async function EventLayout({ params, children }: { params: Promis
   const cash = !!myAssignment || isEvents || hasRole(viewer.roles, "finance") || viewer.roles.includes("executive");
 
   // The OC's (or helper's) one next step, on every tab.
-  const step = myAssignment ? nextStep(await checklistInput(supabase, event, cycle?.description_deadline ?? null), myAssignment.role as "oc" | "helper") : null;
+  const step = myAssignment ? nextStep(await checklistInput(supabase, event, cycle?.description_deadline ?? null, viewer.id), myAssignment.role as "oc" | "helper") : null;
   const notes = step?.kind === "action" ? { [TAB_LABEL[step.tab]]: "Your next step is here" } : {};
 
   return (

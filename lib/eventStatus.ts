@@ -15,14 +15,18 @@ export interface EventForStatus {
   chat_space_requested_at: string | null;
 }
 
-export async function checklistInput(supabase: Db, event: EventForStatus, descriptionDeadline: string | null): Promise<ChecklistInput> {
-  const [{ data: assignments }, { data: description }, { data: list }, { data: photos }, { data: report }, { data: claims }] = await Promise.all([
+/** With `viewerId`, the member's own missing Belege are counted apart (usability review #5). */
+export async function checklistInput(supabase: Db, event: EventForStatus, descriptionDeadline: string | null, viewerId?: string): Promise<ChecklistInput> {
+  const [{ data: assignments }, { data: description }, { data: list }, { data: photos }, { data: report }, { data: claims }, { count: mine }] = await Promise.all([
     supabase.from("assignments").select("role").eq("event_id", event.id).eq("status", "active"),
     supabase.from("descriptions").select("status").eq("event_id", event.id).maybeSingle(),
     supabase.from("attendance_lists").select("signed_off_at").eq("event_id", event.id).maybeSingle(),
     supabase.from("event_photo_folders").select("photo_count, marked_uploaded_at").eq("event_id", event.id).maybeSingle(),
     supabase.from("event_reports").select("event_id").eq("event_id", event.id).maybeSingle(),
     supabase.rpc("event_claims_summary", { event: event.id }),
+    viewerId
+      ? supabase.from("reimbursements").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("claimant_id", viewerId).eq("status", "not_submitted")
+      : Promise.resolve({ count: null }),
   ]);
   const c = (claims ?? {}) as { receipts?: number; belege_missing?: number };
   return {
@@ -41,6 +45,7 @@ export async function checklistInput(supabase: Db, event: EventForStatus, descri
     reportIn: !!report,
     receipts: c.receipts ?? 0,
     belegeMissing: c.belege_missing ?? 0,
+    myBelegeMissing: mine ?? c.belege_missing ?? 0,
   };
 }
 

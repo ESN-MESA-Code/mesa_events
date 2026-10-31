@@ -81,7 +81,7 @@ export default async function MePage() {
   // Past events are labelled by their hand-in: is something still mine to do?
   const past = await Promise.all(
     byTime.past.map(async (a) => {
-      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null);
+      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null, viewer.id);
       return { ...a, handIn: handInState(a.event.status, nextStep(input, a.role as "oc" | "helper")) };
     })
   );

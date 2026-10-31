@@ -18,6 +18,7 @@ const base: ChecklistInput = {
   reportIn: false,
   receipts: 0,
   belegeMissing: 0,
+  myBelegeMissing: 0,
 };
 const state = (i: Partial<ChecklistInput>) => Object.fromEntries(eventChecklist({ ...base, ...i }).map((x) => [x.key, x.state]));
 
@@ -78,8 +79,8 @@ describe("next step", () => {
     expect(step({ description: "published" })).toMatchObject({ kind: "done", tab: "attendance" });
     expect(step({ now: after, description: "published" })).toMatchObject({ label: "Sign off the attendance list", tab: "attendance" });
     expect(step({ now: after, listSignedOff: true })).toMatchObject({ label: "Upload the photos to Drive and write the event report", tab: "hand-in" });
-    expect(step({ now: after, listSignedOff: true, belegeMissing: 1 })).toMatchObject({ label: "Upload the photos to Drive, write the event report and hand in the Belege" });
-    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1, reportIn: true })).toMatchObject({ label: "Hand in the Belege" });
+    expect(step({ now: after, listSignedOff: true, belegeMissing: 1, myBelegeMissing: 1 })).toMatchObject({ label: "Upload the photos to Drive, write the event report and hand in your Belege" });
+    expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, receipts: 1, belegeMissing: 1, myBelegeMissing: 1, reportIn: true })).toMatchObject({ label: "Hand in your Belege" });
     expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true })).toMatchObject({ label: "Write the event report", anchor: "hand-in-status" });
     expect(step({ now: after, listSignedOff: true, photos: 3, photosIn: true, reportIn: true })).toMatchObject({ kind: "done" });
   });
@@ -91,14 +92,28 @@ describe("next step", () => {
     expect(step({ descriptionDeadline: null }).dueNote).toBeUndefined();
   });
 
+  it("the OC is not asked for someone else's Beleg (usability review #5)", () => {
+    const done = { now: after, listSignedOff: true, photos: 3, photosIn: true, reportIn: true, receipts: 2 };
+    expect(step({ ...done, belegeMissing: 1, myBelegeMissing: 0 })).toEqual({
+      label: "The rest of the team still has to hand in 1 Beleg – remind them in the Chat space",
+      tab: "hand-in",
+      anchor: "hand-in-status",
+      kind: "waiting",
+    });
+    expect(step({ ...done, reportIn: false, belegeMissing: 1, myBelegeMissing: 0 })).toMatchObject({ label: "Write the event report", kind: "action" });
+    expect(step({ status: "cancelled", receipts: 1, belegeMissing: 1, myBelegeMissing: 0 })).toMatchObject({ kind: "waiting" });
+    expect(step({ status: "cancelled", receipts: 1, belegeMissing: 1, myBelegeMissing: 0 }, "helper")).toMatchObject({ kind: "done" });
+  });
+
   it("a helper: help, then hand in their Belege", () => {
     expect(step({}, "helper")).toMatchObject({ kind: "waiting" });
-    expect(step({ now: after, belegeMissing: 1 }, "helper")).toMatchObject({ label: "Hand the paper Belege to Finance", kind: "action" });
+    expect(step({ now: after, belegeMissing: 1, myBelegeMissing: 1 }, "helper")).toMatchObject({ label: "Hand the paper Belege to Finance", kind: "action" });
+    expect(step({ now: after, belegeMissing: 1, myBelegeMissing: 0 }, "helper")).toMatchObject({ kind: "done" });
     expect(step({ now: after }, "helper")).toMatchObject({ kind: "done" });
   });
 
   it("cancelled events only need the money sorted out", () => {
-    expect(step({ status: "cancelled", receipts: 1, belegeMissing: 1 })).toMatchObject({ kind: "action", tab: "hand-in" });
+    expect(step({ status: "cancelled", receipts: 1, belegeMissing: 1, myBelegeMissing: 1 })).toMatchObject({ kind: "action", tab: "hand-in" });
     expect(step({ status: "cancelled" })).toMatchObject({ kind: "done" });
   });
 });

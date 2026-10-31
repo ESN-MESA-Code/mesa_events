@@ -58,12 +58,12 @@ export default async function HomePage() {
     .filter((a): a is { role: "oc" | "helper"; event: Ev } => !!a.event && Date.parse(a.event.starts_at) > now - 45 * DAY && !["draft", "dropped"].includes(a.event.status));
   const withSteps = await Promise.all(
     mine.map(async (a) => {
-      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null);
+      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null, viewer.id);
       return { ...a, step: nextStep(input, a.role) };
     })
   );
   const myEvents = withSteps
-    .filter((a) => Date.parse(a.event.starts_at) > now - DAY || a.step.kind === "action")
+    .filter((a) => Date.parse(a.event.starts_at) > now - DAY || a.step.kind !== "done")
     .sort((a, b) => a.event.starts_at.localeCompare(b.event.starts_at));
 
   const myIds = new Set(mine.map((a) => a.event.id));
