@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, isoToBerlinInput, monthStartIso } from "@/lib/dates";
+import { cycleLabel, formatDateTime, isoToBerlinInput, monthStartIso } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
@@ -59,7 +59,7 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
           <p className="text-sm text-gray-600">
             Members pick the events they can do and rank OC and helper per event. {plural(people.length, "volunteer")} answered.
           </p>
-          {canEdit && <FormControls cycleId={cycle.id} status={cycle.status} formLatest={{ input: isoToBerlinInput(formLatest), label: formatDateTime(formLatest) }} />}
+          {canEdit && <FormControls cycleId={cycle.id} month={cycleLabel(cycle.month)} answers={people.length} status={cycle.status} formLatest={{ input: isoToBerlinInput(formLatest), label: formatDateTime(formLatest) }} />}
           {!["planning", "form_open", "form_closed"].includes(cycle.status) && <p className="text-sm text-gray-500">The allocation has run – the form stays closed.</p>}
         </CardContent>
       </Card>

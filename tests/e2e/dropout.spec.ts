@@ -1,7 +1,7 @@
 // Roster changes after confirmation: a helper drops out, the slot is open
 // to every member, someone claims it, the space and the OC are told.
 import { USERS, admin, as as asClient, createEvent, daysFromNow } from "../helpers/local";
-import { expect, runJobs, signInAs, test } from "./fixtures";
+import { answerConfirm, expect, runJobs, signInAs, test } from "./fixtures";
 
 test("dropout and replacement", async ({ page, context, baseURL }) => {
   page.on("dialog", (d) => d.accept());
@@ -24,6 +24,7 @@ test("dropout and replacement", async ({ page, context, baseURL }) => {
   await expect(page.getByRole("link", { name: new RegExp(title) })).toContainText("1 helper slot open");
   await page.getByRole("link", { name: new RegExp(title) }).click();
   await page.getByRole("button", { name: "Claim a helper slot (1 open)" }).click();
+  await answerConfirm(page);
   await expect(page.getByTestId("roster")).toContainText("Mia Member");
   await expect(page.getByTestId("event-status")).toHaveText("Confirmed");
   await expect(page.getByTestId("open-slots")).toHaveCount(0);

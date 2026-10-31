@@ -10,7 +10,7 @@ import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { AddressFields } from "@/components/AddressFields";
 import { DEFAULT_ADDRESS, validateAddress, type EventAddress } from "@/lib/address";
 
-export function DropOutButton({ assignmentId, role }: { assignmentId: string; role: "oc" | "helper" }) {
+export function DropOutButton({ assignmentId, role, title }: { assignmentId: string; role: "oc" | "helper"; title: string }) {
   const { run, pending, error } = useAction();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -26,7 +26,7 @@ export function DropOutButton({ assignmentId, role }: { assignmentId: string; ro
       className="flex flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        run(dropOut, { assignment_id: assignmentId, reason: reason || undefined }, () => setOpen(false));
+        run(dropOut, { assignment_id: assignmentId, reason: reason || undefined }, () => setOpen(false), `You dropped out of ${title}. Your slot is open for others now.`);
       }}
     >
       <Input aria-label="Reason (optional)" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 w-48" maxLength={500} />
@@ -43,8 +43,8 @@ export function DropOutButton({ assignmentId, role }: { assignmentId: string; ro
 }
 
 /** The Events team cancels a running event, with an optional reason for the Chat message. */
-export function CancelEventForm({ eventId }: { eventId: string }) {
-  const { run, pending, error } = useAction();
+export function CancelEventForm({ eventId, title, when }: { eventId: string; title: string; when: string }) {
+  const { run, pending, error, confirm } = useAction();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   if (!open) {
@@ -58,10 +58,10 @@ export function CancelEventForm({ eventId }: { eventId: string }) {
     <form
       className="space-y-2"
       data-testid="cancel-event-form"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        if (!window.confirm(`Cancel this event? ${CANCEL_CONSEQUENCES}`)) return;
-        run(cancelEvent, { event_id: eventId, reason: reason.trim() || undefined }, () => setOpen(false));
+        if (!(await confirm({ title: `Cancel ${title} on ${when}?`, body: CANCEL_CONSEQUENCES, confirmLabel: "Cancel the event", cancelLabel: "Keep it", danger: true }))) return;
+        run(cancelEvent, { event_id: eventId, reason: reason.trim() || undefined }, () => setOpen(false), "Event cancelled.");
       }}
     >
       <Input aria-label="Reason for the team (optional)" placeholder="Reason for the team (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />

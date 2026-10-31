@@ -5,7 +5,7 @@
 import type { Page } from "@playwright/test";
 import { USERS, admin, createEvent, daysFromNow, type SeedUser } from "../helpers/local";
 import { cycleLabel } from "../../lib/dates";
-import { expect, freshMonth, signInAs, test } from "./fixtures";
+import { answerConfirm, expect, freshMonth, signInAs, test } from "./fixtures";
 
 test.describe("Home per role", () => {
   const cases: Array<[string, SeedUser, string[]]> = [
@@ -97,8 +97,9 @@ test.describe("volunteer form, cycle month", () => {
     const answer = async () => {
       await page.goto("/volunteer");
       const form = page.getByRole("region", { name: `Volunteer form ${label}` });
-      await form.getByLabel(`Helper for Form test ${month}`).selectOption({ label: "Top choice" });
+      await form.getByRole("radiogroup", { name: `Helper for Form test ${month}` }).getByRole("radio", { name: "Top choice" }).check();
       await form.getByRole("button", { name: "Submit my answers" }).click();
+      await answerConfirm(page);
       return form;
     };
 
@@ -111,7 +112,7 @@ test.describe("volunteer form, cycle month", () => {
     await expect(form.getByTestId("volunteer-summary")).toContainText("Helper: Top choice");
     // Locked: no form any more.
     await expect(form.getByRole("button", { name: "Submit my answers" })).toHaveCount(0);
-    await expect(form.getByRole("combobox")).toHaveCount(0);
+    await expect(form.getByRole("radiogroup")).toHaveCount(0);
     await page.goto("/");
     await expect(page.getByTestId("home-volunteer").filter({ hasText: label })).toContainText("submitted ✓");
 

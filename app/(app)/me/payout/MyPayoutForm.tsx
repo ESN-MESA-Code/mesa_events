@@ -8,7 +8,7 @@ import { isValidIban } from "@/lib/reimbursement";
 
 /** Save (or replace) the profile's IBAN or PayPal; delete them. */
 export function MyPayoutForm({ saved }: { saved: boolean }) {
-  const { run, pending, error, setError } = useAction();
+  const { run, pending, error, setError, confirm } = useAction();
   const [open, setOpen] = useState(!saved);
   const [method, setMethod] = useState<"bank" | "paypal">("bank");
   const [holder, setHolder] = useState("");
@@ -27,7 +27,17 @@ export function MyPayoutForm({ saved }: { saved: boolean }) {
             size="sm"
             variant="destructive"
             disabled={pending}
-            onClick={() => window.confirm("Delete your saved IBAN / PayPal? Claims Finance has not checked yet lose them too.") && run(deleteMyPayoutDetails, {}, () => setDone("Deleted."))}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: "Delete your saved IBAN / PayPal?",
+                  body: "Claims Finance has not checked yet lose them too – Finance can't pay those until you add details again. Checked claims keep theirs until they are paid.",
+                  confirmLabel: "Delete",
+                  danger: true,
+                })
+              )
+                run(deleteMyPayoutDetails, {}, () => setDone("Deleted."));
+            }}
           >
             Delete
           </Button>

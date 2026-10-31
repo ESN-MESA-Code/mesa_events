@@ -305,7 +305,7 @@ export function PlannerBoard({
 
 /** One date: details, cancel or restore, delete (also the rest of its series). */
 function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; onClose: () => void }) {
-  const { run, pending, error } = useAction();
+  const { run, pending, error, confirm } = useAction();
   const [f, setF] = useState({
     title: ev.title,
     start: ev.start,
@@ -402,8 +402,9 @@ function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; 
                 size="sm"
                 variant="destructive"
                 disabled={pending}
-                onClick={() => {
-                  if (window.confirm(`Delete ${ev.title} on ${ev.start.slice(0, 10)}?`)) run(deleteInternalEvent, { id: ev.id }, onClose);
+                onClick={async () => {
+                  if (await confirm({ title: `Delete ${ev.title} on ${ev.start.slice(0, 10)}?`, body: "Its OC and helpers are removed with it. To keep it visible as cancelled, use “Cancel date”.", confirmLabel: "Delete", danger: true }))
+                    run(deleteInternalEvent, { id: ev.id }, onClose, `${ev.title} deleted.`);
                 }}
               >
                 Delete
@@ -413,8 +414,16 @@ function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; 
                   size="sm"
                   variant="destructive"
                   disabled={pending}
-                  onClick={() => {
-                    if (window.confirm(`Delete ${ev.title} on ${ev.start.slice(0, 10)} and all later dates of its series?`)) run(deleteInternalEvent, { id: ev.id, following: true }, onClose);
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: `Delete ${ev.title} on ${ev.start.slice(0, 10)} and all later dates of its series?`,
+                        body: "Every later date of the series goes, with its OC and helpers. Earlier dates stay.",
+                        confirmLabel: "Delete this and later",
+                        danger: true,
+                      })
+                    )
+                      run(deleteInternalEvent, { id: ev.id, following: true }, onClose, `${ev.title}: this and later dates deleted.`);
                   }}
                 >
                   Delete this and later

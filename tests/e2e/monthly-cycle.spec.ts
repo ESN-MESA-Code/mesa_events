@@ -4,7 +4,7 @@
 // Finance → paid.
 import { TEST_TAG, USERS, admin, hoursFromNow } from "../helpers/local";
 import { cycleLabel } from "../../lib/dates";
-import { drag, expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
+import { answerConfirm, drag, expect, freshMonth, runJobs, signInAs, test, waitSaved } from "./fixtures";
 
 test("a month from idea to paid reimbursement", async ({ page, context, baseURL, browser }) => {
   test.setTimeout(480_000);
@@ -67,8 +67,9 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
       await as(user);
       await page.goto("/volunteer");
       const form = page.getByRole("region", { name: `Volunteer form ${cycleLabel(`${month}-01`)}` });
-      for (const [label, choice] of picks) await form.getByLabel(label).selectOption({ label: choice });
+      for (const [label, choice] of picks) await form.getByRole("radiogroup", { name: label }).getByRole("radio", { name: choice }).check();
       await form.getByRole("button", { name: "Submit my answers" }).click();
+      await answerConfirm(page);
       const summary = form.getByTestId("volunteer-summary");
       await expect(summary).toContainText("Submitted ✓");
       await expect(summary.getByRole("listitem")).toHaveCount(count);
@@ -82,6 +83,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await as(USERS.events);
     await page.goto(`${cycleUrl}/form`);
     await page.getByRole("button", { name: "Close form now" }).click();
+    await answerConfirm(page);
     await expect(page.getByTestId("form-state")).toContainText("Closed");
     await page.getByTestId("cycle-next").click();
     await page.waitForURL(/\/roster$/);
@@ -102,6 +104,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.setViewportSize({ width: 1280, height: 720 });
 
     await page.getByRole("button", { name: "Confirm roster" }).click();
+    await answerConfirm(page);
     await expect(page.getByText("Roster confirmed", { exact: true })).toBeVisible();
   });
 

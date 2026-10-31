@@ -289,7 +289,12 @@ export function CashBox({
                 input={{ report_id: report.id }}
                 size="default"
                 disabled={report.opening_cents === null || report.closing_cents === null}
-                confirm={`Sign off the cash box?\n\nBefore: ${formatCents(report.opening_cents)}\nAfter: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}`}
+                confirm={{
+                  title: "Sign off the cash box?",
+                  body: `Before: ${formatCents(report.opening_cents)}\nAfter: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}\n\nFinance checks and books it next; only Finance can reopen it.`,
+                  confirmLabel: "Sign off",
+                }}
+                done="Cash box signed off – Finance checks it next."
               >
                 Close and sign off
               </ActionButton>

@@ -73,3 +73,15 @@ export function freshMonth() {
 export async function waitSaved(page: Page) {
   await expect(page.getByTestId("save-state")).toHaveText("All changes saved");
 }
+
+/**
+ * Answers the app's confirm dialog (components/Feedback.tsx, usability review
+ * #8 – it replaced the browser's confirm()) and returns its text.
+ */
+export async function answerConfirm(page: Page, accept = true): Promise<string> {
+  const dialog = page.getByTestId("confirm-dialog");
+  await expect(dialog).toBeVisible();
+  const text = await dialog.innerText();
+  await (accept ? dialog.getByTestId("confirm-yes") : dialog.getByRole("button", { name: /Cancel|Keep it|No/ }).first()).click();
+  return text;
+}

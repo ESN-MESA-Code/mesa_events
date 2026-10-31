@@ -3,7 +3,7 @@
 // (round 2026-10-30; it was Comms) pastes the saved activity's link by hand,
 // the space is told; personal access tokens are shown once and can be revoked.
 import { USERS, admin, createEvent, deleteEvent, hoursFromNow } from "../helpers/local";
-import { expect, runJobs, signInAs, test } from "./fixtures";
+import { answerConfirm, expect, runJobs, signInAs, test } from "./fixtures";
 
 const fields = {
   title: "E2E ESN quiz",
@@ -97,6 +97,7 @@ test("ESN Activities page: a token is shown once and can be revoked; others are 
   await expect(row).not.toContainText(token);
   page.once("dialog", (d) => d.accept());
   await row.getByRole("button", { name: "Revoke" }).click();
+  await answerConfirm(page);
   await expect(row).toContainText("revoked");
 
   const res = await fetch(`${baseURL}/api/esn/events/${crypto.randomUUID()}`, { headers: { Authorization: `Bearer ${token}` } });

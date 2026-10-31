@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime } from "@/lib/dates";
+import { cycleLabel, formatDateTime } from "@/lib/dates";
 import { CYCLE_STATUS_LABELS } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
 import { findConflicts } from "@/lib/allocation";
@@ -69,7 +69,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="mr-auto text-lg font-semibold text-gray-900">Roster</h2>
         <Badge tone={cycle.status === "confirmed" ? "green" : "blue"}>{CYCLE_STATUS_LABELS[cycle.status]}</Badge>
-        {canEdit && <AllocationControls cycleId={id} status={cycle.status} />}
+        {canEdit && <AllocationControls cycleId={id} month={cycleLabel(cycle.month)} status={cycle.status} />}
       </div>
       {["planning", "form_open"].includes(cycle.status) && (
         <Alert tone="info" className="mb-4">

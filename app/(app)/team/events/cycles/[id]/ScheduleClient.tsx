@@ -110,7 +110,13 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
             Edit
           </Button>
-          <ActionButton action={dropEvent} input={{ id: event.id }} variant="ghost" confirm={`Remove "${event.title}" from the schedule?`}>
+          <ActionButton
+            action={dropEvent}
+            input={{ id: event.id }}
+            variant="ghost"
+            confirm={{ title: `Remove ${event.title} (${event.startsLabel}) from the schedule?`, body: `${plural(event.signups, "sign-up")} so far. It is dropped from the month and the volunteer form.`, confirmLabel: "Remove", danger: true }}
+            done={`${event.title} removed from the schedule.`}
+          >
             Remove
           </ActionButton>
         </span>
@@ -340,7 +346,7 @@ export function ClearResponseButton({ cycleId, profileId, name }: { cycleId: str
       className="flex flex-wrap items-center gap-2 w-full"
       onSubmit={(e) => {
         e.preventDefault();
-        run(clearVolunteerResponse, { cycle_id: cycleId, profile_id: profileId, reason }, () => setOpen(false));
+        run(clearVolunteerResponse, { cycle_id: cycleId, profile_id: profileId, reason }, () => setOpen(false), `${name}'s answers cleared – they can submit again.`);
       }}
     >
       <Input aria-label={`Reason for clearing ${name}'s answers`} placeholder="Reason (logged)" value={reason} onChange={(e) => setReason(e.target.value)} className="h-8 grow w-48" required />

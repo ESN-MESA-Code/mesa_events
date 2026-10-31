@@ -36,6 +36,9 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const slot = (slots ?? []).find((s) => s.event_id === id);
   const hasOc = active.some((a) => a.role === "oc");
   const upcoming = Date.parse(event.starts_at) > nowMs();
+  // What a confirm dialog names (usability review #8).
+  const when = formatDateTime(event.starts_at);
+  const venue = formatVenue(event.location, eventAddress(event));
   const name = (a: (typeof active)[number]) => (a.profiles as { full_name: string } | null)?.full_name ?? "?";
   const names = new Map((roster ?? []).map((a) => [a.profile_id, name(a)]));
   // Plain language for everyone; the raw log for Events, executives and admins.
@@ -59,11 +62,17 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             {canManage && (
               <div className="mt-2 flex gap-2">
                 {hasOc && (
-                  <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success">
+                  <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success" done="It runs with the team it has – open slots can still be claimed.">
                     Run it anyway
                   </ActionButton>
                 )}
-                <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "cancel" }} variant="destructive" confirm={`Cancel this event? ${CANCEL_CONSEQUENCES}`}>
+                <ActionButton
+                  action={decideUnderstaffed}
+                  input={{ event_id: id, decision: "cancel" }}
+                  variant="destructive"
+                  confirm={{ title: `Cancel ${event.title} on ${when}?`, body: CANCEL_CONSEQUENCES, confirmLabel: "Cancel the event", cancelLabel: "Keep it", danger: true }}
+                  done="Event cancelled."
+                >
                   Cancel the event
                 </ActionButton>
               </div>
@@ -80,7 +89,13 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             </p>
             {isEvents && upcoming && (
               <div className="mt-2">
-                <ActionButton action={reopenEvent} input={{ event_id: id }} variant="outline" confirm="Reopen this event? It goes back to confirmed or under-staffed, depending on its team, and the Chat space is told.">
+                <ActionButton
+                  action={reopenEvent}
+                  input={{ event_id: id }}
+                  variant="outline"
+                  confirm={{ title: `Reopen ${event.title} on ${when}?`, body: "It goes back to confirmed or under-staffed, depending on its team, and the Chat space is told.", confirmLabel: "Reopen" }}
+                  done="Event reopened."
+                >
                   Reopen the event
                 </ActionButton>
               </div>
@@ -123,7 +138,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             )}
             {isEvents && upcoming && ["confirmed", "understaffed"].includes(event.status) && (
               <div className="mt-4 border-t border-gray-100 pt-4">
-                <CancelEventForm eventId={id} />
+                <CancelEventForm eventId={id} title={event.title} when={when} />
               </div>
             )}
           </CardContent>
@@ -153,7 +168,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                     {a.source === "replacement" && <span className="text-xs text-gray-500">(took an open slot)</span>}
                     {a.profile_id === viewer.id && upcoming && (
                       <span className="ml-auto">
-                        <DropOutButton assignmentId={a.id} role={a.role as "oc" | "helper"} />
+                        <DropOutButton assignmentId={a.id} role={a.role as "oc" | "helper"} title={event.title} />
                       </span>
                     )}
                   </li>
@@ -164,12 +179,22 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                 <p className="font-medium text-amber-900">Open slots</p>
                 <div className="flex flex-wrap gap-2">
                   {slot.open_oc && !isStaff && (
-                    <ActionButton action={claimSlot} input={{ event_id: id, role: "oc" }} confirm="Become the OC of this event?">
+                    <ActionButton
+                      action={claimSlot}
+                      input={{ event_id: id, role: "oc" }}
+                      confirm={{ title: `Become the OC of ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. You own the event from now on: details, description, attendance and hand-in. You are added to its Chat space.`, confirmLabel: "Become the OC" }}
+                      done={`You're now the OC of ${event.title} – the description is your next step.`}
+                    >
                       Claim the OC slot
                     </ActionButton>
                   )}
                   {slot.open_helpers > 0 && !isStaff && (
-                    <ActionButton action={claimSlot} input={{ event_id: id, role: "helper" }} confirm="Help at this event?">
+                    <ActionButton
+                      action={claimSlot}
+                      input={{ event_id: id, role: "helper" }}
+                      confirm={{ title: `Help at ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. The OC is told, and you are added to the event's Chat space.`, confirmLabel: "Yes, I'll help" }}
+                      done={`You're now a helper at ${event.title} – see you on ${formatShortDate(event.starts_at)}.`}
+                    >
                       Claim a helper slot ({slot.open_helpers} open)
                     </ActionButton>
                   )}
@@ -203,7 +228,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               <p className="text-gray-600">No space yet – it is created when the month&apos;s roster is confirmed.</p>
             )}
             {isEvents && !event.chat_space_requested_at && !["draft", "dropped"].includes(event.status) && (
-              <ActionButton action={requestChatSpace} input={{ event_id: id }} variant="outline">
+              <ActionButton action={requestChatSpace} input={{ event_id: id }} variant="outline" done="The Chat space is being created.">
                 Create Chat space now
               </ActionButton>
             )}

@@ -88,6 +88,7 @@ export default async function VolunteerPage() {
                   <CardContent className="pt-4">
                     <VolunteerForm
                       cycleId={cycle.id}
+                      month={label}
                       events={events.map((e) => ({
                         id: e.id,
                         title: e.title,

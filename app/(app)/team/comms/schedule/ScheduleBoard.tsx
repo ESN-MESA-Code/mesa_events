@@ -460,7 +460,9 @@ function PostCard({
   focus: string | null;
   setFocus: (id: string | null) => void;
 }) {
-  const { run, pending, error, setError } = useAction();
+  const { run, pending, error, setError, confirm } = useAction();
+  // What a confirm dialog names (usability review #8).
+  const postName = `the ${channel.name} post of ${formatDateTime(post.scheduledFor)} (${post.events.map((id) => byId.get(id)?.title ?? "?").join(", ")})`;
   const { setNodeRef, isOver } = useDroppable({ id: `post|${post.id}`, disabled: !editable || post.status === "skipped" });
   const [mode, setMode] = useState<"" | "move" | "edit" | "publish" | "skip" | "preview">("");
   const [day, setDay] = useState(berlinDate(post.scheduledFor));
@@ -579,7 +581,14 @@ function PostCard({
               <button type="button" className="text-gray-600 hover:underline" onClick={() => setMode(mode === "skip" ? "" : "skip")}>
                 Skip
               </button>
-              <button type="button" className="text-gray-600 hover:underline" onClick={() => window.confirm("Delete this post?") && run(deletePost, { post_id: post.id })}>
+              <button
+                type="button"
+                className="text-gray-600 hover:underline"
+                onClick={async () => {
+                  if (await confirm({ title: "Delete this post?", body: `Deletes ${postName}. An uploaded picture is removed too.`, confirmLabel: "Delete", danger: true }))
+                    run(deletePost, { post_id: post.id }, undefined, "Post deleted.");
+                }}
+              >
                 Delete
               </button>
             </>
@@ -600,9 +609,17 @@ function PostCard({
             size="sm"
             variant={post.status === "published" ? "default" : "outline"}
             disabled={pending}
-            onClick={() =>
-              window.confirm(post.status === "published" ? "Edit the published Telegram post now?" : "Post this to the Telegram channel now?") && run(publishPostNow, { post_id: post.id }, () => setMode(""))
-            }
+            onClick={async () => {
+              const again = post.status === "published";
+              if (
+                await confirm({
+                  title: again ? "Edit the published Telegram post now?" : "Post this to the Telegram channel now?",
+                  body: again ? `The channel's message for ${postName} is replaced with the text above.` : `${postName} goes out to everyone in the channel at once, not at its planned time.`,
+                  confirmLabel: again ? "Edit the post" : "Publish now",
+                })
+              )
+                run(publishPostNow, { post_id: post.id }, () => setMode(""), again ? "Telegram post updated." : "Posted to the Telegram channel.");
+            }}
           >
             {post.status === "published" ? "Publish again (edits the post)" : "Confirm and publish now"}
           </Button>

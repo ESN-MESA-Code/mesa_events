@@ -4,7 +4,7 @@
 // the cash box and the ESNcards and signs it off; a member signs up to an
 // internal event, sees the leaderboard and subscribes to the calendar.
 import { TEST_TAG, USERS, admin } from "../helpers/local";
-import { drag, expect, freshMonth, test } from "./fixtures";
+import { answerConfirm, drag, expect, freshMonth, test } from "./fixtures";
 
 const removeMonth = async (month: string) => {
   const { data } = await admin.from("internal_events").select("id").gte("starts_at", `${month}-01T00:00:00Z`).lt("starts_at", `${month}-28T23:59:59Z`);
@@ -76,6 +76,7 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
 
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Close and sign off" }).click();
+    await answerConfirm(page);
     await expect(page.getByTestId("cash-status")).toHaveText("Signed off");
     await expect(page.getByRole("button", { name: "One internal ESNcard sold" })).toBeDisabled();
   } finally {

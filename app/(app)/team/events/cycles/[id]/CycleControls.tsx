@@ -6,14 +6,20 @@ import { ActionButton, useAction } from "@/components/ActionButton";
 import type { CycleStatus } from "@/lib/labels";
 import { closeForm, confirmAllocation, openForm, runAllocation } from "@/app/actions/planning";
 import { setDescriptionDeadline } from "@/app/actions/descriptions";
+import { plural } from "@/lib/plural";
 
 /** Volunteer form page: open (with its deadline), close early, reopen. */
 export function FormControls({
   cycleId,
+  month,
+  answers,
   status,
   formLatest,
 }: {
   cycleId: string;
+  /** "December 2026" and the answers so far – named in the confirm dialog. */
+  month: string;
+  answers: number;
   status: CycleStatus;
   /** The latest allowed deadline (review 2026-10-29 A5): Berlin input value and label. */
   formLatest: { input: string; label: string };
@@ -27,7 +33,7 @@ export function FormControls({
           className="flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            run(openForm, { cycle_id: cycleId, closes_at: closes });
+            run(openForm, { cycle_id: cycleId, closes_at: closes }, undefined, `The volunteer form for ${month} is open – members see it on Home.`);
           }}
         >
           <Field label="Form deadline" htmlFor="form-deadline" hint={`At the latest ${formLatest.label} (the month's first day)`}>
@@ -37,7 +43,18 @@ export function FormControls({
         </form>
       )}
       {status === "form_open" && (
-        <ActionButton action={closeForm} input={{ cycle_id: cycleId }} variant="outline" size="default" confirm="Close the volunteer form now?">
+        <ActionButton
+          action={closeForm}
+          input={{ cycle_id: cycleId }}
+          variant="outline"
+          size="default"
+          confirm={{
+            title: `Close the volunteer form for ${month} now?`,
+            body: `${plural(answers, "member")} answered so far. Nobody can answer after closing; you can reopen it until the allocation runs.`,
+            confirmLabel: "Close the form",
+          }}
+          done="Volunteer form closed – the allocation is next."
+        >
           Close form now
         </ActionButton>
       )}
@@ -47,8 +64,8 @@ export function FormControls({
 }
 
 /** Roster page: run (or re-run) the allocation, confirm the roster. */
-export function AllocationControls({ cycleId, status }: { cycleId: string; status: CycleStatus }) {
-  const { run, pending, error } = useAction();
+export function AllocationControls({ cycleId, month, status }: { cycleId: string; month: string; status: CycleStatus }) {
+  const { run, pending, error, confirm } = useAction();
   const [summary, setSummary] = useState<string | null>(null);
   if (status !== "form_closed" && status !== "allocated") return null;
   return (
@@ -57,8 +74,12 @@ export function AllocationControls({ cycleId, status }: { cycleId: string; statu
         <Button
           variant={status === "form_closed" ? "default" : "outline"}
           disabled={pending}
-          onClick={() => {
-            if (status === "allocated" && !window.confirm("Run the allocation again? Manual roster changes are replaced.")) return;
+          onClick={async () => {
+            if (
+              status === "allocated" &&
+              !(await confirm({ title: `Run the allocation for ${month} again?`, body: "Manual roster changes are replaced by a fresh allocation.", confirmLabel: "Re-run allocation", danger: true }))
+            )
+              return;
             run(runAllocation, { cycle_id: cycleId }, (d) => {
               const r = d as { assignments: number; events: Record<string, { status: string }>; conflicts: unknown[] };
               const st = Object.values(r.events).map((e) => e.status);
@@ -76,7 +97,12 @@ export function AllocationControls({ cycleId, status }: { cycleId: string; statu
             input={{ cycle_id: cycleId }}
             size="default"
             variant="success"
-            confirm="Confirm the roster? Events without anybody are dropped, Chat spaces are created and everyone sees the roster."
+            confirm={{
+              title: `Confirm the roster for ${month}?`,
+              body: "Events without anybody are dropped, Chat spaces are created and everyone sees the roster. Changes afterwards are announced in the Chat spaces.",
+              confirmLabel: "Confirm roster",
+            }}
+            done="Roster confirmed – Chat spaces are being created."
           >
             Confirm roster
           </ActionButton>
@@ -133,7 +159,7 @@ export function DeadlineControl({
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        run(setDescriptionDeadline, { cycle_id: cycleId, deadline: value || null });
+        run(setDescriptionDeadline, { cycle_id: cycleId, deadline: value || null }, undefined, value ? "Description deadline saved." : "Description deadline removed.");
       }}
     >
       <Field

@@ -145,7 +145,7 @@ export function EntryForm({ categories, events, today, initial, onDone }: { cate
 
 /** A ledger line's actions: edit (inline) and delete. Booked cash boxes are corrected on the cash box. */
 export function EntryActions({ entry, categories, events, today, fromCashBox }: { entry: EntryValues; categories: Category[]; events: Array<{ id: string; label: string }>; today: string; fromCashBox: boolean }) {
-  const { run, pending, error } = useAction();
+  const { run, pending, error, confirm } = useAction();
   const [editing, setEditing] = useState(false);
   if (editing) return <EntryForm categories={categories} events={events} today={today} initial={entry} onDone={() => setEditing(false)} />;
   return (
@@ -159,8 +159,16 @@ export function EntryActions({ entry, categories, events, today, fromCashBox }: 
         size="sm"
         variant="ghost"
         disabled={pending}
-        onClick={() => {
-          if (window.confirm(`Delete "${entry.description}" (${formatCents(entry.amount_cents)})?${fromCashBox ? " The cash box can then be booked again." : ""}`)) run(deleteEntry, { id: entry.id });
+        onClick={async () => {
+          if (
+            await confirm({
+              title: `Delete “${entry.description}” (${formatCents(entry.amount_cents)})?`,
+              body: fromCashBox ? "It leaves the ledger; the cash box can then be booked again." : "It leaves the ledger and the semester overview.",
+              confirmLabel: "Delete",
+              danger: true,
+            })
+          )
+            run(deleteEntry, { id: entry.id }, undefined, "Ledger line deleted.");
         }}
       >
         Delete

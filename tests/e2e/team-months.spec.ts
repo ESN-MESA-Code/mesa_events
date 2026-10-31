@@ -3,7 +3,7 @@
 // the inline actions (Review, Publish, Remind OC, Paste link), late as a
 // mark, the phone track, and the Events page's month with its events.
 import { USERS, admin, createEvent, hoursFromNow, TEST_TAG } from "../helpers/local";
-import { expect, freshMonth, runJobs, test } from "./fixtures";
+import { answerConfirm, expect, freshMonth, runJobs, test } from "./fixtures";
 
 const fields = (title: string) => ({
   title,
@@ -76,6 +76,7 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   // Inline: publish.
   page.once("dialog", (d) => d.accept());
   await row(publish.id).getByRole("button", { name: "Publish" }).click();
+  await answerConfirm(page);
   await expect(row(publish.id)).toContainText("Publishing to the Chat space…");
   await runJobs(baseURL!);
   await page.reload();

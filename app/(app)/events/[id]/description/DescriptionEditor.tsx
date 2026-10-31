@@ -12,6 +12,7 @@ import {
   esnObjectiveIds,
   formatCount,
   formatPrice,
+  isDraftEmpty,
   fromTemplate,
   renderDescription,
   validateAll,
@@ -80,7 +81,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   const version = useRef(initial.version);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, startSave] = useTransition();
-  const { run, pending, error } = useAction();
+  const { run, pending, error, confirm } = useAction();
   const [comment, setComment] = useState("");
 
   useEffect(() => {
@@ -190,10 +191,18 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   const [expand, setExpand] = useState<string | undefined>();
   const results = useMemo(() => searchTemplates(pool, query, eventId, expand), [pool, query, eventId, expand]);
 
-  function applyTemplate(id: string) {
+  async function applyTemplate(id: string, name: string) {
     const t = templates[id];
     if (!t) return;
-    if (!window.confirm("Replace the current text with this event's description? The date stays.")) return;
+    if (
+      !(await confirm({
+        title: `Use the description of ${name}?`,
+        body: "It replaces the current text in every field. The date stays. Change what is different this time before submitting.",
+        confirmLabel: "Replace the text",
+        danger: !isDraftEmpty(fieldsRef.current),
+      }))
+    )
+      return;
     const next = fromTemplate(t, fieldsRef.current);
     prefillPending.current = false;
     setFields(next);
@@ -273,7 +282,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                         +{r.earlier.length} earlier
                       </button>
                     )}
-                    <Button size="sm" variant="outline" className="ml-auto" onClick={() => applyTemplate(r.rec.eventId)}>
+                    <Button size="sm" variant="outline" className="ml-auto" onClick={() => applyTemplate(r.rec.eventId, r.rec.published.title || r.rec.eventTitle)}>
                       Use
                     </Button>
                   </li>
@@ -457,7 +466,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                   disabled={pending || !validation.ok || saveState !== "saved"}
                   onClick={() => {
                     flush();
-                    run(submitDescription, { event_id: eventId }, () => setStatus("submitted"));
+                    run(submitDescription, { event_id: eventId }, () => setStatus("submitted"), "Submitted – Comms reviews it next. You'll see their answer here.");
                   }}
                 >
                   Submit for Comms review
@@ -470,13 +479,13 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
               <div className="space-y-2">
                 <Textarea aria-label="Review comment" placeholder="Comment (required when requesting changes)" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="success" disabled={pending || !validation.ok} onClick={() => run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"))}>
+                  <Button variant="success" disabled={pending || !validation.ok} onClick={() => run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"), "Approved – it can be published now.")}>
                     Approve
                   </Button>
                   <Button
                     variant="outline"
                     disabled={pending || !comment.trim()}
-                    onClick={() => run(reviewDescription, { event_id: eventId, decision: "changes_requested", comment }, () => setStatus("changes_requested"))}
+                    onClick={() => run(reviewDescription, { event_id: eventId, decision: "changes_requested", comment }, () => setStatus("changes_requested"), "Sent back to the OC with your comment.")}
                   >
                     Request changes
                   </Button>
@@ -485,7 +494,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
             )}
             {can.review && status === "approved" && (
               <div>
-                <Button disabled={pending || !can.hasSpace} onClick={() => run(publishDescription, { event_id: eventId }, () => router.refresh())}>
+                <Button disabled={pending || !can.hasSpace} onClick={() => run(publishDescription, { event_id: eventId }, () => router.refresh(), "Publishing to the Chat space…")}>
                   {initial.publishedAt ? "Publish the update" : "Publish to the Chat space (@all)"}
                 </Button>
                 {!can.hasSpace && <p className="text-xs text-gray-500 mt-1">The event has no Chat space yet.</p>}

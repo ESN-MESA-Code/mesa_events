@@ -14,7 +14,7 @@ const webcalUrl = (url: string) => url.replace(/^https?:\/\//, "webcal://");
  * stops the old one.
  */
 export function CalendarSubscribe({ feed }: { feed: { since: string; lastUsed: string | null } | null }) {
-  const { run, pending, error } = useAction();
+  const { run, pending, error, confirm } = useAction();
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const google = url ? `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl(url))}` : null;
@@ -71,8 +71,9 @@ export function CalendarSubscribe({ feed }: { feed: { since: string; lastUsed: s
               size="sm"
               variant="outline"
               disabled={pending}
-              onClick={() => {
-                if (window.confirm("Turn off your calendar link? Calendar apps using it stop updating.")) run(revokeCalendarFeed, {}, () => setUrl(null));
+              onClick={async () => {
+                if (await confirm({ title: "Turn off your calendar link?", body: "Calendar apps using it stop updating. You can make a new link any time.", confirmLabel: "Turn off", danger: true }))
+                  run(revokeCalendarFeed, {}, () => setUrl(null), "Calendar link turned off.");
               }}
             >
               Turn off
