@@ -6,7 +6,7 @@ import { useAction } from "@/components/ActionButton";
 import { remindOc } from "@/app/actions/descriptions";
 
 /** "Remind OC": a Chat reminder through the jobs queue, at most once a day. */
-export function RemindButton({ eventId, about }: { eventId: string; about: "description" | "report" }) {
+export function RemindButton({ eventId, about, title }: { eventId: string; about: "description" | "report"; title?: string }) {
   const { run, pending, error } = useAction();
   const [done, setDone] = useState<string | null>(null);
   return (
@@ -16,7 +16,14 @@ export function RemindButton({ eventId, about }: { eventId: string; about: "desc
         size="sm"
         variant="outline"
         disabled={pending || !!done}
-        onClick={() => run(remindOc, { event_id: eventId, about }, (d) => setDone(d.sent ? "Reminded ✓" : "Reminded today already"))}
+        onClick={() =>
+          run(
+            remindOc,
+            { event_id: eventId, about },
+            (d) => setDone(d.sent ? "Reminded ✓" : "Reminded today already"),
+            (d) => (d.sent ? `Reminder sent to the OC${title ? ` of ${title}` : ""} in Chat.` : null)
+          )
+        }
       >
         {pending ? "…" : (done ?? "Remind OC")}
       </Button>

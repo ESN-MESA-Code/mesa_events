@@ -11,6 +11,8 @@ import { plural } from "@/lib/plural";
 import { photosIn } from "@/lib/photos";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { DESCRIPTION_STATUS, EventStatusBadge, Stepper } from "@/components/status";
+import { RemindButton } from "@/components/RemindButton";
+import { cn } from "@/lib/utils";
 import { MonthSelector } from "@/components/MonthSelector";
 import type { EventStatus } from "@/lib/labels";
 import { NewCycleForm } from "./NewCycleForm";
@@ -44,7 +46,7 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
     ? await Promise.all([
         supabase
           .from("events")
-          .select("id, title, starts_at, status, helpers_needed, assignments(role, status), descriptions(status), event_photo_folders(photo_count, marked_uploaded_at)")
+          .select("id, title, starts_at, status, helpers_needed, assignments(role, status, profiles(full_name)), descriptions(status), event_photo_folders(photo_count, marked_uploaded_at)")
           .eq("cycle_id", cycle.id)
           .neq("status", "dropped")
           .order("starts_at"),
@@ -131,6 +133,7 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
                   <ul className="divide-y divide-gray-100 text-sm" data-testid="month-events">
                     {events.map((e) => {
                       const active = (e.assignments ?? []).filter((a) => a.status === "active");
+                      const ocName = (active.find((a) => a.role === "oc")?.profiles as { full_name: string } | null)?.full_name ?? null;
                       const oc = active.some((a) => a.role === "oc");
                       const helpers = active.filter((a) => a.role === "helper").length;
                       const description = (e.descriptions as { status: string } | null)?.status ?? "missing";
@@ -140,20 +143,40 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
                         ? [!h.signed_off && "attendance list", !h.photos_in && "photos", !h.report_in && "event report", h.belege_missing > 0 && plural(h.belege_missing, "Beleg", "Belege")].filter(Boolean)
                         : [!photosIn(e.event_photo_folders as never) && "photos"].filter(Boolean);
                       const confirmed = cycle.status === "confirmed";
+                      const running = !["cancelled", "dropped"].includes(e.status);
+                      // What needs someone (usability review #21): staffing, a description not in, a hand-in open.
+                      const descOpen = confirmed && running && !started && ["missing", "draft", "changes_requested"].includes(description);
+                      const deadlinePassed = !!cycle.description_deadline && Date.parse(cycle.description_deadline) < now;
+                      const staffOpen = confirmed && running && !started && (!oc || helpers < e.helpers_needed);
+                      const handInOpen = confirmed && running && started && missing.length > 0;
+                      const problem = descOpen || staffOpen || handInOpen;
+                      const desc = DESCRIPTION_STATUS[description] ?? { label: description, tone: "gray" as const };
                       return (
-                        <li key={e.id} className="grid gap-1 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center sm:gap-3" data-testid={`month-event-${e.id}`}>
+                        <li
+                          key={e.id}
+                          className={cn("grid gap-1 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center sm:gap-3", problem && "-mx-2 border-l-4 px-2", problem && (descOpen && deadlinePassed ? "border-red-400" : "border-amber-400"))}
+                          data-testid={`month-event-${e.id}`}
+                          data-problem={problem || undefined}
+                        >
                           <span className="tabular-nums text-gray-600">{formatDateTime(e.starts_at)}</span>
                           <span className="min-w-0">
                             <Link href={`/events/${e.id}?from=events`} className="font-medium text-gray-900 hover:text-esn">
                               {e.title}
                             </Link>
                             <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
-                              <span className={confirmed && (!oc || helpers < e.helpers_needed) ? "text-amber-800" : undefined} data-testid="staffing">
-                                {confirmed ? `${oc ? "OC ✓" : "no OC"} · ${helpers}/${e.helpers_needed} helpers` : `${plural(e.helpers_needed, "helper")} needed`}
+                              <span className={staffOpen ? "font-medium text-amber-800" : undefined} data-testid="staffing">
+                                {confirmed ? `${ocName ? `OC ${ocName}` : "no OC"} · ${helpers}/${e.helpers_needed} helpers` : `${plural(e.helpers_needed, "helper")} needed`}
                               </span>
-                              {confirmed && <span data-testid="description">Description: {DESCRIPTION_STATUS[description]?.label ?? description}</span>}
                               {confirmed && (
-                                <span data-testid="handin">
+                                <span data-testid="description">
+                                  Description:{" "}
+                                  <Badge tone={descOpen ? (deadlinePassed ? "red" : "amber") : desc.tone} className="align-middle">
+                                    {desc.label}
+                                  </Badge>
+                                </span>
+                              )}
+                              {confirmed && (
+                                <span data-testid="handin" className={handInOpen ? "font-medium text-amber-800" : undefined}>
                                   Hand-in:{" "}
                                   {e.status === "cancelled"
                                     ? "–"
@@ -166,7 +189,11 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
                               )}
                             </span>
                           </span>
-                          <EventStatusBadge status={e.status as EventStatus} className="justify-self-start sm:justify-self-end" />
+                          <span className="flex flex-wrap items-center gap-2 justify-self-start sm:justify-self-end">
+                            {canEdit && ocName && descOpen && <RemindButton eventId={e.id} about="description" title={e.title} />}
+                            {canEdit && ocName && handInOpen && missing.includes("event report") && <RemindButton eventId={e.id} about="report" title={e.title} />}
+                            <EventStatusBadge status={e.status as EventStatus} />
+                          </span>
                         </li>
                       );
                     })}

@@ -15,7 +15,7 @@ import { loadEsn } from "@/lib/esn/load";
 import { FILTERS, eventStage, parseFilter, stageCounts, type FilterId } from "@/lib/commsStages";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { cn } from "@/lib/utils";
-import { RemindButton } from "./RemindButton";
+import { RemindButton } from "@/components/RemindButton";
 import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Comms" };
