@@ -215,6 +215,14 @@ describe("validation", () => {
     expect(v.errors.extras).not.toContain("Pick the ESN activity type (needed for ESN Activities).");
   });
 
+  it("refuses the example programme until it is replaced (usability review #2)", () => {
+    const v = validateAll(filled({ program: "Welcome and introductions\nThe main part\nDrinks afterwards" }), "2025-01-01");
+    expect(v.ok).toBe(false);
+    expect(v.errors.program[0]).toMatch(/still has the example text \("Welcome and introductions"\)/);
+    expect(validateAll(filled({ program: "- the main part." }), "2025-01-01").ok).toBe(false);
+    expect(validateAll(filled({ program: "The main part of the hike is the ridge\nDrinks afterwards at the hut" }), "2025-01-01").ok).toBe(true);
+  });
+
   it("the goal must say something; ratings are optional (the type's defaults)", () => {
     expect(validateAll(filled({ esnGoal: "Fun." })).errors.esn).toContain("The goal is very short – say in a sentence what the event wants to achieve.");
     expect(validateAll(filled({ esnAccess: "" })).errors.esn).toEqual([]);

@@ -211,6 +211,8 @@ async function main() {
   await place(brunch, "Augustiner-Keller", "Arnulfstraße 52", "80335");
   await place(museum, "Pinakothek der Moderne", "Barer Straße 40", "80333");
   await place(hike, "Kampenwand", "Kampenwandstraße 1", "83229");
+  // The example programme is refused on submit and approval (usability review #2): every event
+  // below has its own except the hike, which shows Comms the warning.
   const text = (title, startsAt, venue, price, hook, intro, goal, extra = {}) => ({
     title, dateIso: berlinDay(startsAt), time: `${String(new Date(startsAt).getUTCHours() + 1).padStart(2, "0")}:00`, venue, price, priceNote: "", hook, intro,
     program: "Welcome and introductions\nThe main part\nDrinks afterwards", bring: "Good mood 😄\nYour ESNcard 🪪", closing: "see you there!",
@@ -219,16 +221,16 @@ async function main() {
   const describe = async (event_id, status, fields, extra = {}) =>
     check(await db.from("descriptions").upsert({ event_id, status, fields, version: 3, updated_by: "oc@esnmesa.org", ...(status !== "draft" ? { submitted_at: at(-1, 12), submitted_by: "oc@esnmesa.org" } : {}), ...extra }), `description ${status}`);
   await describe(hike, "submitted", text("Hike to the Kampenwand", at(9, 8), "Kampenwand, Aschau im Chiemgau", "TBA", "a day in the mountains", "We take the train to Aschau and hike up the Kampenwand. The views over the Chiemsee are worth every step.", "Show international students the Bavarian Alps and how to hike safely.", { esnType: "9" }));
-  await describe(cooking, "submitted", text("International Cooking Class", at(10, 18), "Kochschule Munich, Arcisstraße 21", "8", "a taste of the world", "Four volunteers from four countries show you their favourite dish. We cook together and eat everything.", "Share food cultures and let participants cook with people from other countries."));
-  await describe(alps, "changes_requested", text("Weekend in the Alps", at(16, 8), "Berchtesgaden", "89", "a weekend in the mountains", "Two days, one hut, many mountains.", "Give international students a first real mountain weekend with the group.", { esnType: "9" }));
+  await describe(cooking, "submitted", text("International Cooking Class", at(10, 18), "Kochschule Munich, Arcisstraße 21", "8", "a taste of the world", "Four volunteers from four countries show you their favourite dish. We cook together and eat everything.", "Share food cultures and let participants cook with people from other countries.", { program: "Four cooking stations, one per country\nCooking in small teams\nDinner together" }));
+  await describe(alps, "changes_requested", text("Weekend in the Alps", at(16, 8), "Berchtesgaden", "89", "a weekend in the mountains", "Two days, one hut, many mountains.", "Give international students a first real mountain weekend with the group.", { esnType: "9", program: "Saturday: train to Berchtesgaden, hike to the hut\nSunday: Königssee and back to Munich" }));
   check(await db.from("reviews").insert({ event_id: alps, reviewer: "comms@esnmesa.org", decision: "changes_requested", comment: "Please add what is included in the price and when we meet at the station.", version: 2, created_at: at(-1, 15) }), "review");
-  const karaokeFields = text("Karaoke Night", at(7, 20), "Bavarian Karaoke Bar, Augustenstraße 5, 80333 München", "3", "a night on the stage", "Sing alone, in a duet or with the whole room. Songs in every language you can think of.", "Get shy newcomers on stage and mixing with others through music.");
+  const karaokeFields = text("Karaoke Night", at(7, 20), "Bavarian Karaoke Bar, Augustenstraße 5, 80333 München", "3", "a night on the stage", "Sing alone, in a duet or with the whole room. Songs in every language you can think of.", "Get shy newcomers on stage and mixing with others through music.", { program: "Song list in every language\nDuet challenge at 22:00" });
   await describe(karaoke, "approved", karaokeFields, {
     approved_fields: karaokeFields, approved_at: at(-1, 16), approved_by: "comms@esnmesa.org",
     approved_text: "🎤 Karaoke Night\n\nAre you ready for a night on the stage? 🎉\n\nSing alone, in a duet or with the whole room. Songs in every language you can think of.\n\nWith lots of love,\nTeam ESN MESA",
   });
-  await describe(skating, "draft", text("Ice Skating at Karlsplatz", at(14, 18), "Münchner Eiszauber, Karlsplatz", "TBA", "", "", ""));
-  const brunchFields = text("Bavarian Brunch", at(6, 11), "Augustiner-Keller, Arnulfstraße 52, 80335 München", "12", "a real Bavarian Sunday", "Weißwurst, Brezn and sweet mustard – we show you how Bavarians start a Sunday. A vegetarian option is included.", "Introduce international students to Bavarian food culture in a relaxed setting.");
+  await describe(skating, "draft", text("Ice Skating at Karlsplatz", at(14, 18), "Münchner Eiszauber, Karlsplatz", "TBA", "", "", "", { program: "Skate hire at the entrance\nOne hour on the ice\nPunsch afterwards" }));
+  const brunchFields = text("Bavarian Brunch", at(6, 11), "Augustiner-Keller, Arnulfstraße 52, 80335 München", "12", "a real Bavarian Sunday", "Weißwurst, Brezn and sweet mustard – we show you how Bavarians start a Sunday. A vegetarian option is included.", "Introduce international students to Bavarian food culture in a relaxed setting.", { program: "Weißwurst before noon, as is tradition\nBrezn and sweet mustard\nA short Bavarian phrase lesson" });
   await describe(brunch, "published", brunchFields, { approved_fields: brunchFields, approved_at: at(-4, 10), approved_by: "comms@esnmesa.org", published_at: at(-3, 12), published_by: "comms@esnmesa.org" });
 
   // The description deadline lies before each cycle's first event (the

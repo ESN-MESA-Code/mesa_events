@@ -166,6 +166,18 @@ export function bullets(s: unknown): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Example lines that say nothing about the event (usability review #2):
+ * "Welcome and introductions / The main part / Drinks afterwards". They pass
+ * as filled in, so a description still holding them is refused until the OC
+ * writes the real programme – the OC before submitting, Comms before approving.
+ */
+const EXAMPLE_LINES = new Set(["welcome and introductions", "the main part", "drinks afterwards"]);
+
+export function exampleLines(s: unknown): string[] {
+  return bullets(s).filter((l) => EXAMPLE_LINES.has(l.toLowerCase().replace(/[.!…]+$/, "")));
+}
+
 export function hasEmoji(s: string): boolean {
   return /\p{Extended_Pictographic}/u.test(s);
 }
@@ -409,6 +421,8 @@ export function validateStep(d: DescriptionFields, step: StepId, todayIso?: stri
       const program = bullets(d.program);
       const bring = bullets(d.bring);
       if (!program.length) errors.push('Add at least one point to "What does the event look like?".');
+      const example = exampleLines(d.program);
+      if (example.length) errors.push(`"What does the event look like?" still has the example text ("${example[0]}") – describe what really happens.`);
       if (!bring.length) errors.push('Add at least one item to "What should I bring?" (e.g. "Good mood 😄").');
       if (program.length > CONFIG.MAX_BULLETS || bring.length > CONFIG.MAX_BULLETS) {
         warnings.push(`Try to keep lists at ${CONFIG.MAX_BULLETS} bullet points or fewer.`);
