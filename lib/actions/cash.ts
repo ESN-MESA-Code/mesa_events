@@ -1,6 +1,6 @@
 // Cash boxes (round 2026-10-30): the OC and helpers of an office hour or an
 // ESN event count it before and after and count ESNcards sold; the OC signs
-// it off. Finance checks, reopens or books it. The database functions check
+// it off. Finance checks, reopens or books it, and keeps the boxes. The database functions check
 // who may do what (staff, OC, Finance).
 import { z } from "zod";
 import { dbError, defineAction, forbidden, PAGES, requireRole, uuid } from "@/lib/actions/core";
@@ -14,9 +14,10 @@ const counts = z
   .refine((c) => (countTotal(c) ?? Infinity) <= 100_000_000, "Not a valid count");
 
 export const startCashBox = defineAction(
-  z.union([z.object({ event_id: uuid }), z.object({ internal_event_id: uuid })]),
+  z.union([z.object({ event_id: uuid, box_id: uuid.optional() }), z.object({ internal_event_id: uuid, box_id: uuid.optional() })]),
   async (ctx, i) => {
-    const { data, error } = await ctx.supabase.rpc("ensure_cash_report", "event_id" in i ? { event: i.event_id } : { internal_event: i.internal_event_id });
+    const target = "event_id" in i ? { event: i.event_id } : { internal_event: i.internal_event_id };
+    const { data, error } = await ctx.supabase.rpc("ensure_cash_report", { ...target, ...(i.box_id ? { box: i.box_id } : {}) });
     dbError(error);
     return { report_id: data as string };
   },
@@ -88,6 +89,51 @@ export const bookCashBox = defineAction(
     if (error?.code === "23505") throw forbidden("These takings are booked already.");
     dbError(error);
     return { entry_id: data as string };
+  },
+  { revalidate: CASH }
+);
+
+// The cash boxes themselves (round 2026-10-31): Finance adds and removes
+// them, picks the default box of office hours and events, and puts money
+// in, takes it out or recounts a box.
+
+export const addCashBox = defineAction(
+  z.object({ name: z.string().trim().min(1, "Give the cash box a name").max(80) }),
+  async (ctx, i) => {
+    requireRole(ctx, "finance");
+    const { data, error } = await ctx.supabase.rpc("add_cash_box", { name: i.name });
+    dbError(error);
+    return { box_id: data as string };
+  },
+  { revalidate: CASH }
+);
+
+export const removeCashBox = defineAction(
+  z.object({ box_id: uuid }),
+  async (ctx, i) => {
+    requireRole(ctx, "finance");
+    dbError((await ctx.supabase.rpc("remove_cash_box", { box: i.box_id })).error);
+  },
+  { revalidate: CASH }
+);
+
+export const setCashBoxDefault = defineAction(
+  z.object({ box_id: uuid, kind: z.enum(["office_hour", "event"]) }),
+  async (ctx, i) => {
+    requireRole(ctx, "finance");
+    dbError((await ctx.supabase.rpc("set_cash_box_default", { box: i.box_id, kind: i.kind })).error);
+  },
+  { revalidate: CASH }
+);
+
+/** Money in, out, or the box counted anew; returns its new total. */
+export const adjustCashBox = defineAction(
+  z.object({ box_id: uuid, mode: z.enum(["in", "out", "recount"]), counts, note: z.string().trim().max(300).default("") }),
+  async (ctx, i) => {
+    requireRole(ctx, "finance");
+    const { data, error } = await ctx.supabase.rpc("adjust_cash_box", { box: i.box_id, mode: i.mode, counts: i.counts, note: i.note });
+    dbError(error);
+    return { total_cents: data as number };
   },
   { revalidate: CASH }
 );

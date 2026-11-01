@@ -15,7 +15,7 @@ export default async function EventCashPage({ params }: { params: Promise<{ id: 
   const { event, viewer, supabase, isStaff, isOc, isEvents } = await loadEventForPage(id);
   const finance = hasRole(viewer.roles, "finance") || viewer.roles.includes("executive");
   if (!isStaff && !isEvents && !finance) notFound();
-  const { report, finance: financeView } = await loadCashBox(supabase, { event_id: id }, viewer.roles, false);
+  const { report, finance: financeView, boxes } = await loadCashBox(supabase, { event_id: id }, viewer.roles, false);
   const runs = !["draft", "dropped"].includes(event.status);
-  return <CashBox report={report} target={{ event_id: id }} officeHour={false} canCount={isStaff && runs} isOc={isOc} finance={financeView} />;
+  return <CashBox report={report} target={{ event_id: id }} officeHour={false} canCount={isStaff && runs} isOc={isOc} finance={financeView} boxes={boxes} />;
 }

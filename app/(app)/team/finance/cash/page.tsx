@@ -2,21 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { berlinDate, berlinInputToIso, formatCents, formatDate, nowMs } from "@/lib/dates";
+import { berlinDate, berlinInputToIso, formatCents, formatDate, formatDateTime, nowMs } from "@/lib/dates";
 import { addDays } from "@/lib/month";
 import { hasRole } from "@/lib/roles";
 import { parseSemesterKey, semesterFor, shiftSemester } from "@/lib/internal";
-import { CASH_STATUS_LABELS, CASH_STATUS_TONES, cashStatus, difference, takings } from "@/lib/cash";
+import { CASH_STATUS_LABELS, CASH_STATUS_TONES, cashStatus, difference, takings, type CashCounts } from "@/lib/cash";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { FinanceTabs } from "@/components/FinanceTabs";
 import { checkCashBox } from "@/app/actions/cash";
 import { cn } from "@/lib/utils";
 import { EsncardPrices } from "./EsncardPrices";
+import { CashBoxes, type BoxChange, type ManagedBox } from "./CashBoxes";
 
 export const metadata: Metadata = { title: "Cash boxes" };
 
-// Every cash box of the semester (round 2026-10-30): office hours with the
+// The physical cash boxes with what is in them (round 2026-10-31), and
+// every cash count of the semester (round 2026-10-30): office hours with the
 // ESNcards sold (internal = members, external) and events that sold drinks
 // or the like – counts before and after, takings, the difference to what
 // the cards should have brought, and whether the OC signed off, Finance
@@ -30,14 +32,45 @@ export default async function CashBoxesPage({ searchParams }: { searchParams: Pr
   const fromIso = berlinInputToIso(`${semester.from}T00:00`);
   const toIso = berlinInputToIso(`${addDays(semester.to, 1)}T00:00`);
 
-  const [{ data: boxes }, { data: entries }, { data: prices }] = await Promise.all([
+  const [{ data: boxes }, { data: entries }, { data: prices }, { data: physical }, { data: changeRows }] = await Promise.all([
     supabase
       .from("cash_reports")
       .select("*, events(id, title, starts_at), internal_events(id, kind, title, starts_at)")
       .order("created_at", { ascending: false }),
     supabase.from("finance_entries").select("cash_report_id").not("cash_report_id", "is", null),
     supabase.from("app_settings").select("key, value").in("key", ["esncard_price_internal_cents", "esncard_price_external_cents"]),
+    supabase.from("cash_boxes").select("id, name, default_for, cents, counts, removed_at").order("position").order("created_at"),
+    supabase.from("cash_box_changes").select("id, box_id, kind, cents_before, cents_after, note, cash_report_id, created_at, created_by").order("created_at", { ascending: false }).limit(300),
   ]);
+  const boxName = new Map((physical ?? []).map((b) => [b.id, b.name]));
+  const { data: people } = await supabase.from("profiles").select("email, full_name").in("email", [...new Set((changeRows ?? []).map((c) => c.created_by).filter((e): e is string => !!e))]);
+  const nameOf = new Map((people ?? []).map((p) => [p.email, p.full_name || p.email]));
+  const reportTitle = (id: string | null) => {
+    const b = id ? (boxes ?? []).find((x) => x.id === id) : null;
+    const ev = (b?.events ?? b?.internal_events) as { title: string; starts_at: string } | null | undefined;
+    return ev ? `${ev.title}, ${formatDate(ev.starts_at)}` : null;
+  };
+  const managed: ManagedBox[] = (physical ?? [])
+    .filter((b) => !b.removed_at)
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      defaultFor: b.default_for as ManagedBox["defaultFor"],
+      cents: b.cents,
+      counts: (b.counts ?? {}) as CashCounts,
+      openReports: (boxes ?? []).filter((r) => r.cash_box_id === b.id && !r.closed_at).length,
+      changes: (changeRows ?? [])
+        .filter((c) => c.box_id === b.id)
+        .map((c) => ({
+          id: c.id,
+          kind: c.kind as BoxChange["kind"],
+          centsBefore: c.cents_before,
+          centsAfter: c.cents_after,
+          note: c.note,
+          stamp: `${c.created_by ? (nameOf.get(c.created_by) ?? c.created_by) : "?"}, ${formatDateTime(c.created_at)}`,
+          report: reportTitle(c.cash_report_id),
+        })),
+    }));
   const booked = new Set((entries ?? []).map((e) => e.cash_report_id));
   const price = (key: string) => {
     const v = (prices ?? []).find((p) => p.key === key)?.value;
@@ -99,9 +132,17 @@ export default async function CashBoxesPage({ searchParams }: { searchParams: Pr
           ))}
         </div>
 
+        <section aria-labelledby="boxes-heading" className="space-y-2">
+          <h2 id="boxes-heading" className="text-base font-semibold text-gray-900">
+            The cash boxes
+          </h2>
+          <p className="text-sm text-gray-600">What is in each box now. A signed-off office hour or event sets its box to what was counted at the end; put money in, take it out or recount a box here.</p>
+          <CashBoxes boxes={managed} canAct={canAct} />
+        </section>
+
         <Card>
           <CardHeader>
-            <CardTitle>Cash boxes {semester.name}</CardTitle>
+            <CardTitle>Office hours and events {semester.name}</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
             {!rows.length ? (
@@ -130,7 +171,7 @@ export default async function CashBoxesPage({ searchParams }: { searchParams: Pr
                             {r.title}
                           </Link>
                           <span className="block text-xs text-gray-500">
-                            {formatDate(r.at)}
+                            {formatDate(r.at)} · {boxName.get(r.box.cash_box_id) ?? "?"}
                             {r.box.note && ` · ${r.box.note}`}
                           </span>
                         </td>

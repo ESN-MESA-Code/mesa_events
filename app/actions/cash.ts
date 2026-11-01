@@ -36,6 +36,22 @@ export async function bookCashBox(input: unknown) {
   return run(A.bookCashBox, input);
 }
 
+export async function addCashBox(input: unknown) {
+  return run(A.addCashBox, input);
+}
+
+export async function removeCashBox(input: unknown) {
+  return run(A.removeCashBox, input);
+}
+
+export async function setCashBoxDefault(input: unknown) {
+  return run(A.setCashBoxDefault, input);
+}
+
+export async function adjustCashBox(input: unknown) {
+  return run(A.adjustCashBox, input);
+}
+
 export async function setEsncardPrices(input: unknown) {
   return run(A.setEsncardPrices, input);
 }

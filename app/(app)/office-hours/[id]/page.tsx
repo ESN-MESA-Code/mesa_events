@@ -17,7 +17,7 @@ export default async function OfficeHourPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const { event, description, people, mine, isOc, isStaff, isPlanner, viewer, supabase } = await loadInternalForPage(id);
   if (event.kind !== "office_hour") redirect(internalPath(event.kind, id));
-  const { report, finance } = await loadCashBox(supabase, { internal_event_id: id }, viewer.roles, true);
+  const { report, finance, boxes } = await loadCashBox(supabase, { internal_event_id: id }, viewer.roles, true);
   const oc = people.find((p) => p.role === "oc");
   const helpers = people.filter((p) => p.role === "helper");
 
@@ -56,7 +56,7 @@ export default async function OfficeHourPage({ params }: { params: Promise<{ id:
         </Card>
       </div>
       {(isStaff || report || finance || isPlanner) && (
-        <CashBox report={report} target={{ internal_event_id: id }} officeHour canCount={isStaff && event.status === "scheduled"} isOc={isOc} finance={finance} />
+        <CashBox report={report} target={{ internal_event_id: id }} officeHour canCount={isStaff && event.status === "scheduled"} isOc={isOc} finance={finance} boxes={boxes} />
       )}
     </div>
   );

@@ -126,10 +126,12 @@ describe("Telegram", () => {
     expect(r.ok).toBe(true);
     const after = (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel, scheduled_for)").eq("event_id", approved)).data!;
     const channels = after.map((x) => (x.publication_posts as { channel: string }).channel);
-    for (const c of ["telegram", "instagram", "pretix"]) expect(channels).toContain(c);
+    for (const c of ["telegram", "instagram"]) expect(channels).toContain(c);
+    // pretix is a checklist, not on the schedule (round 2026-10-31).
+    expect(channels).not.toContain("pretix");
     // Telegram was there already: not planned twice.
     expect(channels.filter((c) => c === "telegram")).toHaveLength(before.filter((c) => c === "telegram").length);
-    expect(r.ok && r.data.posts).toBe(3 - new Set(before.filter((c) => ["telegram", "instagram", "pretix"].includes(c))).size);
+    expect(r.ok && r.data.posts).toBe(2 - new Set(before.filter((c) => ["telegram", "instagram"].includes(c))).size);
     // Again: nothing left to plan.
     expect(await P.planEverywhere(await actionContext(USERS.comms), { event_id: approved, day: day(96) })).toMatchObject({ ok: true, data: { posts: 0 } });
     expect(await P.planEverywhere(await actionContext(USERS.events), { event_id: approved, day: day(96) })).toMatchObject({ ok: false, error: "forbidden" });
@@ -210,7 +212,7 @@ describe("manual channels and the status", () => {
   });
 
   it("skip needs a reason; published posts stay; each change is logged for the event's staff", async () => {
-    const id = await post("pretix", [free]);
+    const id = await post("instagram", [free]);
     expect(await P.skipPost(await actionContext(USERS.comms), { post_id: id, reason: " " })).toMatchObject({ ok: false, error: "invalid_input" });
     expect((await P.skipPost(await actionContext(USERS.comms), { post_id: id, reason: "no pretix for free events" })).ok).toBe(true);
     expect(await P.deletePost(await actionContext(USERS.comms), { post_id: posts[1] })).toMatchObject({ ok: false, message: "Published posts stay (they are the record)" });
@@ -222,9 +224,29 @@ describe("manual channels and the status", () => {
     const status = async (u: (typeof USERS)[keyof typeof USERS], ev: string) =>
       Object.fromEntries(((await (await as(u)).rpc("publication_status", { events: [ev] })).data ?? []).map((s) => [s.channel, s.state]));
     expect(await status(USERS.oc, approved)).toEqual({ chat: "planned", telegram: "published", instagram: "published", pretix: "not_planned", esn: "not_planned" });
-    expect(await status(USERS.comms, free)).toMatchObject({ telegram: "published", pretix: "skipped" });
+    expect(await status(USERS.comms, free)).toMatchObject({ telegram: "published", instagram: "skipped" });
     expect(await status(USERS.comms, unapproved)).toMatchObject({ telegram: "planned" });
     expect(await status(USERS.member, approved)).toEqual({});
+  });
+
+  it("pretix is a tick per event, with its link optionally – not a post on the schedule (round 2026-10-31)", async () => {
+    const status = async (ev: string) => Object.fromEntries(((await (await as(USERS.comms)).rpc("publication_status", { events: [ev] })).data ?? []).map((s) => [s.channel, s]));
+    expect(await P.createPost(await actionContext(USERS.comms), { channel: "pretix", day: day(48), event_ids: [approved] })).toMatchObject({ ok: false, message: "This channel is not on the schedule" });
+    expect(await P.setPretixReady(await actionContext(USERS.events), { event_id: approved, ready: true })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: "pretix.eu/x" })).toMatchObject({ ok: false, error: "invalid_input" });
+    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true })).ok).toBe(true);
+    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: null } });
+    // Ticking again only sets the link; still one pretix post.
+    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: "https://pretix.eu/esnmesa/pub/" })).ok).toBe(true);
+    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: "https://pretix.eu/esnmesa/pub/" } });
+    const pretixPosts = async () => (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel)").eq("event_id", approved).eq("publication_posts.channel", "pretix")).data ?? [];
+    expect(await pretixPosts()).toHaveLength(1);
+    await runJobs();
+    expect((await admin.from("fake_chat_messages").select("text").eq("space", space).like("text", "%on pretix%")).data).toHaveLength(1);
+    // Not up after all: the tick goes.
+    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: false })).ok).toBe(true);
+    expect(await status(approved)).toMatchObject({ pretix: { state: "not_planned" } });
+    expect(await pretixPosts()).toHaveLength(0);
   });
 
   it("an admin switches a channel off: it leaves the status and the board", async () => {
@@ -234,6 +256,7 @@ describe("manual channels and the status", () => {
       const { data } = await (await as(USERS.comms)).rpc("publication_status", { events: [free] });
       expect((data ?? []).map((s) => s.channel)).not.toContain("pretix");
       expect(await P.createPost(await actionContext(USERS.comms), { channel: "pretix", day: day(48), event_ids: [free] })).toMatchObject({ ok: false });
+      expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: free, ready: true })).toMatchObject({ ok: false });
     } finally {
       await P.setChannelEnabled(await actionContext(USERS.admin), { channel: "pretix", enabled: true });
     }

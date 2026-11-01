@@ -125,19 +125,65 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
-                },"cash_reports": {
+                },"cash_box_changes": {
                   Row: {
-                    "card_price_external_cents": number | null,"card_price_internal_cents": number | null,"checked_at": string | null,"checked_by": string | null,"closed_at": string | null,"closed_by": string | null,"closing_cents": number | null,"closing_counted_at": string | null,"closing_counted_by": string | null,"closing_counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"esncards_external": number,"esncards_internal": number,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"opening_cents": number | null,"opening_counted_at": string | null,"opening_counted_by": string | null,"opening_counts": NonNullable<Json>,"updated_at": string
+                    "box_id": string,"cash_report_id": string | null,"cents_after": number,"cents_before": number,"counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"id": string,"kind": string,"note": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                    "box_id": string,"cash_report_id"?: string | null,"cents_after": number,"cents_before": number,"counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind": string,"note"?: string
                   }
                   Update: {
-                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                    "box_id"?: string,"cash_report_id"?: string | null,"cents_after"?: number,"cents_before"?: number,"counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind"?: string,"note"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "cash_box_changes_box_id_fkey"
+      columns: ["box_id"]
+isOneToOne: false
+      referencedRelation: "cash_boxes"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "cash_box_changes_cash_report_id_fkey"
+      columns: ["cash_report_id"]
+isOneToOne: false
+      referencedRelation: "cash_reports"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"cash_boxes": {
+                  Row: {
+                    "cents": number,"counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"default_for": string | null,"id": string,"name": string,"position": number,"removed_at": string | null,"removed_by": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cents"?: number,"counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"default_for"?: string | null,"id"?: string,"name": string,"position"?: number,"removed_at"?: string | null,"removed_by"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "cents"?: number,"counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"default_for"?: string | null,"id"?: string,"name"?: string,"position"?: number,"removed_at"?: string | null,"removed_by"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"cash_reports": {
+                  Row: {
+                    "card_price_external_cents": number | null,"card_price_internal_cents": number | null,"cash_box_id": string,"checked_at": string | null,"checked_by": string | null,"closed_at": string | null,"closed_by": string | null,"closing_cents": number | null,"closing_counted_at": string | null,"closing_counted_by": string | null,"closing_counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"esncards_external": number,"esncards_internal": number,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"opening_cents": number | null,"opening_counted_at": string | null,"opening_counted_by": string | null,"opening_counts": NonNullable<Json>,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"cash_box_id": string,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Update: {
+                    "card_price_external_cents"?: number | null,"card_price_internal_cents"?: number | null,"cash_box_id"?: string,"checked_at"?: string | null,"checked_by"?: string | null,"closed_at"?: string | null,"closed_by"?: string | null,"closing_cents"?: number | null,"closing_counted_at"?: string | null,"closing_counted_by"?: string | null,"closing_counts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"esncards_external"?: number,"esncards_internal"?: number,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"opening_cents"?: number | null,"opening_counted_at"?: string | null,"opening_counted_by"?: string | null,"opening_counts"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cash_reports_cash_box_id_fkey"
+      columns: ["cash_box_id"]
+isOneToOne: false
+      referencedRelation: "cash_boxes"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "cash_reports_event_id_fkey"
       columns: ["event_id"]
 isOneToOne: true
@@ -1055,8 +1101,14 @@ isOneToOne: false
 "acknowledge_confidentiality":
 { Args: { "accepted_version": string }; Returns: undefined
                            },
+"add_cash_box":
+{ Args: { "name": string }; Returns: string
+                           },
 "add_to_post":
 { Args: { "event": string,"post": string }; Returns: undefined
+                           },
+"adjust_cash_box":
+{ Args: { "box": string,"counts": Json,"mode": string,"note"?: string }; Returns: number
                            },
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -1215,7 +1267,7 @@ isOneToOne: false
 { Args: { "coalescing"?: boolean,"job_event"?: string,"job_kind": string,"job_payload": Json,"key": string }; Returns: number
                            },
 "ensure_cash_report":
-{ Args: { "event"?: string,"internal_event"?: string }; Returns: string
+{ Args: { "box"?: string,"event"?: string,"internal_event"?: string }; Returns: string
                            },
 "esn_api_link":
 { Args: { "event": string,"hash": string,"url": string }; Returns: undefined
@@ -1377,6 +1429,9 @@ isOneToOne: false
 "remind_oc":
 { Args: { "about": string,"event": string }; Returns: boolean
                            },
+"remove_cash_box":
+{ Args: { "box": string }; Returns: undefined
+                           },
 "remove_from_post":
 { Args: { "event": string,"post": string }; Returns: undefined
                            },
@@ -1436,6 +1491,9 @@ isOneToOne: false
 "sees_board_meetings":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"set_cash_box_default":
+{ Args: { "box": string,"kind": string }; Returns: undefined
+                           },
 "set_cash_note":
 { Args: { "note": string,"report": string }; Returns: undefined
                            },
@@ -1453,6 +1511,9 @@ isOneToOne: false
                            },
 "set_payout_details":
 { Args: { "account_holder"?: string,"claim": string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: undefined
+                           },
+"set_pretix_ready":
+{ Args: { "event": string,"link"?: string,"ready": boolean }; Returns: undefined
                            },
 "set_trip_budget":
 { Args: { "amount": number,"event": string,"note"?: string }; Returns: undefined

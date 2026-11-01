@@ -4,7 +4,7 @@ import type { Db } from "@/lib/supabase/session";
 import { formatDateTime } from "@/lib/dates";
 import { hasRole, type AppRole } from "@/lib/roles";
 import type { CashCounts } from "@/lib/cash";
-import type { CashFinance, CashReportView } from "@/components/CashBox";
+import type { CashBoxOption, CashFinance, CashReportView } from "@/components/CashBox";
 
 /** "Hana HR, Thu, 5 Nov 2026, 14:02" from an email and a time. */
 async function who(supabase: Db, emails: Array<string | null>): Promise<Map<string, string>> {
@@ -19,10 +19,17 @@ export async function loadCashBox(
   target: { event_id: string } | { internal_event_id: string },
   roles: readonly AppRole[],
   officeHour: boolean
-): Promise<{ report: CashReportView | null; finance: CashFinance | null }> {
+): Promise<{ report: CashReportView | null; finance: CashFinance | null; boxes: CashBoxOption[] }> {
   const column = "event_id" in target ? "event_id" : "internal_event_id";
   const id = "event_id" in target ? target.event_id : target.internal_event_id;
-  const { data: r } = await supabase.from("cash_reports").select("*").eq(column, id).maybeSingle();
+  const [{ data: r }, { data: boxRows }] = await Promise.all([
+    supabase.from("cash_reports").select("*").eq(column, id).maybeSingle(),
+    // The physical boxes (round 2026-10-31): the one used, and the ones to pick from.
+    supabase.from("cash_boxes").select("id, name, default_for, cents, counts, removed_at").order("position").order("created_at"),
+  ]);
+  const toOption = (b: NonNullable<typeof boxRows>[number]): CashBoxOption => ({ id: b.id, name: b.name, defaultFor: b.default_for as CashBoxOption["defaultFor"], cents: b.cents, counts: (b.counts ?? {}) as CashCounts });
+  const boxes = (boxRows ?? []).filter((b) => !b.removed_at).map(toOption);
+  const used = r ? (boxRows ?? []).find((b) => b.id === r.cash_box_id) : null;
   const finance = hasRole(roles, "finance") || roles.includes("executive");
   let financeView: CashFinance | null = null;
   if (finance && r) {
@@ -32,7 +39,7 @@ export async function loadCashBox(
     ]);
     financeView = { canAct: hasRole(roles, "finance"), booked: !!booked, categories: categories ?? [], suggested: officeHour ? "ESNcard sales" : "Cash box takings" };
   }
-  if (!r) return { report: null, finance: financeView };
+  if (!r) return { report: null, finance: financeView, boxes };
   const names = await who(supabase, [r.opening_counted_by, r.closing_counted_by, r.closed_by, r.checked_by]);
   const stamp = (email: string | null, at: string | null) => (email && at ? `${names.get(email) ?? email}, ${formatDateTime(at)}` : null);
   return {
@@ -53,7 +60,9 @@ export async function loadCashBox(
       closed_at: r.closed_at,
       checked: stamp(r.checked_by, r.checked_at),
       checked_at: r.checked_at,
+      box: used ? toOption(used) : null,
     },
     finance: financeView,
+    boxes,
   };
 }

@@ -1,5 +1,5 @@
 // RLS matrix cases of internal events, cash boxes, the ledger and calendar
-// feeds (round 2026-10-30): HR and the Vice President plan; board meetings
+// feeds (round 2026-10-30; the boxes themselves 2026-10-31): HR and the Vice President plan; board meetings
 // only for the executive board; cash boxes for their staff, Finance,
 // executives (and Events / the planners); the ledger for Finance and
 // executives; feeds for their owner. See rls-matrix.test.ts.
@@ -31,6 +31,12 @@ async function officeBox(): Promise<Match> {
   const ev = await internalOf("office_hour");
   await admin.from("internal_event_people").insert({ internal_event_id: ev.id as string, profile_id: USERS.volunteer1.id, role: "oc" });
   return insertRow("cash_reports", { internal_event_id: ev.id });
+}
+// A physical cash box of the tests (round 2026-10-31), and a change of it.
+const boxOf = () => insertRow("cash_boxes", { name: `RLS box ${uid()}`, created_by: TEST_TAG });
+async function boxChangeOf(): Promise<Match> {
+  const box = await boxOf();
+  return insertRow("cash_box_changes", { box_id: box.id, kind: "in", counts: { "200": 1 }, cents_before: 0, cents_after: 200 });
 }
 const category = () => insertRow("finance_categories", { direction: "expense", name: `RLS ${uid()}` });
 async function entryOf(): Promise<Match> {
@@ -91,6 +97,20 @@ export const SPECS_INTERNAL: Spec[] = [
     delete: [{ name: "cash box of an office hour", make: () => officeBox(), allowed: NOBODY }],
   },
   {
+    table: "cash_boxes",
+    select: [{ name: "a cash box", make: () => boxOf(), allowed: MEMBERS }],
+    insert: [{ payload: () => ({ id: uid(), name: `RLS box ${uid()}` }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "a cash box", make: () => boxOf(), patch: () => ({ cents: 999 }), allowed: NOBODY }],
+    delete: [{ name: "a cash box", make: () => boxOf(), allowed: NOBODY }],
+  },
+  {
+    table: "cash_box_changes",
+    select: [{ name: "money put into a box", make: () => boxChangeOf(), allowed: FINANCE_READ }],
+    insert: [{ payload: async () => ({ id: uid(), box_id: (await boxOf()).id, kind: "in", cents_before: 0, cents_after: 1 }), allowed: NOBODY, match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "money put into a box", make: () => boxChangeOf(), patch: () => ({ cents_after: 1 }), allowed: NOBODY }],
+    delete: [{ name: "money put into a box", make: () => boxChangeOf(), allowed: NOBODY }],
+  },
+  {
     table: "finance_categories",
     select: [{ name: "a category", make: () => category(), allowed: FINANCE_READ }],
     insert: [{ payload: () => ({ id: uid(), direction: "income", name: `RLS ${uid()}` }), allowed: FINANCE, match: (p) => ({ id: p.id as string }) }],
@@ -130,4 +150,5 @@ export async function cleanupInternal(w: World) {
     await admin.from("internal_events").delete().in("id", ids);
   }
   await admin.from("calendar_feeds").delete().eq("token_prefix", "mesa_cal_RLS");
+  await admin.from("cash_boxes").delete().like("name", "RLS box %");
 }

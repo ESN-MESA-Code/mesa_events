@@ -52,6 +52,10 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
     .insert({ kind: "office_hour", title: "E2E office hour", starts_at: new Date(Date.now() - 30 * 60_000).toISOString(), ends_at: new Date(Date.now() + 60 * 60_000).toISOString(), helpers_needed: 1, created_by: TEST_TAG })
     .select("id")
     .single();
+  // The office hour box (its default) is counted empty here and holds what it held afterwards (round 2026-10-31).
+  const { data: box } = await admin.from("cash_boxes").select("id, counts, cents").eq("default_for", "office_hour").single();
+  const since = new Date().toISOString();
+  await admin.from("cash_boxes").update({ counts: {}, cents: 0 }).eq("id", box!.id);
   try {
     await admin.from("internal_event_people").insert([
       { internal_event_id: office!.id, profile_id: USERS.oc.id, role: "oc" },
@@ -60,7 +64,9 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
     await as(USERS.oc);
     await page.goto(`/office-hours/${office!.id}`);
     await expect(page.getByTestId("office-hour-text")).toContainText("office hour");
+    await expect(page.getByLabel("Which cash box")).toHaveValue(box!.id);
     await page.getByRole("button", { name: "Start the cash box" }).click();
+    await expect(page.getByTestId("cash-box-name")).toContainText("Office hour cash box");
 
     await page.getByLabel("Before (opening): € 10", { exact: true }).fill("5");
     await expect(page.getByTestId("total-opening")).toHaveText("€ 50.00");
@@ -79,7 +85,11 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
     await answerConfirm(page);
     await expect(page.getByTestId("cash-status")).toHaveText("Signed off");
     await expect(page.getByRole("button", { name: "One internal ESNcard sold" })).toBeDisabled();
+    // The sign-off sets the box to the closing count.
+    expect((await admin.from("cash_boxes").select("cents").eq("id", box!.id).single()).data).toEqual({ cents: 6000 });
   } finally {
+    await admin.from("cash_box_changes").delete().eq("box_id", box!.id).gte("created_at", since);
+    await admin.from("cash_boxes").update({ counts: box!.counts, cents: box!.cents }).eq("id", box!.id);
     await admin.from("cash_reports").delete().eq("internal_event_id", office!.id);
     await admin.from("internal_events").delete().eq("id", office!.id);
   }

@@ -819,3 +819,30 @@ choice:
 - **Colours:** one per category (OC indigo `#4549B8`, helped cyan `#0091C8`, office hours orange
   `#E06A12`), checked for colour-vision deficiency and contrast on white; names and numbers stay
   in the gray text colours, ties share a step on the podium.
+
+## 2026-10-31 – Publishing calendar, pretix checklist, cash boxes as objects
+
+- **pretix is a checklist, not a channel on the schedule.** Comms ticks "pretix page is up" per
+  event (link optional). A tick is still a published pretix post of the event, so
+  `publication_status`, the Chat space notice and the sign-up link in Telegram bundles keep
+  working; untick removes it. `publication_channels.pretix.schedulable = false`; planned pretix
+  posts were deleted (migration `20261031000200`, `set_pretix_ready()`). This replaces "Three
+  required channels" (2026-10-30) for pretix; Telegram and Instagram stay required.
+- **No "All channels" lane any more.** The board is a month calendar like the cycle schedule and
+  the internal planner (whole month at once, no sideways scrolling), the month's events listed on
+  the left like the roster's volunteers. Each event has a chip per channel (TG, IG): drag a chip
+  onto a day to plan that post, onto a post of the same channel to bundle. Events show on their
+  date (📅) so the lead time is visible. A post opens in a dialog for preview, confirm, publish,
+  skip and the rest. `plan_everywhere()` stays in the database but the board no longer offers it.
+- **Phone twins of drop targets get their own ids** (`mday`, `mpost`): a hidden twin with the
+  same id has a zero-size rect and swallows the drop. A post under the pointer wins over its day.
+- **Cash boxes are physical objects** (`cash_boxes`, migration `20261031000300`): name, notes and
+  coins in it, the default box of office hours and of events. Two to start: "Office hour cash
+  box" and "Events cash box". Finance adds boxes, removes empty ones (history stays), picks the
+  defaults, and puts money in, takes it out or recounts (`adjust_cash_box()`, every change in
+  `cash_box_changes`). Members read the boxes (to pick one); the history is Finance and
+  executives only.
+- **An office hour or event counts one box** (`cash_reports.cash_box_id`, not null; the default
+  when the staff don't pick one). Its content is filled in as the suggested opening count, and
+  the OC's sign-off sets the box to the closing count. Finance then takes the takings out
+  ("Take money out") when they go to the bank.

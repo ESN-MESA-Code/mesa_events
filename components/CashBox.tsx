@@ -25,6 +25,17 @@ export interface CashReportView {
   closed_at: string | null;
   checked: string | null;
   checked_at: string | null;
+  /** The physical box counted (round 2026-10-31). */
+  box: CashBoxOption | null;
+}
+
+/** A physical cash box with what Finance knows is in it. */
+export interface CashBoxOption {
+  id: string;
+  name: string;
+  defaultFor: "office_hour" | "event" | null;
+  cents: number;
+  counts: CashCounts;
 }
 
 export interface CashFinance {
@@ -45,9 +56,24 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
 }
 
 /** Notes and coins of one count, with the running total. */
-function CountForm({ reportId, phase, saved, savedBy, disabled }: { reportId: string; phase: "opening" | "closing"; saved: CashCounts; savedBy: string | null; disabled: boolean }) {
+function CountForm({
+  reportId,
+  phase,
+  saved,
+  savedBy,
+  disabled,
+  suggested,
+}: {
+  reportId: string;
+  phase: "opening" | "closing";
+  saved: CashCounts;
+  savedBy: string | null;
+  disabled: boolean;
+  /** Not counted yet: what the box should hold (Finance's record), filled in to check. */
+  suggested?: { counts: CashCounts; label: string } | null;
+}) {
   const { run, pending, error } = useAction();
-  const [counts, setCounts] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(saved).map(([k, v]) => [k, String(v)])));
+  const [counts, setCounts] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(savedBy || !suggested ? saved : suggested.counts).map(([k, v]) => [k, String(v)])));
   const numbers: CashCounts = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v === "" ? 0 : Number(v)]));
   const total = countTotal(numbers);
   const dirty = JSON.stringify(Object.entries(numbers).filter(([, n]) => n > 0).sort()) !== JSON.stringify(Object.entries(saved).sort());
@@ -84,7 +110,11 @@ function CountForm({ reportId, phase, saved, savedBy, disabled }: { reportId: st
           {total === null ? "–" : formatCents(total)}
         </span>
       </div>
-      {savedBy ? <p className="text-xs text-gray-500">Counted by {savedBy}</p> : <p className="text-xs text-amber-700">Not counted yet</p>}
+      {savedBy ? (
+        <p className="text-xs text-gray-500">Counted by {savedBy}</p>
+      ) : (
+        <p className="text-xs text-amber-700">Not counted yet{suggested && !disabled ? ` – filled in from ${suggested.label}; count and correct it` : ""}</p>
+      )}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
         <div className="space-y-1.5">{DENOMINATIONS.filter(isNote).map(field)}</div>
         <div className="space-y-1.5">{DENOMINATIONS.filter((d) => !isNote(d)).map(field)}</div>
@@ -157,6 +187,26 @@ function NoteForm({ reportId, note, disabled }: { reportId: string; note: string
   );
 }
 
+/** Which box: the default of office hours or events, unless the staff pick another. */
+function StartForm({ target, boxes, officeHour }: { target: { event_id: string } | { internal_event_id: string }; boxes: CashBoxOption[]; officeHour: boolean }) {
+  const [box, setBox] = useState(boxes.find((b) => b.defaultFor === (officeHour ? "office_hour" : "event"))?.id ?? boxes[0]?.id ?? "");
+  if (!boxes.length) return <p className="text-amber-700">There is no cash box yet – Finance adds one first.</p>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select aria-label="Which cash box" className="h-9 w-56" value={box} onChange={(e) => setBox(e.target.value)}>
+        {boxes.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </Select>
+      <ActionButton action={startCashBox} input={{ ...target, box_id: box }} size="default">
+        Start the cash box
+      </ActionButton>
+    </div>
+  );
+}
+
 function BookForm({ reportId, finance }: { reportId: string; finance: CashFinance }) {
   const { run, pending, error } = useAction();
   const [category, setCategory] = useState(finance.categories.find((c) => c.name === finance.suggested)?.id ?? finance.categories[0]?.id ?? "");
@@ -189,6 +239,7 @@ export function CashBox({
   canCount,
   isOc,
   finance,
+  boxes,
 }: {
   report: CashReportView | null;
   target: { event_id: string } | { internal_event_id: string };
@@ -196,6 +247,8 @@ export function CashBox({
   canCount: boolean;
   isOc: boolean;
   finance: CashFinance | null;
+  /** The cash boxes to pick from (round 2026-10-31). */
+  boxes: CashBoxOption[];
 }) {
   if (!report) {
     return (
@@ -211,9 +264,7 @@ export function CashBox({
               : "Using the cash box (selling drinks or the like)? Count it before and after; the OC signs it off and Finance sees the takings."}
           </p>
           {canCount ? (
-            <ActionButton action={startCashBox} input={target} size="default">
-              Start the cash box
-            </ActionButton>
+            <StartForm target={target} boxes={boxes} officeHour={officeHour} />
           ) : (
             <p>The OC and helpers start it.</p>
           )}
@@ -233,7 +284,15 @@ export function CashBox({
   return (
     <Card data-testid="cash-box">
       <CardHeader>
-        <CardTitle>Cash box</CardTitle>
+        <CardTitle>
+          Cash box
+          {report.box && (
+            <span className="font-normal text-gray-500" data-testid="cash-box-name">
+              {" "}
+              · {report.box.name}
+            </span>
+          )}
+        </CardTitle>
         <Badge tone={CASH_STATUS_TONES[status]} data-testid="cash-status">
           {CASH_STATUS_LABELS[status]}
         </Badge>
@@ -270,7 +329,15 @@ export function CashBox({
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
-          <CountForm key={`o-${report.opening_counted}`} reportId={report.id} phase="opening" saved={report.opening_counts} savedBy={report.opening_counted} disabled={!editable} />
+          <CountForm
+            key={`o-${report.opening_counted}`}
+            reportId={report.id}
+            phase="opening"
+            saved={report.opening_counts}
+            savedBy={report.opening_counted}
+            disabled={!editable}
+            suggested={report.box && report.box.cents > 0 ? { counts: report.box.counts, label: `what Finance knows is in the ${report.box.name} (${formatCents(report.box.cents)})` } : null}
+          />
           <CountForm key={`c-${report.closing_counted}`} reportId={report.id} phase="closing" saved={report.closing_counts} savedBy={report.closing_counted} disabled={!editable} />
         </div>
 
@@ -291,7 +358,7 @@ export function CashBox({
                 disabled={report.opening_cents === null || report.closing_cents === null}
                 confirm={{
                   title: "Sign off the cash box?",
-                  body: `Before: ${formatCents(report.opening_cents)}\nAfter: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}\n\nFinance checks and books it next; only Finance can reopen it.`,
+                  body: `Before: ${formatCents(report.opening_cents)}\nAfter: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}\n\n${report.box ? `The ${report.box.name} then holds ${formatCents(report.closing_cents)}. ` : ""}Finance checks and books it next; only Finance can reopen it.`,
                   confirmLabel: "Sign off",
                 }}
                 done="Cash box signed off – Finance checks it next."

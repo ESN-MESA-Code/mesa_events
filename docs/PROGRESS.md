@@ -1,5 +1,16 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-10-31 (2): Publishing calendar, pretix checklist, cash boxes
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-10-31 –
+Publishing calendar …"). New migrations `20261031000200`, `20261031000300`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Publishing board | Month calendar (whole month visible) with the events on their dates and the posts on theirs; events listed on the left with a TG / IG chip each to drag; post details in a dialog; no "All channels" lane | E2E: drag a chip onto a day, keyboard plan, bundle onto a post, wrong channel refused, confirm, publish |
+| pretix | A tick per event (link optional) instead of scheduled posts | DB: tick, link, untick, Comms only, channel off; E2E: tick and link |
+| Cash boxes | `cash_boxes` with notes and coins; Finance adds, removes, sets defaults, puts money in / takes it out / recounts; staff pick the box when starting (default per office hour / event), opening count suggested from the box, sign-off sets the box | DB: defaults, in/out/recount, never more out than in, remove only empty, RLS matrix |
+
 ## Round 2026-10-30 (2): Internal events, office hours, cash boxes, finance ledger, leaderboard, iCal
 
 Status: **implemented and tested locally; committed on the local branch

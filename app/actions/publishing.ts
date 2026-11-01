@@ -48,6 +48,10 @@ export async function skipPost(input: unknown) {
   return run(A.skipPost, input);
 }
 
+export async function setPretixReady(input: unknown) {
+  return run(A.setPretixReady, input);
+}
+
 export async function deletePost(input: unknown) {
   return run(A.deletePost, input);
 }

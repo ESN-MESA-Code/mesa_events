@@ -6,23 +6,19 @@ import { hasRole } from "@/lib/roles";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { postWarnings, type PostEventFacts } from "@/lib/publishing";
 import { coerceFields } from "@/lib/description/template";
-import { Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
 import { CommsTabs } from "@/components/CommsTabs";
 import { bundleMessage, bundlePrice, eventMessage, plainText } from "@/lib/telegram/messages";
-import { ScheduleBoard, type BoardChannel, type BoardPost, type Coverage } from "./ScheduleBoard";
+import { ScheduleBoard, type BoardChannel, type BoardPost, type Coverage, type PretixChecklist } from "./ScheduleBoard";
 
 export const metadata: Metadata = { title: "Publishing schedule" };
 
-const daysOf = (month: string) => {
-  const [y, m] = month.split("-").map(Number);
-  const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return Array.from({ length: n }, (_, i) => `${month.slice(0, 8)}${String(i + 1).padStart(2, "0")}`);
-};
-
-// The publishing schedule (brief 2026-10-29, E3): a month board with a lane
-// per channel, the month's events in a tray; Comms plans, bundles, moves
-// and publishes; Events and executives look on.
+// The publishing schedule (brief 2026-10-29, E3; round 2026-10-31): the
+// month's events listed on the left, the month as a calendar with the
+// events on their dates and the posts on theirs; Comms plans, bundles,
+// moves and publishes, and ticks pretix off per event. Events and
+// executives look on.
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const viewer = await requirePageRole(["comms", "events"], { executiveMayRead: true, page: "Publishing schedule" });
   const editable = hasRole(viewer.roles, "comms");
@@ -45,14 +41,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const posts = postRows ?? [];
   const months = [...new Set([...rows.map((r) => monthOf(r.starts_at)), ...posts.map((p) => monthOf(p.scheduled_for))])].sort();
   // Work: events still ahead that are on no schedulable channel yet, or posts waiting.
-  const planned = new Set(posts.filter((p) => p.status !== "skipped").flatMap((p) => p.publication_post_events.map((x) => x.event_id)));
+  const planned = new Set(posts.filter((p) => p.status !== "skipped" && p.channel !== "pretix").flatMap((p) => p.publication_post_events.map((x) => x.event_id)));
   const hasWork = (m: string) =>
     rows.some((r) => monthOf(r.starts_at) === m && Date.parse(r.starts_at) > now && !planned.has(r.event_id)) ||
     posts.some((p) => monthOf(p.scheduled_for) === m && p.status === "planned");
   const month = pickMonth(months.map((m) => ({ month: m, hasWork: hasWork(m) })), parseMonthParam(sp.month), thisMonth) ?? thisMonth;
 
   const channels: BoardChannel[] = (channelRows ?? []).filter((c) => c.enabled && c.schedulable).map((c) => ({ key: c.key, name: c.name, kind: c.kind as BoardChannel["kind"], required: c.required }));
-  const monthPosts = posts.filter((p) => monthOf(p.scheduled_for) === month);
+  const onBoard = new Set(channels.map((c) => c.key));
+  const monthPosts = posts.filter((p) => monthOf(p.scheduled_for) === month && onBoard.has(p.channel));
+  // pretix is a checklist (round 2026-10-31): ticked = a published pretix post of the event.
+  const pretix: PretixChecklist = { enabled: (channelRows ?? []).some((c) => c.key === "pretix" && c.enabled), done: {} };
+  for (const p of posts) if (p.channel === "pretix" && p.status === "published") for (const x of p.publication_post_events) pretix.done[x.event_id] ??= { link: p.link };
   const monthEvents = rows.filter((r) => monthOf(r.starts_at) === month);
   // Events on a post of this month that take place in another month are shown too.
   const ids = [...new Set([...monthEvents.map((r) => r.event_id), ...monthPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id))])];
@@ -127,7 +127,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Comms" description="Every event goes out on Telegram, Instagram and pretix: plan the posts around the event's date, bundle them, publish. Telegram posts go out by themselves once confirmed.">
+      <PageHeader title="Comms" description="Every event goes out on Telegram and Instagram: drag it from the list onto a day, bundle posts, publish – and tick pretix off once its page is up. Telegram posts go out by themselves once confirmed.">
         <div className="flex flex-wrap items-center gap-3">
           <MonthSelector
             options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
@@ -144,20 +144,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <EmptyState>No channel is switched on for the schedule (Admin → Publishing channels).</EmptyState>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="pt-5">
-            <ScheduleBoard
-              days={daysOf(month)}
-              channels={channels}
-              events={boardEvents}
-              posts={boardPosts}
-              editable={editable}
-              viewer={{ email: viewer.email, name: viewer.name }}
-              today={berlinDate(new Date(now).toISOString())}
-              coverage={coverage}
-            />
-          </CardContent>
-        </Card>
+        <ScheduleBoard
+          month={month}
+          channels={channels}
+          events={boardEvents}
+          posts={boardPosts}
+          editable={editable}
+          viewer={{ email: viewer.email, name: viewer.name }}
+          today={berlinDate(new Date(now).toISOString())}
+          coverage={coverage}
+          pretix={pretix}
+        />
       )}
     </>
   );

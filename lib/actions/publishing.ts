@@ -21,7 +21,7 @@ export const createPost = defineAction(z.object({ channel, day, time: time.optio
   return { id: data as string };
 }, { revalidate: BOARD });
 
-/** One event on every required channel (Telegram, Instagram, pretix) it is not on yet, on one day. */
+/** One event on every required channel on the schedule (Telegram, Instagram) it is not on yet, on one day. */
 export const planEverywhere = defineAction(z.object({ event_id: uuid, day, time: time.optional() }), async (ctx, i) => {
   requireRole(ctx, "comms");
   const { data, error } = await ctx.supabase.rpc("plan_everywhere", { event: i.event_id, scheduled_for: at(i.day, i.time) });
@@ -92,6 +92,16 @@ export const skipPost = defineAction(z.object({ post_id: uuid, reason: z.string(
   requireRole(ctx, "comms");
   dbError((await ctx.supabase.rpc("skip_post", { post: i.post_id, reason: i.reason })).error);
 }, { revalidate: BOARD });
+
+/** pretix is a checklist (round 2026-10-31): the event's pretix page is up (with its link, optionally) – or not after all. */
+export const setPretixReady = defineAction(
+  z.object({ event_id: uuid, ready: z.boolean(), link: z.union([z.literal(""), z.url({ protocol: /^https?$/, error: "Paste the link of the pretix page" }).max(500)]).default("") }),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    dbError((await ctx.supabase.rpc("set_pretix_ready", { event: i.event_id, ready: i.ready, link: i.link })).error);
+  },
+  { revalidate: BOARD }
+);
 
 export const deletePost = defineAction(z.object({ post_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "comms");

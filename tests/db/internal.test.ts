@@ -13,6 +13,9 @@ import { parseFeedSegment, renderFeed } from "@/lib/calendarFeed";
 
 const internalIds: string[] = [];
 let eventId: string;
+// A box of the tests' own, so the real boxes keep what they hold (round 2026-10-31).
+let testBox: string;
+const boxName = `Test box ${crypto.randomUUID().slice(0, 6)}`;
 
 async function internal(kind: string, extra: Record<string, unknown> = {}) {
   const { data, error } = await admin
@@ -31,6 +34,7 @@ const ok = <T,>(r: { ok: true; data: T } | { ok: false; message: string }): T =>
 };
 
 beforeAll(async () => {
+  testBox = (await admin.from("cash_boxes").insert({ name: boxName, created_by: TEST_TAG }).select("id").single()).data!.id;
   eventId = (await createEvent({ title: "Cash box test event", starts_at: hoursFromNow(-2), oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 1 })).id;
 });
 afterAll(async () => {
@@ -42,6 +46,7 @@ afterAll(async () => {
     await admin.from("internal_events").delete().in("id", internalIds);
   }
   await admin.from("events").delete().eq("id", eventId);
+  await admin.from("cash_boxes").delete().like("name", "Test box%");
   await admin.from("calendar_feeds").delete().in("profile_id", [USERS.member.id, USERS.executive.id, USERS.newcomer.id]);
   await admin.from("app_settings").delete().in("key", ["esncard_price_internal_cents", "esncard_price_external_cents"]);
 });
@@ -152,7 +157,7 @@ describe("the office hour's cash box", () => {
   it("only the OC and helpers start and count it", async () => {
     expect(await C.startCashBox(await actionContext(USERS.member), { internal_event_id: office })).toMatchObject({ ok: false, error: "forbidden" });
     expect(await C.startCashBox(await actionContext(USERS.finance), { internal_event_id: office })).toMatchObject({ ok: false, error: "forbidden" });
-    report = ok(await C.startCashBox(await actionContext(USERS.helper), { internal_event_id: office })).report_id;
+    report = ok(await C.startCashBox(await actionContext(USERS.helper), { internal_event_id: office, box_id: testBox })).report_id;
     expect(ok(await C.startCashBox(await actionContext(USERS.oc), { internal_event_id: office })).report_id).toBe(report);
     const { data } = await admin.from("cash_reports").select("card_price_internal_cents, card_price_external_cents").eq("id", report).single();
     expect(data).toEqual({ card_price_internal_cents: 500, card_price_external_cents: 1500 });
@@ -190,6 +195,14 @@ describe("the office hour's cash box", () => {
     ok(await C.closeCashBox(await actionContext(USERS.oc), { report_id: report }));
     const { data } = await admin.from("cash_reports").select("opening_cents, closing_cents, esncards_internal, esncards_external, closed_by").eq("id", report).single();
     expect(data).toEqual({ opening_cents: 5000, closing_cents: 7000, esncards_internal: 2, esncards_external: 1, closed_by: USERS.oc.email });
+    // The box holds what was counted at the end; each sign-off is in its history.
+    const { data: box } = await admin.from("cash_boxes").select("counts, cents").eq("id", testBox).single();
+    expect(box).toEqual({ counts: { "5000": 1, "1000": 1, "500": 1, "100": 5 }, cents: 7000 });
+    const { data: changes } = await admin.from("cash_box_changes").select("kind, cents_after, cash_report_id").eq("box_id", testBox);
+    expect(changes).toEqual([
+      { kind: "report", cents_after: 7000, cash_report_id: report },
+      { kind: "report", cents_after: 7000, cash_report_id: report },
+    ]);
   });
 
   it("Finance checks and books the takings once; booked boxes cannot be reopened", async () => {
@@ -223,7 +236,7 @@ describe("the office hour's cash box", () => {
 describe("an event's cash box (drinks and the like)", () => {
   it("the event's OC and helpers count, the OC signs off; no ESNcards", async () => {
     expect(await C.startCashBox(await actionContext(USERS.volunteer1), { event_id: eventId })).toMatchObject({ ok: false, error: "forbidden" });
-    const report = ok(await C.startCashBox(await actionContext(USERS.helper), { event_id: eventId })).report_id;
+    const report = ok(await C.startCashBox(await actionContext(USERS.helper), { event_id: eventId, box_id: testBox })).report_id;
     expect(await C.bumpEsncards(await actionContext(USERS.helper), { report_id: report, card: "internal", delta: 1 })).toMatchObject({ ok: false, message: /office hours/ });
     ok(await C.saveCashCount(await actionContext(USERS.helper), { report_id: report, phase: "opening", counts: { "1000": 3 } }));
     ok(await C.saveCashCount(await actionContext(USERS.helper), { report_id: report, phase: "closing", counts: { "1000": 3, "200": 10 } }));
@@ -236,6 +249,85 @@ describe("an event's cash box (drinks and the like)", () => {
     // The event's staff read their box; Events does too, other members not.
     expect((await (await as(USERS.events)).from("cash_reports").select("note").eq("id", report)).data).toEqual([{ note: "20 drinks at € 1" }]);
     expect((await (await as(USERS.volunteer1)).from("cash_reports").select("id").eq("id", report)).data).toEqual([]);
+  });
+});
+
+describe("the cash boxes themselves (round 2026-10-31)", () => {
+  let box: string;
+  it("two to start with: office hours and events take their own by default", async () => {
+    const { data } = await admin.from("cash_boxes").select("name, default_for").is("removed_at", null).not("default_for", "is", null).order("position");
+    expect(data).toEqual([
+      { name: "Office hour cash box", default_for: "office_hour" },
+      { name: "Events cash box", default_for: "event" },
+    ]);
+    const office = await internal("office_hour", { starts_at: hoursFromNow(2) });
+    await staff(office, USERS.helper, "helper");
+    const report = ok(await C.startCashBox(await actionContext(USERS.helper), { internal_event_id: office })).report_id;
+    const { data: r } = await admin.from("cash_reports").select("cash_boxes(default_for)").eq("id", report).single();
+    expect(r!.cash_boxes).toEqual({ default_for: "office_hour" });
+  });
+
+  it("only Finance adds a box; names are unique", async () => {
+    expect(await C.addCashBox(await actionContext(USERS.oc), { name: "Test box extra" })).toMatchObject({ ok: false, error: "forbidden" });
+    box = ok(await C.addCashBox(await actionContext(USERS.finance), { name: "Test box extra" })).box_id;
+    expect(await C.addCashBox(await actionContext(USERS.finance), { name: " test BOX extra " })).toMatchObject({ ok: false, message: /of that name already/ });
+  });
+
+  it("Finance puts money in, takes it out and recounts – never more out than in", async () => {
+    const fin = await actionContext(USERS.finance);
+    expect(ok(await C.adjustCashBox(fin, { box_id: box, mode: "in", counts: { "2000": 2, "200": 5 } })).total_cents).toBe(5000);
+    expect(ok(await C.adjustCashBox(fin, { box_id: box, mode: "in", counts: { "200": 5 }, note: "new coins" })).total_cents).toBe(6000);
+    expect(ok(await C.adjustCashBox(fin, { box_id: box, mode: "out", counts: { "2000": 1 }, note: "to the bank" })).total_cents).toBe(4000);
+    expect(await C.adjustCashBox(fin, { box_id: box, mode: "out", counts: { "5000": 1, "200": 11 } })).toMatchObject({ ok: false, message: /missing/ });
+    expect(await C.adjustCashBox(fin, { box_id: box, mode: "in", counts: {} })).toMatchObject({ ok: false, message: /notes and coins/ });
+    expect(await C.adjustCashBox(await actionContext(USERS.executive), { box_id: box, mode: "in", counts: { "100": 1 } })).toMatchObject({ ok: false, error: "forbidden" });
+    const { data } = await admin.from("cash_boxes").select("counts, cents").eq("id", box).single();
+    expect(data).toEqual({ counts: { "2000": 1, "200": 10 }, cents: 4000 });
+    expect(ok(await C.adjustCashBox(fin, { box_id: box, mode: "recount", counts: { "2000": 1, "200": 9, "10": 0 } })).total_cents).toBe(3800);
+    const { data: changes } = await admin.from("cash_box_changes").select("kind, counts, cents_before, cents_after, note, created_by").eq("box_id", box).order("created_at");
+    expect(changes!.map((c) => [c.kind, c.cents_before, c.cents_after])).toEqual([
+      ["in", 0, 5000],
+      ["in", 5000, 6000],
+      ["out", 6000, 4000],
+      ["recount", 4000, 3800],
+    ]);
+    expect(changes![2]).toMatchObject({ counts: { "2000": 1 }, note: "to the bank", created_by: USERS.finance.email });
+  });
+
+  it("members read the boxes (to pick one); only Finance and executives read their history", async () => {
+    for (const [user, history] of [
+      [USERS.member, false],
+      [USERS.oc, false],
+      [USERS.executive, true],
+      [USERS.finance, true],
+    ] as const) {
+      expect((await (await as(user)).from("cash_boxes").select("id").eq("id", box)).data, user.email).toHaveLength(1);
+      expect(((await (await as(user)).from("cash_box_changes").select("id").eq("box_id", box)).data ?? []).length > 0, user.email).toBe(history);
+    }
+    const { error } = await (await as(USERS.finance)).from("cash_boxes").update({ cents: 1 }).eq("id", box);
+    expect(error).not.toBeNull();
+  });
+
+  it("Finance picks the default box of events", async () => {
+    const { data: events } = await admin.from("cash_boxes").select("id").eq("default_for", "event").single();
+    ok(await C.setCashBoxDefault(await actionContext(USERS.finance), { box_id: box, kind: "event" }));
+    try {
+      expect((await admin.from("cash_boxes").select("id").eq("default_for", "event")).data).toEqual([{ id: box }]);
+    } finally {
+      ok(await C.setCashBoxDefault(await actionContext(USERS.finance), { box_id: events!.id, kind: "event" }));
+    }
+  });
+
+  it("only an empty box is removed; then nobody starts with it", async () => {
+    const fin = await actionContext(USERS.finance);
+    expect(await C.removeCashBox(fin, { box_id: box })).toMatchObject({ ok: false, message: /Take the money out/ });
+    ok(await C.adjustCashBox(fin, { box_id: box, mode: "out", counts: { "2000": 1, "200": 9 } }));
+    ok(await C.removeCashBox(fin, { box_id: box }));
+    const office = await internal("office_hour", { starts_at: hoursFromNow(3) });
+    await staff(office, USERS.helper, "helper");
+    expect(await C.startCashBox(await actionContext(USERS.helper), { internal_event_id: office, box_id: box })).toMatchObject({ ok: false, message: /removed/ });
+    // Its history stays.
+    expect((await admin.from("cash_box_changes").select("id").eq("box_id", box)).data!.length).toBeGreaterThan(0);
   });
 });
 
