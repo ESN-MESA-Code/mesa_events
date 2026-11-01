@@ -92,3 +92,32 @@ describe("a row → a history event", () => {
     expect(mapRecord(records[3], today)).toMatchObject({ skip: expect.stringMatching(/not past yet/) });
   });
 });
+
+describe("the _Registry tab (round 2026-11-01)", () => {
+  const fields = (title: string, dateIso: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ title, dateIso, time: "19:00", venue: "EineWeltHaus", price: "2€", priceNote: "10€ without food", hook: "exploring dishes", intro: "Join us.", program: "Bring a dish", bring: "", importantHeading: "", important: "", weather: false, closing: "eat together", esnType: "441", esnObjectives: "413,407", ...extra });
+  const csv = [
+    ["eventId", "eventTitle", "status", "published", "publishedBy", "publishedAt", "dbSheet"],
+    ["spaces/AAA", "International dinner", "PUBLISHED", fields("International dinner — WiSe26", "2026-10-16"), "Comms Person", "2026-10-01T10:00:00.000Z", "WiSe 26/27"],
+    ["spaces/BBB", "Berlin Weekend Trip", "PUBLISHED", fields("Berlin Weekend Trip", "2026-04-30", { esnType: "9" }), "", "2026-04-01T10:00:00.000Z", "SoSe 26"],
+    ["spaces/CCC", "Draft", "DRAFT", "", "", "", ""],
+    ["spaces/DDD", "Dry run", "PUBLISHED", fields("Dry run Zebra Hike", "2026-10-14"), "", "", "Training"],
+  ]
+    .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  it("takes the published fields as they are, skips drafts and training", () => {
+    const records = recordsFromFile("_Registry.csv", csv);
+    const [dinner, berlin, draft, training] = records.map((r: object) => mapRecord(r, "2026-11-01"));
+    expect(dinner).toMatchObject({
+      ref: "spaces/AAA",
+      event: { title: "International dinner — WiSe26", type: "standard", price_cents: 200, location: "EineWeltHaus" },
+      description: { hook: "exploring dishes", priceNote: "10€ without food", esnType: "441", esnObjectives: "413,407", time: "19:00" },
+      publishedAt: "2026-10-01T10:00:00.000Z",
+      publishedBy: "Comms Person",
+    });
+    expect(berlin).toMatchObject({ event: { type: "weekend_trip" } });
+    expect(draft).toEqual({ skip: "not published (spaces/CCC)" });
+    expect(training).toEqual({ skip: "training (Dry run Zebra Hike)" });
+  });
+});

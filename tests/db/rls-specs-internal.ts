@@ -2,7 +2,9 @@
 // feeds (round 2026-10-30; the boxes themselves 2026-10-31): HR and the Vice President plan; board meetings
 // only for the executive board; cash boxes for their staff, Finance,
 // executives (and Events / the planners); the ledger for Finance and
-// executives; feeds for their owner. See rls-matrix.test.ts.
+// executives; feeds for their owner; event categories and formats for every
+// member to read and the Events team to keep (round 2026-11-01). See
+// rls-matrix.test.ts.
 import crypto from "node:crypto";
 import { TEST_TAG, USERS, admin } from "../helpers/local";
 import { MEMBERS, NOBODY, PLANNERS, ROLE_USER, type Role, type World } from "./world";
@@ -39,6 +41,8 @@ async function boxChangeOf(): Promise<Match> {
   return insertRow("cash_box_changes", { box_id: box.id, kind: "in", counts: { "200": 1 }, cents_before: 0, cents_after: 200 });
 }
 const category = () => insertRow("finance_categories", { direction: "expense", name: `RLS ${uid()}` });
+const eventCategory = () => insertRow("event_categories", { name: `RLS ${uid()}` });
+const eventFormat = () => insertRow("event_formats", { name: `RLS ${uid()}` });
 async function entryOf(): Promise<Match> {
   const cat = await category();
   return insertRow("finance_entries", { direction: "expense", category_id: cat.id, amount_cents: 100, booked_on: "2999-01-05", description: "RLS", created_by: TEST_TAG });
@@ -49,6 +53,20 @@ async function feedOf(): Promise<Match> {
 }
 
 export const SPECS_INTERNAL: Spec[] = [
+  {
+    table: "event_categories",
+    select: [{ name: "a category", make: () => eventCategory(), allowed: MEMBERS }],
+    insert: [{ payload: () => ({ id: uid(), name: `RLS ${uid()}` }), allowed: ["events"], match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "a category", make: () => eventCategory(), patch: () => ({ active: false }), allowed: ["events"] }],
+    delete: [{ name: "a category", make: () => eventCategory(), allowed: NOBODY }],
+  },
+  {
+    table: "event_formats",
+    select: [{ name: "a format", make: () => eventFormat(), allowed: MEMBERS }],
+    insert: [{ payload: () => ({ id: uid(), name: `RLS ${uid()}` }), allowed: ["events"], match: (p) => ({ id: p.id as string }) }],
+    update: [{ name: "a format", make: () => eventFormat(), patch: () => ({ helpers_needed: 3 }), allowed: ["events"] }],
+    delete: [{ name: "a format", make: () => eventFormat(), allowed: NOBODY }],
+  },
   {
     table: "internal_kind_settings",
     select: [{ name: "office hour defaults", make: async () => ({ kind: "office_hour" }), allowed: MEMBERS }],
@@ -142,6 +160,8 @@ export const SPECS_INTERNAL: Spec[] = [
 export async function cleanupInternal(w: World) {
   await admin.from("finance_entries").delete().eq("description", "RLS");
   await admin.from("finance_categories").delete().like("name", "RLS %");
+  await admin.from("event_categories").delete().like("name", "RLS %");
+  await admin.from("event_formats").delete().like("name", "RLS %");
   await admin.from("cash_reports").delete().eq("event_id", w.eventA.id);
   const { data: rows } = await admin.from("internal_events").select("id").in("title", ["RLS internal", "RLS new"]);
   const ids = (rows ?? []).map((r) => r.id);

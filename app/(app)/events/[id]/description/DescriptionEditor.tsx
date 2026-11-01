@@ -60,6 +60,8 @@ interface Props {
   can: { submit: boolean; review: boolean; hasSpace: boolean };
   pool: SearchEntry[];
   templates: Record<string, DescriptionFields>;
+  /** The last published run of this event's format, offered first. */
+  lastRun?: { eventId: string; format: string; date: string } | null;
   reviews: Array<{ id: string; reviewer: string; decision: string; comment: string; when: string }>;
   /** The event's venue name and address (the venue fields start from them). */
   place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
@@ -69,7 +71,7 @@ interface Props {
   lastRequest: { reviewer: string; comment: string; when: string; fields: DescriptionFields | null } | null;
 }
 
-export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, reviews, place, eventPriceCents, lastRequest }: Props) {
+export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, lastRun, reviews, place, eventPriceCents, lastRequest }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
@@ -318,6 +320,16 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
               <CardTitle>Start from a previous event?</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {lastRun && templates[lastRun.eventId] && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-esn/30 bg-esn/5 p-3 text-sm" data-testid="last-run">
+                  <span>
+                    This is a run of <strong>{lastRun.format}</strong> – start from its last description{lastRun.date ? ` (${lastRun.date})` : ""}?
+                  </span>
+                  <Button size="sm" className="ml-auto" onClick={() => applyTemplate(lastRun.eventId, `the last ${lastRun.format}`)}>
+                    Use the last {lastRun.format}
+                  </Button>
+                </div>
+              )}
               <Input aria-label="Search previous events" placeholder="Search by name, venue or text (e.g. hike, pub quiz)" value={query} onChange={(e) => setQuery(e.target.value)} />
               {!results.rows.length && <p className="text-sm text-gray-500">{pool.length ? "No match." : "No published descriptions yet."}</p>}
               <ul className="divide-y divide-gray-100 text-sm" data-testid="template-results">

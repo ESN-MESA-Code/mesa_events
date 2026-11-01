@@ -17,6 +17,8 @@ const ev = (id: string, title: string, starts_at: string, extra: Partial<PastEve
   helpers_needed: 2,
   photo_folder_url: null,
   source: "platform",
+  category_id: null,
+  format_id: null,
   ...extra,
 });
 
@@ -50,6 +52,19 @@ describe("search and filters", () => {
     expect(big[0].earlier.map((e) => e.event_id)).toEqual(["q1"]);
   });
 
+  it("runs of one format are one group whatever their names; the category filters (round 2026-11-01)", () => {
+    const linked = [
+      ...pool,
+      ev("l1", "Language Café", "2026-02-12T18:00:00Z", { format_id: "f-lang", category_id: "c-lang" }),
+      ev("l2", "Sprachcafé im Winter", "2026-01-12T18:00:00Z", { format_id: "f-lang", category_id: "c-lang" }),
+    ];
+    const lang = searchInspiration(linked, { ...all, category: "c-lang" }).results;
+    expect(lang.map((r) => [r.event.event_id, r.earlier.map((e) => e.event_id)])).toEqual([["l1", ["l2"]]]);
+    expect(searchInspiration(linked, { ...all, category: "c-other" }).results).toEqual([]);
+    expect(ideaFromEvent(linked[5], [], "2026-10-01", "Language Café")).toMatchObject({ title: "Language Café", format_id: "f-lang", category_id: "c-lang" });
+    expect(ideaFromEvent(ev("x", "International dinner — Oct WiSe26", "2026-10-16T17:00:00Z"), [], "2026-10-01").title).toBe("International dinner");
+  });
+
   it("without a query: the most recent events", () => {
     expect(searchInspiration(pool, all).results[0].event.event_id).toBe("q3");
   });
@@ -78,6 +93,8 @@ describe("Propose this again", () => {
       pitch: "A night of trivia. Teams battle it out.\n\nRan before: 2025-11-06 (39 people the last time).",
       helpers_needed: 2,
       type_suggestion: "standard",
+      category_id: null,
+      format_id: null,
     });
     expect(ideaFromEvent(q.event, q.earlier, "2026-10-29")).toMatchObject({ title: "Pub Quiz", pitch: "Ran before: 2026-06-10, 2026-03-04, 2025-11-06 (31 people the last time)." });
     expect(ideaFromEvent({ ...pool[3], helpers_needed: null }, [], "2026-10-29")).toMatchObject({ helpers_needed: 2, type_suggestion: "day_trip" });

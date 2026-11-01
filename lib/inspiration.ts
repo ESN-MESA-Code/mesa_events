@@ -2,11 +2,13 @@
 // the ported bot search (lib/description/search.ts – word starts, synonyms,
 // umlauts, repeats grouped "+N earlier"), filtered by type, season or month
 // and turnout, and turned into a prefilled idea ("Propose this again").
+// Runs of one format are one group; the category filters (round 2026-11-01).
 // Pure (tests/unit/inspiration.test.ts).
 import { berlinDate } from "@/lib/dates";
 import { normalizeHook, paragraph } from "@/lib/description/template";
 import { searchEntry, searchTemplates, type SearchEntry } from "@/lib/description/search";
 import type { EventType } from "@/lib/labels";
+import { formatName } from "@/lib/formats";
 
 /** A row of public.inspiration_events(). */
 export interface PastEvent {
@@ -23,6 +25,8 @@ export interface PastEvent {
   helpers_needed: number | null;
   photo_folder_url: string | null;
   source: string;
+  category_id: string | null;
+  format_id: string | null;
 }
 
 /** "Had a big turnout": at least this many people counted. */
@@ -38,6 +42,8 @@ export const SEASONS = {
 export interface InspirationFilters {
   query: string;
   type: EventType | "";
+  /** A category id, "" (any). */
+  category?: string;
   /** "" (any time), a season key, or a month "1"–"12". */
   when: string;
   bigTurnout: boolean;
@@ -47,6 +53,7 @@ const monthOfYear = (iso: string) => Number(berlinDate(iso).slice(5, 7));
 
 export function matchesFilters(e: PastEvent, f: Omit<InspirationFilters, "query">): boolean {
   if (f.type && e.type !== f.type) return false;
+  if (f.category && e.category_id !== f.category) return false;
   if (f.bigTurnout && !((e.headcount ?? 0) >= BIG_TURNOUT)) return false;
   if (f.when) {
     const m = monthOfYear(e.starts_at);
@@ -58,7 +65,7 @@ export function matchesFilters(e: PastEvent, f: Omit<InspirationFilters, "query"
 
 export interface InspirationResult {
   event: PastEvent;
-  /** Earlier runs of the same event (same name without numbers/years), newest first. */
+  /** Earlier runs of the same event (same format, else same name without numbers/years), newest first. */
   earlier: PastEvent[];
   /** How often it ran (this one and the earlier ones). */
   times: number;
@@ -70,7 +77,7 @@ export function searchInspiration(pool: PastEvent[], f: InspirationFilters, limi
   const byId = new Map(pool.map((e) => [e.event_id, e]));
   const entries: SearchEntry[] = pool
     .filter((e) => matchesFilters(e, f))
-    .map((e) => searchEntry(e.event_id, e.title, { title: e.title, dateIso: berlinDate(e.starts_at), venue: e.venue, price: e.price, hook: e.hook, intro: e.intro }));
+    .map((e) => searchEntry(e.event_id, e.title, { title: e.title, dateIso: berlinDate(e.starts_at), venue: e.venue, price: e.price, hook: e.hook, intro: e.intro }, e.format_id));
   const { rows, total, totalGroups } = searchTemplates(entries, f.query, undefined, undefined, limit);
   return {
     total,
@@ -119,19 +126,23 @@ export interface IdeaPrefill {
   pitch: string;
   helpers_needed: number;
   type_suggestion: EventType;
+  category_id: string | null;
+  format_id: string | null;
 }
 
-/** "Propose this again": the idea form filled from a previous event. */
-export function ideaFromEvent(e: PastEvent, earlier: PastEvent[], todayIso: string): IdeaPrefill {
+/** "Propose this again": the idea form filled from a previous event (named after its format when it has one). */
+export function ideaFromEvent(e: PastEvent, earlier: PastEvent[], todayIso: string, formatTitle?: string): IdeaPrefill {
   const hook = normalizeHook(e.hook);
   const firstSentence = paragraph(e.intro).split(/(?<=[.!?])\s+/)[0] ?? "";
   const pitch = [hook && `${hook.charAt(0).toUpperCase()}${hook.slice(1)}.`, firstSentence].filter(Boolean).join(" ");
   const runs = [e, ...earlier].map((x) => berlinDate(x.starts_at)).join(", ");
   return {
-    title: e.title.replace(/\s*(#\d+|\b(19|20)\d{2}\b)\s*/g, " ").replace(/\s+/g, " ").trim() || e.title,
+    title: formatTitle || formatName(e.title.replace(/\s*(#\d+|\b(19|20)\d{2}\b)\s*/g, " ").replace(/\s+/g, " ").trim() || e.title),
     proposed_date: freshDate(e.starts_at, todayIso),
     pitch: `${pitch}\n\nRan before: ${runs}${e.headcount ? ` (${e.headcount} people the last time)` : ""}.`.trim().slice(0, 2000),
     helpers_needed: e.helpers_needed ?? 2,
     type_suggestion: e.type,
+    category_id: e.category_id,
+    format_id: e.format_id,
   };
 }

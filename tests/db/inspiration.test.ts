@@ -68,7 +68,7 @@ describe("inspiration_events()", () => {
     expect(byTitle.get("Inspiring dinner")).toMatchObject({ headcount: 42, photo_folder_url: "https://drive.google.com/drive/folders/insp", hook: "a dinner", source: "platform", helpers_needed: 2 });
     expect(byTitle.get("Pub Quiz")).toMatchObject({ headcount: 39, source: "bot_archive", helpers_needed: null, venue: "Shamrock Munich, Trautenwolfstraße 6, 80802 Munich" });
     expect(byTitle.has("Inspiring future")).toBe(false);
-    expect(Object.keys(byTitle.get("Pub Quiz")!).sort()).toEqual(["ends_at", "event_id", "headcount", "helpers_needed", "hook", "intro", "photo_folder_url", "price", "source", "starts_at", "title", "type", "venue"]);
+    expect(Object.keys(byTitle.get("Pub Quiz")!).sort()).toEqual(["category_id", "ends_at", "event_id", "format_id", "headcount", "helpers_needed", "hook", "intro", "photo_folder_url", "price", "source", "starts_at", "title", "type", "venue"]);
     const text = JSON.stringify(data);
     for (const u of [USERS.oc, USERS.helper]) {
       expect(text).not.toContain(u.email);

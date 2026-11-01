@@ -18,6 +18,8 @@ const title = z.string().trim().min(1, "Required").max(200);
 const helpers = z.number().int().min(0).max(50);
 const eventType = z.enum(EVENT_TYPES as [string, ...string[]]).transform((t) => t as (typeof EVENT_TYPES)[number]);
 const rank = z.union([z.literal(1), z.literal(2), z.literal(3), z.null()]);
+/** Category and format (round 2026-11-01); a format brings its category (trigger). */
+const sorting = { category_id: uuid.nullable().optional(), format_id: uuid.nullable().optional() };
 
 // ── Ideas ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,7 @@ export const proposeIdea = defineAction(
     helpers_needed: helpers.default(2),
     wants_to_oc: z.boolean().default(true),
     type_suggestion: z.enum(["standard", "special", "day_trip", "weekend_trip"]).nullable().optional(),
+    ...sorting,
   }),
   async (ctx, input) => {
     const { data, error } = await ctx.supabase
@@ -49,7 +52,7 @@ export const withdrawIdea = defineAction(z.object({ id: uuid }), async (ctx, { i
 }, { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] });
 
 export const acceptIdea = defineAction(
-  z.object({ idea_id: uuid, cycle_id: uuid, type: eventType, starts_at: localDateTime, helpers_needed: helpers.optional() }),
+  z.object({ idea_id: uuid, cycle_id: uuid, type: eventType, starts_at: localDateTime, helpers_needed: helpers.optional(), ...sorting }),
   async (ctx, i) => {
     requireRole(ctx, "events");
     const { data, error } = await ctx.supabase.rpc("accept_idea", {
@@ -58,6 +61,8 @@ export const acceptIdea = defineAction(
       event_type: i.type,
       starts: i.starts_at,
       helpers: i.helpers_needed,
+      category: i.category_id ?? undefined,
+      format: i.format_id ?? undefined,
     });
     dbError(error);
     return { event_id: data as string };
@@ -118,6 +123,7 @@ const eventFields = {
   helpers_needed: helpers,
   price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
   capacity: z.number().int().min(1).max(100_000).nullable().optional(),
+  ...sorting,
 };
 
 export const createEvent = defineAction(z.object({ cycle_id: uuid, ...eventFields }), async (ctx, i) => {
@@ -157,6 +163,7 @@ export const updateEvent = defineAction(
     price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
     capacity: z.number().int().min(1).max(100_000).nullable().optional(),
     address: address.nullable().optional(),
+    ...sorting,
   }),
   async (ctx, { id, address: a, ...rest }) => {
     // Checked against the address lookup like a delivery address (round 2026-10-30); a lookup that cannot answer does not block.
@@ -173,8 +180,8 @@ export const updateEvent = defineAction(
     };
     if (!hasRole(ctx.viewer.roles, "events")) {
       await requireEventOc(ctx, id);
-      if (patch.title !== undefined || patch.type !== undefined || patch.helpers_needed !== undefined) {
-        throw forbidden("Only the Events team changes the title, type and number of helpers.");
+      if (patch.title !== undefined || patch.type !== undefined || patch.helpers_needed !== undefined || patch.category_id !== undefined || patch.format_id !== undefined) {
+        throw forbidden("Only the Events team changes the title, type, category, format and number of helpers.");
       }
       if (patch.starts_at !== undefined || patch.ends_at !== undefined) {
         throw forbidden("Only the Events team changes the date – ask them in the Chat space.");

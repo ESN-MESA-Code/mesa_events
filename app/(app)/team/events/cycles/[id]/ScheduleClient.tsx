@@ -7,6 +7,8 @@ import { ActionButton, useAction } from "@/components/ActionButton";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type EventStatus, type EventType } from "@/lib/labels";
 import { acceptIdea, clearVolunteerResponse, createEvent, dropEvent, mergeIdea, moveIdea, rejectIdea, updateEvent } from "@/app/actions/planning";
 import { plural } from "@/lib/plural";
+import { CategoryBadge, CategorySelect, FormatSelect } from "@/components/Sorting";
+import { suggestCategory, type Category, type Format } from "@/lib/formats";
 
 interface RowEvent {
   id: string;
@@ -20,9 +22,11 @@ interface RowEvent {
   status: EventStatus;
   proposer: string | null;
   signups: number;
+  categoryId: string;
+  formatId: string;
 }
 
-export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: boolean }) {
+export function ScheduleRow({ event, canEdit, categories, formats }: { event: RowEvent; canEdit: boolean; categories: Category[]; formats: Format[] }) {
   const cycleParam = useParams<{ id: string }>().id;
   const [editing, setEditing] = useState(false);
   const { run, pending, error } = useAction();
@@ -45,6 +49,8 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
                 ends_at: v.endsAt || null,
                 location: v.location || null,
                 helpers_needed: Number(v.helpersNeeded),
+                category_id: v.categoryId || null,
+                format_id: v.formatId || null,
               },
               () => setEditing(false)
             );
@@ -74,6 +80,19 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
           <Field label="Helpers needed" htmlFor={`h-${event.id}`}>
             <Input id={`h-${event.id}`} type="number" min={0} max={50} value={v.helpersNeeded} onChange={(e) => setV({ ...v, helpersNeeded: Number(e.target.value) })} />
           </Field>
+          <Field label="Category" htmlFor={`c-${event.id}`}>
+            <CategorySelect id={`c-${event.id}`} categories={categories} value={v.categoryId} onChange={(id) => setV({ ...v, categoryId: id })} />
+          </Field>
+          <Field label="Format (a run of)" htmlFor={`f-${event.id}`}>
+            <FormatSelect
+              id={`f-${event.id}`}
+              formats={formats}
+              categories={categories}
+              value={v.formatId}
+              empty="None – a one-off"
+              onChange={(id) => setV({ ...v, formatId: id, categoryId: formats.find((f) => f.id === id)?.category_id ?? v.categoryId })}
+            />
+          </Field>
           <div className="sm:col-span-2 flex gap-2">
             <Button disabled={pending}>Save</Button>
             <Button type="button" variant="outline" onClick={() => setEditing(false)}>
@@ -86,6 +105,7 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
     );
   }
 
+  const category = categories.find((c) => c.id === event.categoryId);
   // One grid for every row, so dates, titles and labels line up in columns.
   return (
     <li
@@ -94,6 +114,11 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
     >
       <span className="col-span-2 text-sm tabular-nums text-gray-600 sm:col-span-1">{event.startsLabel}</span>
       <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="min-w-0 truncate font-medium text-gray-900 hover:text-esn">
+        {category && (
+          <span className="mr-1.5" title={category.name} aria-label={category.name}>
+            {category.emoji}
+          </span>
+        )}
         {event.title}
       </a>
       <span className="hidden sm:block">
@@ -127,11 +152,14 @@ export function ScheduleRow({ event, canEdit }: { event: RowEvent; canEdit: bool
   );
 }
 
-export function AddEventForm({ cycleId, defaultStart }: { cycleId: string; defaultStart: string }) {
+/** A format fills title, type, helpers, place and category; the category is suggested from the title until picked. */
+export function AddEventForm({ cycleId, defaultStart, categories, formats }: { cycleId: string; defaultStart: string; categories: Category[]; formats: Format[] }) {
   const { run, pending, error } = useAction();
-  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", helpers_needed: 2 };
+  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", helpers_needed: 2, category_id: "", format_id: "" };
   const [v, setV] = useState(blank);
+  const [pickedCategory, setPickedCategory] = useState(false);
   const [open, setOpen] = useState(false);
+  const categoryId = pickedCategory || v.format_id ? v.category_id : (suggestCategory({ title: v.title }, categories)?.id ?? "");
   if (!open) {
     return (
       <Button variant="outline" onClick={() => setOpen(true)}>
@@ -144,14 +172,41 @@ export function AddEventForm({ cycleId, defaultStart }: { cycleId: string; defau
       className="grid gap-3 sm:grid-cols-2 rounded-lg border border-dashed border-gray-300 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, helpers_needed: Number(v.helpers_needed) }, () => {
+        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, helpers_needed: Number(v.helpers_needed), category_id: categoryId || null, format_id: v.format_id || null }, () => {
           setV(blank);
+          setPickedCategory(false);
           setOpen(false);
         });
       }}
     >
+      {formats.length > 0 && (
+        <Field label="A run of" htmlFor="new-format" hint="Fills in name, type, helpers, place and category">
+          <FormatSelect
+            id="new-format"
+            formats={formats}
+            categories={categories}
+            value={v.format_id}
+            empty="Nothing – a new event"
+            onChange={(id) => {
+              const f = formats.find((x) => x.id === id);
+              setV(f ? { ...v, format_id: id, title: v.title || f.name, type: f.type, helpers_needed: f.helpers_needed, location: v.location || f.location || "", category_id: f.category_id ?? v.category_id } : { ...v, format_id: "" });
+            }}
+          />
+        </Field>
+      )}
       <Field label="Title" htmlFor="new-title">
         <Input id="new-title" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} required />
+      </Field>
+      <Field label="Category" htmlFor="new-category" hint={!pickedCategory && !v.format_id && categoryId ? "Suggested from the title" : undefined}>
+        <CategorySelect
+          id="new-category"
+          categories={categories}
+          value={categoryId}
+          onChange={(id) => {
+            setPickedCategory(true);
+            setV({ ...v, category_id: id });
+          }}
+        />
       </Field>
       <Field label="Type" htmlFor="new-type">
         <Select id="new-type" value={v.type} onChange={(e) => setV({ ...v, type: e.target.value as EventType })}>
@@ -187,11 +242,18 @@ export function IdeaCard({
   cycleId,
   events,
   canEdit,
+  categories,
+  formats,
+  sameFormatIdeas = 0,
 }: {
-  idea: { id: string; title: string; date: string; pitch: string; helpers: number; wantsToOc: boolean; proposer: string; typeSuggestion?: EventType | null };
+  idea: { id: string; title: string; date: string; pitch: string; helpers: number; wantsToOc: boolean; proposer: string; typeSuggestion?: EventType | null; categoryId?: string | null; formatId?: string | null };
   cycleId: string;
-  events: Array<{ id: string; title: string }>;
+  events: Array<{ id: string; title: string; formatId?: string | null; when?: string }>;
   canEdit: boolean;
+  categories: Category[];
+  formats: Format[];
+  /** Other open ideas of the same format this month. */
+  sameFormatIdeas?: number;
 }) {
   const { run, pending, error } = useAction();
   const [mode, setMode] = useState<"none" | "accept" | "merge" | "reject" | "move">("none");
@@ -202,6 +264,10 @@ export function IdeaCard({
   const [mergeInto, setMergeInto] = useState(events[0]?.id ?? "");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(idea.date);
+  const [categoryId, setCategoryId] = useState(idea.categoryId ?? "");
+  const [formatId, setFormatId] = useState(idea.formatId ?? "");
+  const format = formats.find((f) => f.id === idea.formatId);
+  const planned = idea.formatId ? events.filter((e) => e.formatId === idea.formatId) : [];
 
   return (
     <div className="rounded-lg border border-gray-200 p-3 space-y-2" data-testid={`idea-${idea.title}`}>
@@ -212,6 +278,18 @@ export function IdeaCard({
       <p className="text-xs text-gray-500">
         by {idea.proposer} · {plural(idea.helpers, "helper")} · {idea.wantsToOc ? "wants to OC" : "not OC"}
       </p>
+      {(idea.categoryId || format) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+          <CategoryBadge category={categories.find((c) => c.id === idea.categoryId)} />
+          {format && <span>a run of {format.name}</span>}
+        </div>
+      )}
+      {planned.length > 0 && (
+        <p className="text-xs text-amber-800" data-testid="format-planned">
+          {format?.name ?? "This format"} is planned already: {planned.map((e) => e.when ?? e.title).join(", ")}
+        </p>
+      )}
+      {sameFormatIdeas > 0 && <p className="text-xs text-esn-dark">{plural(sameFormatIdeas, "more idea")} for {format?.name ?? "this format"} this month – merge them?</p>}
       {idea.pitch && <p className="text-sm text-gray-700 whitespace-pre-line">{idea.pitch}</p>}
       {canEdit && mode === "none" && (
         <div className="flex flex-wrap gap-1">
@@ -234,7 +312,7 @@ export function IdeaCard({
           className="grid gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            run(acceptIdea, { idea_id: idea.id, cycle_id: cycleId, type, starts_at: start, helpers_needed: Number(helpers) });
+            run(acceptIdea, { idea_id: idea.id, cycle_id: cycleId, type, starts_at: start, helpers_needed: Number(helpers), category_id: categoryId || null, format_id: formatId || null });
           }}
         >
           <Field label="Event type" htmlFor={`type-${idea.id}`}>
@@ -251,6 +329,23 @@ export function IdeaCard({
           </Field>
           <Field label="Helpers" htmlFor={`helpers-${idea.id}`}>
             <Input id={`helpers-${idea.id}`} type="number" min={0} value={helpers} onChange={(e) => setHelpers(Number(e.target.value))} />
+          </Field>
+          <Field label="Category" htmlFor={`cat-${idea.id}`}>
+            <CategorySelect id={`cat-${idea.id}`} categories={categories} value={categoryId} onChange={setCategoryId} />
+          </Field>
+          <Field label="Format (a run of)" htmlFor={`fmt-${idea.id}`}>
+            <FormatSelect
+              id={`fmt-${idea.id}`}
+              formats={formats}
+              categories={categories}
+              value={formatId}
+              empty="None – a one-off"
+              onChange={(id) => {
+                setFormatId(id);
+                const f = formats.find((x) => x.id === id);
+                if (f?.category_id) setCategoryId(f.category_id);
+              }}
+            />
           </Field>
           <div className="flex gap-2">
             <Button size="sm" disabled={pending}>

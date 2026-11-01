@@ -46,19 +46,26 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
     );
   }
 
-  const [{ data: reviews }, { data: published }] = await Promise.all([
+  const [{ data: reviews }, { data: published }, { data: category }, { data: format }] = await Promise.all([
     supabase.from("reviews").select("id, reviewer, decision, comment, created_at").eq("event_id", id).order("created_at", { ascending: false }),
     supabase
       .from("descriptions")
-      .select("event_id, approved_fields, events(title)")
+      .select("event_id, approved_fields, events(title, format_id)")
       .not("published_at", "is", null)
       .neq("event_id", id)
       .limit(500),
+    event.category_id ? supabase.from("event_categories").select("esn_type").eq("id", event.category_id).maybeSingle() : Promise.resolve({ data: null }),
+    event.format_id ? supabase.from("event_formats").select("name").eq("id", event.format_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const pool: SearchEntry[] = (published ?? []).map((p) => {
     const f = coerceFields(p.approved_fields);
-    return searchEntry(p.event_id, (p.events as { title: string } | null)?.title ?? f.title, f);
+    const ev = p.events as { title: string; format_id: string | null } | null;
+    return searchEntry(p.event_id, ev?.title ?? f.title, f, ev?.format_id ?? null);
   });
+  // The last published run of the same format: the first template offered (round 2026-11-01).
+  const lastRun = event.format_id
+    ? pool.filter((p) => p.formatId === event.format_id).sort((a, b) => (a.published.dateIso < b.published.dateIso ? 1 : -1))[0]
+    : undefined;
   const templates = Object.fromEntries((published ?? []).map((p) => [p.event_id, coerceFields(p.approved_fields)]));
   // After "changes requested": the version Comms saw, to show what changed since (usability review #17).
   const lastReview = reviews?.[0];
@@ -91,7 +98,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         eventId={id}
         viewer={{ name: viewer.name, email: viewer.email }}
         initial={{
-          fields: description ? coerceFields(description.fields) : prefillFromEvent(event),
+          fields: description ? coerceFields(description.fields) : prefillFromEvent(event, category?.esn_type),
           exists: !!description,
           version: description?.version ?? 0,
           status: description?.status ?? "draft",
@@ -102,6 +109,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         can={{ submit: isOc || isEvents, review: isComms, hasSpace: !!event.chat_space_requested_at }}
         pool={pool}
         templates={templates}
+        lastRun={lastRun ? { eventId: lastRun.eventId, format: format?.name ?? lastRun.published.title, date: lastRun.published.dateIso } : null}
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
         place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
         eventPriceCents={event.price_cents}

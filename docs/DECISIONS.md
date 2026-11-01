@@ -866,3 +866,44 @@ pm run seed:staging). The small
 - **Unsubmitted descriptions only in next month.** pg_cron cancels the current month's coming
   events whose description was never submitted (its deadline has passed); the seed had a draft
   there, which staging cancelled within a minute. A DB test checks no seeded event qualifies.
+## 2026-11-01 – Event categories and formats
+
+- **Two things, not one:** a *category* says what kind of event it is (16 seeded: Language &
+  Meet-ups, Movies & Watch parties, Social impact, Rally & Scavenger hunt, Karaoke & Music,
+  Festivals & Traditions, Dance & Yoga, Food & Drinks, Sports, Hiking & Outdoors, Trips &
+  Excursions, Creative workshops, Museums & Culture, City tours & Visits, Games & Quiz, Party &
+  Nightlife); a *format* is a recurring event (Language Café, Partnachklamm hike, Bouldering)
+  whose runs belong together. `events.type` stays as it is – it decides the reimbursement rules
+  – so "Hike to the Partnachklamm" is a day trip *and* Hiking.
+- **One category per event and idea**, not tags: filters, badges and counts stay simple; the
+  search covers the rest. A format brings its category (trigger); a category given with it wins.
+- **The Events team keeps both** on `/team/events/formats` (executives read): categories with
+  emoji, ESN activity type and keywords, never deleted, only hidden (like the ledger's); formats
+  with type, helpers and usual place, merge one into another, take a run out. Only the Events
+  team changes an event's category or format (trigger; the OC keeps place and price).
+- **Suggestions, never silent sorting:** `suggestCategory()` (lib/formats.ts) takes the first
+  category in `sort` order whose keyword matches the title (else the hook, else the intro) –
+  the seed is ordered specific → general so "Singing Workshop" is music, "Cycling Tour" sports,
+  "Bar Rallye" a rally, "Hiking Trip" a hike. Keywords of up to 4 letters match whole words
+  ("tour" is not "Tournament"). The idea and schedule forms prefill the suggestion until someone
+  picks; past events are sorted on the formats page, where the rows are suggested and saved in
+  bulk (`sort_past_events()`, one transaction). Checked against all 177 titles of the bot's
+  registry from SoSe 25 to WiSe 26/27 (tests/fixtures/registry-titles.json – titles and hooks
+  only): every one gets a category.
+- **Runs of one event meet by a looser name** for the sorting suggestions (`formatKey()`):
+  without semester tags, numbers, "ESN MESA" and filler words – "Hike to Leutaschklamm" =
+  "Hiking Trip to Leutaschklamm", "Day Trip Salzburg" = "Trip to Salzburg", "Football World Cup
+  Watch Party: MEX - RSA" = "…: ESP - CPV". The bot's template search keeps its literal grouping
+  for events without a format; with a format, runs group by it.
+- **Where it shows:** the idea form ("Is this a new run of …?", category), Get inspired (category
+  filter, runs of a format as one result with their average turnout), the month schedule
+  (category on each event, format and category when accepting, ideas of one format together with
+  "planned already" and "N more ideas"), the description editor ("Start from the last Language
+  Café" first; a new description gets the category's ESN activity type and objectives).
+- **The bot's _Registry tab can be imported** (`npm run import:bot-archive -- _Registry.csv`):
+  its published descriptions are taken as they are (no parsing of the rendered text), drafts,
+  removed rows and the Training sheet skipped, the same Event IDs as the semester tabs. Titles
+  with "weekend" become weekend trips. The import does not sort – that is the formats page.
+- **Staging:** the demo's planned events are sorted by the seed (a format for each repeat), the
+  imported history is left unsorted to show the formats page; "Reset demo data" wipes formats
+  and keeps categories.

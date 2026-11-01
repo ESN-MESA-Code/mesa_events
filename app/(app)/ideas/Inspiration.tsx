@@ -6,6 +6,8 @@ import { EVENT_TYPES, EVENT_TYPE_LABELS, type EventType } from "@/lib/labels";
 import { BIG_TURNOUT, SEASONS, ideaFromEvent, searchInspiration, teaser, type IdeaPrefill, type PastEvent } from "@/lib/inspiration";
 import { formatDate, monthLabel } from "@/lib/dates";
 import { plural } from "@/lib/plural";
+import { formatStats, type Category, type Format } from "@/lib/formats";
+import { CategoryBadge, CategorySelect } from "@/components/Sorting";
 import { IdeaForm } from "./IdeaForm";
 
 /** Events per "page" of the infinite scroll. */
@@ -16,21 +18,25 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), lab
 /**
  * /ideas with "Get inspired" (brief 2026-10-29, D): the idea form, the
  * member's ideas (children), and the search over previous events; "Propose
- * this again" fills the form with a fresh date.
+ * this again" fills the form with a fresh date. Runs of one format are one
+ * result; the category filters (round 2026-11-01).
  */
-export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; today: string; children: React.ReactNode }) {
+export function IdeasWorkspace({ pool, today, categories, formats, children }: { pool: PastEvent[]; today: string; categories: Category[]; formats: Format[]; children: React.ReactNode }) {
   const [prefill, setPrefill] = useState<(IdeaPrefill & { nonce: number }) | null>(null);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<EventType | "">("");
+  const [category, setCategory] = useState("");
   const [when, setWhen] = useState("");
   const [bigTurnout, setBigTurnout] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   // How far the member scrolled, for the current search (a new search or filter starts at the first page).
-  const filterKey = JSON.stringify([query, type, when, bigTurnout]);
+  const filterKey = JSON.stringify([query, type, category, when, bigTurnout]);
   const [page, setPage] = useState({ key: filterKey, limit: PAGE });
   const limit = page.key === filterKey ? page.limit : PAGE;
   const loadMore = () => setPage((p) => ({ key: filterKey, limit: (p.key === filterKey ? p.limit : PAGE) + PAGE }));
-  const { results, total, groups } = useMemo(() => searchInspiration(pool, { query, type, when, bigTurnout }, limit), [pool, query, type, when, bigTurnout, limit]);
+  const { results, total, groups } = useMemo(() => searchInspiration(pool, { query, type, category, when, bigTurnout }, limit), [pool, query, type, category, when, bigTurnout, limit]);
+  const categoryOf = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const formatOf = useMemo(() => new Map(formats.map((f) => [f.id, f])), [formats]);
   const more = results.length < groups;
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -54,7 +60,7 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
           </CardHeader>
           <CardContent>
             {prefill && <p className="mb-3 text-xs text-esn-dark">Filled in from “{prefill.title}” – change anything you like.</p>}
-            <IdeaForm prefill={prefill} />
+            <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} />
           </CardContent>
         </Card>
         {children}
@@ -66,7 +72,7 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
           <span className="text-xs text-gray-500">{plural(pool.length, "previous event")}</span>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))_auto] sm:items-center">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] sm:items-center">
             <Input aria-label="Search previous events" placeholder="e.g. hike, quiz, dinner, museum" value={query} onChange={(e) => setQuery(e.target.value)} />
             <Select aria-label="Event type" value={type} onChange={(e) => setType(e.target.value as EventType | "")}>
               <option value="">Any type</option>
@@ -76,6 +82,7 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
                 </option>
               ))}
             </Select>
+            <CategorySelect aria-label="Category" categories={categories} value={category} onChange={setCategory} empty="Any category" />
             <Select aria-label="Time of year" value={when} onChange={(e) => setWhen(e.target.value)}>
               <option value="">Any time of year</option>
               <optgroup label="Season">
@@ -105,11 +112,15 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
             <EmptyState>Nothing found – try another word or fewer filters.</EmptyState>
           ) : (
             <ul className="divide-y divide-gray-100" data-testid="inspiration-results">
-              {results.map(({ event: e, earlier, times }) => (
+              {results.map(({ event: e, earlier, times }) => {
+                const stats = formatStats([e, ...earlier]);
+                const format = e.format_id ? formatOf.get(e.format_id) : undefined;
+                return (
                 <li key={e.event_id} className="space-y-1.5 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-gray-900">{e.title}</span>
                     <Badge>{EVENT_TYPE_LABELS[e.type]}</Badge>
+                    <CategoryBadge category={e.category_id ? categoryOf.get(e.category_id) : null} />
                     {times > 1 && (
                       <button type="button" className="text-xs text-esn hover:underline" onClick={() => setOpen(open === e.event_id ? null : e.event_id)} aria-expanded={open === e.event_id}>
                         +{times - 1} earlier
@@ -124,7 +135,11 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
                   <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
                     {e.venue && <span>📍 {e.venue}</span>}
                     <span>{e.headcount !== null ? `👥 ${plural(e.headcount, "person", "people")}` : "👥 no headcount"}</span>
-                    <span>{times > 1 ? `ran ${times} times` : "ran once"}</span>
+                    <span>
+                      {times > 1 ? `ran ${times} times` : "ran once"}
+                      {times > 1 && stats.avgHeadcount !== null ? `, about ${plural(stats.avgHeadcount, "person", "people")} each` : ""}
+                      {format ? ` · ${format.name}` : ""}
+                    </span>
                     {e.photo_folder_url && (
                       <a href={e.photo_folder_url} target="_blank" rel="noopener noreferrer" className="text-esn hover:underline">
                         📁 Photos
@@ -136,7 +151,7 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
                       variant="outline"
                       className="ml-auto"
                       onClick={() => {
-                        setPrefill({ ...ideaFromEvent(e, earlier, today), nonce: Date.now() });
+                        setPrefill({ ...ideaFromEvent(e, earlier, today, format?.name), nonce: Date.now() });
                         document.getElementById("propose")?.scrollIntoView({ behavior: "smooth" });
                       }}
                     >
@@ -154,7 +169,8 @@ export function IdeasWorkspace({ pool, today, children }: { pool: PastEvent[]; t
                     </ul>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
           {more && (

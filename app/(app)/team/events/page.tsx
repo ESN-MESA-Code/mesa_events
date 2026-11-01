@@ -70,6 +70,9 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
           explicit={!!parseMonthParam(sp.month) || planning}
           extra={canEdit ? { label: "+ Plan a new month", href: "/team/events?new=1" } : undefined}
         />
+        <Link href="/team/events/formats" className="text-sm text-esn hover:underline" data-testid="formats-link">
+          Categories and formats
+        </Link>
       </PageHeader>
       <div className="space-y-6">
         {planning && (

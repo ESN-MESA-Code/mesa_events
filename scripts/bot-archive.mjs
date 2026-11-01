@@ -12,6 +12,12 @@
 //   ⬆ pretix · ⬆ ESN · Telegram picture · Upload status · Description ·
 //   pretix event · ESN Activities link · Chat markup · ESN form data ·
 //   Published by · Last updated · Event ID
+// The bot's _Registry tab works too (one row per description: eventId,
+// eventTitle, status, published – the fields as JSON –, publishedBy,
+// publishedAt, dbSheet …; round 2026-11-01): its published descriptions are
+// taken as they are, drafts, removed rows and the Training sheet skipped.
+// The same Event ID as in the semester tabs, so both can be imported.
+//
 // Each row becomes a history event: completed, no cycle, source =
 // 'bot_archive' (archive_ref = the bot's Event ID, so a second run updates
 // instead of duplicating), its published description (fields read back
@@ -81,10 +87,50 @@ const HEADERS = {
 export function rowsToRecords(table) {
   const [header, ...rows] = table;
   if (!header) return [];
+  if (header.includes("eventId") && header.includes("published")) return registryToRecords(table);
   const index = {};
   for (const [key, name] of Object.entries(HEADERS)) index[key] = header.findIndex((h) => h.trim() === name);
   if (index.date < 0 || index.title < 0) throw new Error(`Not a semester tab of the bot's Sheet: no "Date" and "Event" columns (found: ${header.join(", ")})`);
   return rows.map((r) => Object.fromEntries(Object.entries(index).map(([k, i]) => [k, i >= 0 ? String(r[i] ?? "").trim() : ""])));
+}
+
+/**
+ * The _Registry tab → records carrying the published fields. Only
+ * PUBLISHED rows of a semester sheet count; the others say why not.
+ */
+export function registryToRecords(table) {
+  const [header, ...rows] = table;
+  const col = (r, name) => String(r[header.indexOf(name)] ?? "").trim();
+  return rows.map((r) => {
+    const eventId = col(r, "eventId");
+    const sheet = col(r, "dbSheet");
+    let fields = null;
+    try {
+      fields = JSON.parse(col(r, "published") || "null");
+    } catch {
+      fields = null;
+    }
+    const title = String(fields?.title || col(r, "eventTitle"));
+    const skip =
+      col(r, "status") !== "PUBLISHED" || !fields
+        ? `not published (${eventId})`
+        : /^training$/i.test(sheet) || /^training/i.test(title)
+          ? `training (${title})`
+          : null;
+    return {
+      ...(skip ? { skip } : {}),
+      eventId,
+      title,
+      date: String(fields?.dateIso ?? ""),
+      time: String(fields?.time ?? ""),
+      venue: String(fields?.venue ?? ""),
+      price: String(fields?.price ?? ""),
+      fields,
+      publishedBy: col(r, "publishedBy"),
+      publishedAt: col(r, "publishedAt"),
+      esnData: "",
+    };
+  });
 }
 
 /** A file: a CSV of one tab, or JSON – { "<tab>": [[header…], [row…]] }, an array of such tables, or an array of records. */
@@ -226,6 +272,7 @@ function classification(raw) {
  * have not happened yet are skipped (they are no history).
  */
 export function mapRecord(r, today) {
+  if (r.skip) return { skip: r.skip };
   const dateIso = parseSheetDate(r.date);
   const title = String(r.title ?? "").replace(/\s+/g, " ").trim();
   if (!dateIso || !title) return { skip: `no date or title (${r.date || "?"} ${title || "?"})` };
@@ -233,9 +280,9 @@ export function mapRecord(r, today) {
   const time = parseSheetTime(r.time);
   const startsAt = berlinToIso(dateIso, time ?? "12:00");
   const parsed = parseBotDescription(r.description);
-  const cls = classification(r.esnData);
+  const cls = r.fields ? { esnType: String(r.fields.esnType ?? ""), esnObjectives: String(r.fields.esnObjectives ?? "") } : classification(r.esnData);
   const priceRaw = String(r.price ?? "").trim();
-  const fields = {
+  const sheetFields = {
     title,
     dateIso,
     time: time ?? "TBA",
@@ -248,18 +295,20 @@ export function mapRecord(r, today) {
     weather: false,
     ...cls,
   };
+  // The registry has the fields themselves (its price without "€").
+  const fields = r.fields ? { ...sheetFields, ...r.fields, title, dateIso, time: time ?? "TBA", weather: r.fields.weather === true, ...cls } : sheetFields;
   const ref = String(r.eventId ?? "").trim() || `${dateIso} ${title}`;
   return {
     ref,
     event: {
       title: title.slice(0, 200),
-      type: cls.esnType === "9" ? "day_trip" : "standard",
+      type: /weekend/i.test(title) ? "weekend_trip" : cls.esnType === "9" ? "day_trip" : "standard",
       starts_at: startsAt,
       location: fields.venue.slice(0, 300) || null,
       price_cents: parseSheetPrice(priceRaw),
     },
     description: fields,
-    publishedAt: parseSheetDate(r.updated) ? berlinToIso(parseSheetDate(r.updated), "12:00") : startsAt,
+    publishedAt: /^\d{4}-\d{2}-\d{2}T/.test(r.publishedAt ?? "") ? r.publishedAt : parseSheetDate(r.updated) ? berlinToIso(parseSheetDate(r.updated), "12:00") : startsAt,
     publishedBy: String(r.publishedBy ?? "").trim() || null,
     report: reportFromEsnData(r.esnData),
     esnLink: /^https:\/\/activities\.esn\.org\/(activity\/[a-z0-9-]+|node\/\d+)\/?$/i.test(String(r.esnLink ?? "").trim()) ? String(r.esnLink).trim() : null,

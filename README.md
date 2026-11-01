@@ -59,8 +59,9 @@ Good to know:
   (Admin page shows "fake mode"). `npm run fake:drive -- <event id> [n]` puts files into an event's
   photo folder, as members would in Drive.
 - **History from the description bot:** export the bot's database Sheet (each semester tab as CSV,
-  or one JSON file) and run `npm run import:bot-archive -- <files…>` (`--dry-run` first); see
-  docs/DECISIONS.md ("D – Get inspired").
+  or one JSON file – or the `_Registry` tab as CSV) and run `npm run import:bot-archive -- <files…>`
+  (`--dry-run` first); see docs/DECISIONS.md ("D – Get inspired"). Then sort the events into
+  categories and formats under Events team → Categories and formats.
 - **ESN Activities:** Comms installs the browser script from Team → Comms → ESN Activities script
   (Tampermonkey, personal access token).
 - **Background jobs** (Chat, Drive, role sync): pg_cron calls `POST /api/jobs/run` every 30 s

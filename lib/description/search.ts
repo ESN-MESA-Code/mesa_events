@@ -6,7 +6,8 @@
 //   folded (ä = ae), "pub quiz" = "Pubquiz".
 // - Synonyms: SEARCH_SYNONYMS (one line per group, lower case).
 // - Name matches come first, then events that match only in venue/text.
-// - Repeats of the same event are grouped: newest shown, "+N earlier".
+// - Repeats of the same event are grouped: newest shown, "+N earlier" – runs
+//   of one format together (round 2026-11-01), else by the name.
 // The pool comes from the database (published descriptions) instead of the
 // bot's cache and hidden sheet.
 
@@ -32,6 +33,8 @@ export const SEARCH_TEXT_MAX = 400;
 export interface SearchEntry {
   eventId: string;
   eventTitle: string;
+  /** The event's format: runs of it are one group whatever their names. */
+  formatId?: string | null;
   published: { title: string; dateIso: string; venue: string; price: string; priceNote: string; hook: string; intro: string; program: string };
 }
 
@@ -42,11 +45,12 @@ export interface SearchRow {
   expanded?: boolean;
 }
 
-export function searchEntry(eventId: string, eventTitle: string, p: Partial<SearchEntry["published"]>): SearchEntry {
+export function searchEntry(eventId: string, eventTitle: string, p: Partial<SearchEntry["published"]>, formatId: string | null = null): SearchEntry {
   const short = (s?: string) => String(s || "").slice(0, SEARCH_TEXT_MAX);
   return {
     eventId: String(eventId),
     eventTitle: String(eventTitle || ""),
+    formatId,
     published: {
       title: p.title || "",
       dateIso: p.dateIso || "",
@@ -110,8 +114,9 @@ export function searchTermMatches(alts: string[], words: string[]): boolean {
   return alts.some((a) => words.some((w) => w.indexOf(a) === 0 || (a.length >= 4 && w.indexOf(a) >= 0)));
 }
 
-/** Grouping key: the name without numbers/years ("Hike #2 2025" = "Hike"). */
+/** Grouping key: the format, else the name without numbers/years ("Hike #2 2025" = "Hike"). */
 export function searchGroupKey(rec: SearchEntry): string {
+  if (rec.formatId) return `format:${rec.formatId}`;
   return searchFold(rec.published.title || rec.eventTitle)
     .replace(/\b\d+\b/g, " ")
     .replace(/\s+/g, " ")

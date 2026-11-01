@@ -7,6 +7,8 @@ import { withdrawIdea } from "@/app/actions/planning";
 import { IdeasWorkspace } from "./Inspiration";
 import type { PastEvent } from "@/lib/inspiration";
 import { plural } from "@/lib/plural";
+import { loadSorting } from "@/lib/sortingLoad";
+import { categoryLabel } from "@/lib/formats";
 
 export const metadata: Metadata = { title: "Ideas" };
 
@@ -20,15 +22,17 @@ const STATUS: Record<string, { label: string; tone: "gray" | "green" | "red" | "
 export default async function IdeasPage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
-  const [{ data: ideas }, { data: past }] = await Promise.all([
+  const [{ data: ideas }, { data: past }, { categories, formats }] = await Promise.all([
     supabase
       .from("event_ideas")
-      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id")
+      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id, category_id")
       .eq("proposer_id", viewer.id)
       .order("created_at", { ascending: false }),
     // Previous events for "Get inspired": only what members may read (published descriptions, headcounts, photo folders).
     supabase.rpc("inspiration_events"),
+    loadSorting(supabase),
   ]);
+  const categoryOf = new Map(categories.map((c) => [c.id, c]));
 
   return (
     <>
@@ -36,7 +40,7 @@ export default async function IdeasPage() {
         title="Ideas"
         description="Propose an event – or get inspired by what ran before. The Events team builds each month's schedule from the ideas; by default you become its OC."
       />
-      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} today={berlinDate(new Date(nowMs()).toISOString())}>
+      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} today={berlinDate(new Date(nowMs()).toISOString())} categories={categories} formats={formats}>
         <Card>
           <CardHeader>
             <CardTitle>Your ideas</CardTitle>
@@ -49,6 +53,7 @@ export default async function IdeasPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-gray-900">{i.title}</span>
                     <Badge tone={STATUS[i.status].tone}>{STATUS[i.status].label}</Badge>
+                    {i.category_id && categoryOf.has(i.category_id) && <Badge tone="purple">{categoryLabel(categoryOf.get(i.category_id)!)}</Badge>}
                     <span className="ml-auto text-xs text-gray-500">{formatDate(`${i.proposed_date}T12:00:00Z`)}</span>
                   </div>
                   {i.pitch && <p className="text-sm text-gray-600 whitespace-pre-line">{i.pitch}</p>}
