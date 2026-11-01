@@ -176,9 +176,61 @@ describe("seed:staging", () => {
     expect(history.filter((h) => h.title === "Pub Quiz Night").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("has the OC persona's own work: a description to write (deadline ahead), one sent back, one with Comms", async () => {
+    const chloe = person("chloe").id;
+    const mine = await rows(admin.from("assignments").select("event_id").eq("profile_id", chloe).eq("role", "oc").eq("status", "active").in("event_id", eventIds));
+    const events = await rows(admin.from("events").select("id, starts_at, status, cycle_id").in("id", mine.map((m) => m.event_id)));
+    const descriptions = await rows(admin.from("descriptions").select("event_id, status").in("event_id", events.map((e) => e.id)));
+    const coming = events.filter((e) => Date.parse(e.starts_at) > Date.now() && e.status !== "cancelled");
+    const stage = (id: string) => descriptions.find((d) => d.event_id === id)?.status ?? "none";
+    expect(coming.some((e) => stage(e.id) === "none")).toBe(true);
+    expect(coming.some((e) => stage(e.id) === "changes_requested")).toBe(true);
+    expect(coming.some((e) => stage(e.id) === "submitted")).toBe(true);
+    // pg_cron cancels events whose description was never submitted once their month's deadline passed: none of the seed's may qualify.
+    const cycles = await rows(admin.from("planning_cycles").select("id, description_deadline").eq("created_by", TAG));
+    const all = await rows(admin.from("events").select("id, starts_at, status, cycle_id").in("id", eventIds));
+    const submitted = await rows(admin.from("descriptions").select("event_id, submitted_at").in("event_id", eventIds));
+    const doomed = all.filter((e) => {
+      const deadline = cycles.find((c) => c.id === e.cycle_id)?.description_deadline;
+      return deadline && Date.parse(deadline) <= Date.now() && ["confirmed", "understaffed"].includes(e.status) && Date.parse(e.starts_at) > Date.now() && !submitted.find((d) => d.event_id === e.id)?.submitted_at;
+    });
+    expect(doomed).toEqual([]);
+  });
+
+  it("has internal events of every kind, staffed and open, cancelled and full", async () => {
+    const internal = await rows(admin.from("internal_events").select("id, kind, status, starts_at, capacity").like("created_by", "%.demo@esnmesa.org"));
+    for (const k of ["internal", "stammtisch", "tuesday_talk", "board_meeting", "office_hour"]) expect(internal.some((e) => e.kind === k), k).toBe(true);
+    expect(internal.some((e) => e.status === "cancelled")).toBe(true);
+    const people = await rows(admin.from("internal_event_people").select("internal_event_id, role").in("internal_event_id", internal.map((e) => e.id)));
+    const coming = internal.filter((e) => e.kind === "office_hour" && e.status === "scheduled" && Date.parse(e.starts_at) > Date.now());
+    const staffed = (id: string) => people.filter((p) => p.internal_event_id === id && p.role !== "attendee").length;
+    expect(coming.some((e) => staffed(e.id) === 2) && coming.some((e) => staffed(e.id) === 0)).toBe(true);
+    const full = internal.filter((e) => e.capacity && people.filter((p) => p.internal_event_id === e.id && p.role === "attendee").length >= e.capacity);
+    expect(full.length).toBeGreaterThan(0);
+    // An office hour running now, for the cash box and ESNcard counting.
+    expect(internal.some((e) => e.kind === "office_hour" && Date.parse(e.starts_at) <= Date.now() && Date.parse(e.starts_at) > Date.now() - 2 * 3_600_000)).toBe(true);
+  });
+
+  it("has cash boxes with history and reports in every state, and a ledger", async () => {
+    const reports = await rows(admin.from("cash_reports").select("id, opening_cents, closing_cents, closed_at, checked_at, event_id, internal_event_id"));
+    const booked = await rows(admin.from("finance_entries").select("cash_report_id").not("cash_report_id", "is", null));
+    expect(reports.some((r) => r.closing_cents === null)).toBe(true);
+    expect(reports.some((r) => r.closing_cents !== null && !r.closed_at)).toBe(true);
+    expect(reports.some((r) => r.closed_at && !r.checked_at)).toBe(true);
+    expect(reports.some((r) => r.checked_at && !booked.some((b) => b.cash_report_id === r.id))).toBe(true);
+    expect(booked.length).toBeGreaterThan(5);
+    expect(reports.some((r) => r.event_id) && reports.some((r) => r.internal_event_id)).toBe(true);
+    const changes = await rows(admin.from("cash_box_changes").select("kind"));
+    for (const k of ["in", "out", "recount", "report"]) expect(changes.some((c) => c.kind === k), k).toBe(true);
+    expect((await rows(admin.from("cash_boxes").select("id").not("removed_at", "is", null))).length).toBeGreaterThan(0);
+    const ledger = await rows(admin.from("finance_entries").select("direction, beleg_received").like("created_by", "%.demo@esnmesa.org"));
+    expect(ledger.some((l) => l.direction === "income") && ledger.some((l) => l.direction === "expense" && !l.beleg_received)).toBe(true);
+    expect(first.internal.ledgerEntries).toBeGreaterThan(30);
+  });
+
   it("has a member per role, a newcomer who has not accepted the rules", async () => {
     const roles = await rows(admin.from("role_members").select("role").like("email", "%.demo@esnmesa.org"));
-    expect(new Set(roles.map((r) => r.role))).toEqual(new Set(["events", "comms", "finance", "treasurer", "executive", "admin"]));
+    expect(new Set(roles.map((r) => r.role))).toEqual(new Set(["events", "comms", "finance", "treasurer", "executive", "hr", "vice_president", "newbie", "admin"]));
     const noor = demoEmail(person("noor"), "esnmesa.org");
     expect((await rows(admin.from("organiser_acknowledgements").select("email").eq("email", noor))).length).toBe(0);
   });

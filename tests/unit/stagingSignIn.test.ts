@@ -102,7 +102,7 @@ describe("the demo cast", () => {
   });
 
   it("offers a persona per role, each a cast member with a description", () => {
-    expect(PERSONAS.map((p) => p.key).sort()).toEqual(["admin", "comms", "events", "executive", "finance", "helper", "member", "newcomer", "oc", "treasurer"]);
+    expect(PERSONAS.map((p) => p.key).sort()).toEqual(["admin", "comms", "events", "executive", "finance", "helper", "hr", "member", "newcomer", "oc", "treasurer", "vice_president"]);
     for (const p of PERSONAS) {
       expect(person(p.person)).toBeTruthy();
       expect(p.sees.length).toBeGreaterThan(30);

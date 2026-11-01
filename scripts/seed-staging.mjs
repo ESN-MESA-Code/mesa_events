@@ -66,6 +66,8 @@ try {
   console.log("  Descriptions:", JSON.stringify(summary.descriptionStages));
   console.log("  Claims:", JSON.stringify(summary.claimStatuses));
   console.log("  Ideas:", JSON.stringify(summary.ideaStatuses));
+  console.log("  Internal events:", JSON.stringify(summary.internal.internalEvents));
+  console.log("  Cash reports:", JSON.stringify(summary.internal.cashReports), "– ledger entries:", summary.internal.ledgerEntries);
   console.log("Demo sign-in personas (staging builds, after the access code):");
   for (const p of PERSONAS) console.log(`  ${p.label.padEnd(18)} ${demoEmail(person(p.person), domain)}`);
   if (!remote) console.log('Locally, the team roles (Events, Comms, Finance …) of "npm run dev:local" see all of it too.');

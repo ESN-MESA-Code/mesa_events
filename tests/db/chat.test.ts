@@ -22,7 +22,8 @@ async function space(eventId: string) {
     admin.from("fake_chat_members").select("email").eq("space", name).order("email"),
     admin.from("fake_chat_messages").select("name, text, edits").eq("space", name).order("created_at"),
   ]);
-  return { event: ev!, space: s!, members: members!.map((m) => m.email), messages: messages! };
+  // The staging demo's team members (seed:staging on the local stack) are invited too: only the test accounts count here.
+  return { event: ev!, space: s!, members: members!.map((m) => m.email).filter((e) => !e.endsWith(".demo@esnmesa.org")), messages: messages! };
 }
 
 describe("Chat spaces and roster changes", () => {

@@ -135,12 +135,14 @@ platform would have posted.
 |---|---|---|---|
 | Events team | Amara Okafor | Events | Plans the month: ideas → schedule, volunteer form, allocation, roster board, confirmation |
 | Member | Hannah Becker | Home | Volunteer form banner (not answered yet), calendar, own ideas, open slots to claim |
-| OC (organiser) | Chloé Dubois | Home | Her events today (attendance open), hand-ins (photos missing, list to sign off), claims needing Belege |
-| Helper | Kwame Mensah | Home | Events he helps at, a drop-out, a slot he claimed, his claims |
-| Comms team | Sofia Marino | Comms | Descriptions by stage (late, in review, approved, published), ESN Activities, publishing schedule |
-| Finance team | Priya Raman | Finance | Claims in every status, the open payout batch, paid batches, an early payout |
+| OC (organiser) | Chloé Dubois | Home | Her events today (attendance and cash box open), hand-ins (photos missing, list and cash box to sign off), claims needing Belege; descriptions: one to write for next month, one sent back, one with Comms; an office hour she leads next week; saved bank details, a calendar link |
+| Helper | Kwame Mensah | Home | Events he helps at, a drop-out, a slot he claimed, his claims, an office hour shift |
+| Comms team | Sofia Marino | Comms | Descriptions by stage (late, in review, approved, published), ESN Activities (with her access tokens), publishing schedule |
+| Finance team | Priya Raman | Finance | Claims in every status, the open payout batch, paid batches, an early payout; cash boxes with history (money in and out, a recount, a removed box), cash reports counting, to sign off, to check, to book; the ledger with missing Belege |
 | Treasurer | Mateo Álvarez | Finance | Finance plus rules and the pre-approval waiting for him |
-| Executive (board) | Elif Yıldız | Home | Everything read-only, Finance included |
+| HR | Ines Kraft | Internal | Office hours every Wednesday, Stammtisch every Thursday, Tuesday Talks, board meetings and internal events: staffed, a helper or the OC missing, cancelled, a full sign-up list |
+| Vice President | Marco Bianchi | Internal | Plans with HR; reads everything as a board member |
+| Executive (board) | Elif Yıldız | Home | Everything read-only, Finance and board meetings included |
 | Admin (IT) | Nadia Haddad | Admin | Roles, settings, jobs, **Reset demo data** |
 | Newcomer | Noor Al-Sayed | Confidentiality rules | What a new member sees first |
 
@@ -163,7 +165,12 @@ platform would have posted.
 6. **(1 min) Oversight.** **Executive**: the same pages read-only, closed attendance lists with names.
 
 Dates move with today: rerun the reset before a presentation if the site has been up for weeks,
-so "today" and "next month" still match.
+so "today" and "next month" still match. The extra office hour "running now" starts half an hour
+before the reset – reset shortly before presenting the cash box.
+
+pg_cron keeps working on the demo: at the description deadline it cancels events whose
+description was never submitted. The seed therefore puts unsubmitted descriptions only in next
+month (deadline ahead); this month's coming events all have theirs submitted.
 
 ## Resetting
 

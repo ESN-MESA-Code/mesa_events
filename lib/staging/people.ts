@@ -53,13 +53,16 @@ const CAST: Array<Omit<DemoPerson, "id">> = [
   { key: "giulia", name: "Giulia Ferri", handle: "giulia.ferri", roles: [] },
   { key: "nikos", name: "Nikos Papadakis", handle: "nikos.papadakis", roles: [] },
   { key: "fatima", name: "Fatima Zahra El Idrissi", handle: "fatima.elidrissi", roles: [] },
-  { key: "emil", name: "Emil Novák", handle: "emil.novak", roles: [] },
+  { key: "emil", name: "Emil Novák", handle: "emil.novak", roles: ["newbie"] },
   { key: "isabel", name: "Isabel Moreau", handle: "isabel.moreau", roles: [] },
   { key: "thanh", name: "Thanh Nguyen", handle: "thanh.nguyen", roles: [] },
-  { key: "marta", name: "Marta Kovač", handle: "marta.kovac", roles: [] },
-  { key: "pedro", name: "Pedro Santos", handle: "pedro.santos", roles: [] },
-  { key: "hiro", name: "Hiro Takeda", handle: "hiro.takeda", roles: [] },
+  { key: "marta", name: "Marta Kovač", handle: "marta.kovac", roles: ["newbie"] },
+  { key: "pedro", name: "Pedro Santos", handle: "pedro.santos", roles: ["newbie"] },
+  { key: "hiro", name: "Hiro Takeda", handle: "hiro.takeda", roles: ["newbie"] },
   { key: "noor", name: "Noor Al-Sayed", handle: "noor.alsayed", roles: [], newcomer: true },
+  // Added later: new ids at the end, the earlier ones stay.
+  { key: "ines", name: "Ines Kraft", handle: "ines.kraft", roles: ["hr"], active: true },
+  { key: "marco", name: "Marco Bianchi", handle: "marco.bianchi", roles: ["vice_president", "executive"] },
 ];
 
 export const DEMO_PEOPLE: DemoPerson[] = CAST.map((p, i) => ({ ...p, id: id(i + 1) }));
@@ -140,6 +143,20 @@ export const PERSONAS: Persona[] = [
     label: "Treasurer",
     sees: "Finance, plus the reimbursement rules and the pre-approvals for weekend trips.",
     start: "/team/finance",
+  },
+  {
+    key: "hr",
+    person: "ines",
+    label: "HR",
+    sees: "Plans internal events, office hours, Stammtisch, Tuesday Talks and board meetings, and staffs office hours and Stammtisch.",
+    start: "/team/internal",
+  },
+  {
+    key: "vice_president",
+    person: "marco",
+    label: "Vice President",
+    sees: "Plans internal events with HR, and reads everything as a member of the executive board.",
+    start: "/team/internal",
   },
   {
     key: "executive",

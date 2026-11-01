@@ -42,6 +42,7 @@ import { demoPassword } from "@/lib/staging/password";
 import { importArchive } from "@/scripts/bot-archive.mjs";
 import { eventMessage } from "@/lib/telegram/messages";
 import { EVENTS, FIRST_NAMES, LAST_NAMES, NATIONALITIES, PROGRAMS, UNIVERSITIES, type EventKey, type EventType } from "@/lib/staging/content";
+import { removeInternalStaging, seedInternalStaging, type InternalSummary } from "@/lib/staging/internal";
 
 type Db = SupabaseClient<Database>;
 type EventStatus = Database["public"]["Enums"]["event_status"];
@@ -70,6 +71,8 @@ export interface SeedSummary {
   descriptionStages: Record<string, number>;
   claimStatuses: Record<string, number>;
   ideaStatuses: Record<string, number>;
+  /** Internal events, cash reports and the ledger (lib/staging/internal.ts). */
+  internal: InternalSummary;
   removed: number;
 }
 
@@ -337,9 +340,16 @@ const CURRENT: Spec[] = [
     dropouts: [{ who: "camila", role: "helper", reason: "Caught a cold.", before: 4, replacedBy: "kwame" }],
   },
   {
-    // Under-staffed and waiting for the OC's decision; the description is late (Comms reminded the OC).
-    key: "iceSkating", plan: "iceSkating", cycle: 0, offset: 3, oc: "oskar", helpers: ["marta", "emil"], description: "draft", remindedOc: true,
+    // Under-staffed and waiting for the OC's decision; the description came in late (Comms reminded the OC).
+    // Not a draft: the month's deadline has passed, and pg_cron cancels events never submitted by then.
+    key: "iceSkating", plan: "iceSkating", cycle: 0, offset: 3, oc: "oskar", helpers: ["marta", "emil"], description: "submitted", remindedOc: true,
     dropouts: [{ who: "marta", role: "helper", reason: "Sprained my ankle at bouldering.", before: 2 }],
+  },
+  // The OC persona's own coming events: one waiting for Comms, one sent back with changes.
+  { key: "photoWalk", plan: "photoWalk", cycle: 0, offset: 3, oc: "chloe", helpers: ["kwame"], description: "submitted" },
+  {
+    key: "erasmusTalk", plan: "erasmusTalk", cycle: 0, offset: 5, oc: "chloe", helpers: ["lea"], description: "changes_requested",
+    review: "Nice idea! Please name the four panelists and say that the talk is in English – then it can go out.",
   },
   {
     // Cancelled after the description went out; Comms has not marked it handled. Events can reopen it.
@@ -374,6 +384,9 @@ const NEXT: FutureSpec[] = [
     key: "christmasOpening", plan: "christmasMarket", cycle: 1, day: 26, description: "none",
     answers: [["giulia", 1, 1], ["kwame", 2, 1], ["pedro", null, 1], ["mateo", null, 3]],
   },
+  // The OC persona's description still to write (next month: its deadline is ahead).
+  { key: "cityRally", plan: "cityRally", cycle: 1, day: 16, description: "none", answers: [["chloe", 1, null], ["kwame", null, 1], ["giulia", null, 2], ["hiro", null, 1]] },
+  { key: "cleanUp", plan: "cleanUp", cycle: 1, day: 22, description: "none", answers: [["ingrid", 1, 2], ["sara", null, 1]] },
 ];
 
 // The month after: volunteer form open, ideas coming in.
@@ -382,6 +395,7 @@ const LATER: FutureSpec[] = [
   { key: "zugspitze", plan: "zugspitze", cycle: 2, day: 12, answers: [["oskar", 1, null], ["emil", null, 1], ["chloe", 3, 2]] },
   { key: "christmasDinner", plan: "christmasDinner", cycle: 2, day: 17, idea: { proposer: "lea", wantsOc: true }, answers: [["lea", 1, null], ["rafael", null, 1]] },
   { key: "uglySweater", plan: "uglySweater", cycle: 2, day: 19, answers: [["kwame", 2, 1], ["giulia", null, 1], ["tomasz", 1, null]] },
+  { key: "volleyball", plan: "volleyball", cycle: 2, day: 4, answers: [["diego", 1, null], ["arjun", null, 1], ["mei", null, 2]] },
 ];
 
 const IDEAS: Array<{ title: string; cycle: 1 | 2 | 3; day: number; proposer: string; pitch: string; helpers: number; wantsOc: boolean; status: "proposed" | "rejected" | "merged"; note?: string; mergedInto?: string }> = [
@@ -1099,7 +1113,16 @@ We can’t wait to ${plan.closing}! ✨`;
   });
   const imported = await importArchive(db, history, { createdBy: TAG });
 
-  // 15. The activity log, as the people did it (the triggers wrote "now" and no one).
+  // 15. Internal events, office hours, cash boxes, the ledger, personal settings.
+  const internal = await seedInternalStaging(db, {
+    rng, now, months, email, pid, ibans: IBANS,
+    event: (key) => {
+      const b = byKey.get(key)!;
+      return { id: b.id, plan: b.spec.plan, title: b.title, startsAt: b.startsAt, endsAt: b.endsAt, oc: b.oc, helpers: b.helpers, attendance: b.spec.attendance?.count ?? null };
+    },
+  });
+
+  // 16. The activity log, as the people did it (the triggers wrote "now" and no one).
   await writeActivity(db, { built, cycleRows, ideaRows, descRows, reviews, claims, events, comms: comms[0]!, finance, email, keyOf, eventIds: built.map((b) => b.id), cycleIds: cycleRows.map((c) => c.id), now });
 
   const count = <T,>(rows: T[], key: (r: T) => string) => rows.reduce<Record<string, number>>((m, r) => ({ ...m, [key(r)]: (m[key(r)] ?? 0) + 1 }), {});
@@ -1112,6 +1135,7 @@ We can’t wait to ${plan.closing}! ✨`;
     descriptionStages: count(descRows, (d) => d.status!),
     claimStatuses: count(claims, (c) => c.status!),
     ideaStatuses: count(ideaRows, (i) => i.status!),
+    internal,
     removed,
   };
   log(`Staging demo: ${summary.people} members, ${summary.events} events in ${Object.keys(summary.cycles).length} cycles (replaced ${removed} earlier events).`);
@@ -1121,6 +1145,7 @@ We can’t wait to ${plan.closing}! ✨`;
 // The ESN objectives each activity type starts with (lib/description/template.ts).
 const ESN_DEFAULT_OBJECTIVES: Record<string, string> = {
   "10": "413,426", "442": "413,418", "441": "413,407", "31": "422,413", "438": "424,426", "9": "424,425,428", "13": "412,423",
+  "11": "412,411", "439": "410,426",
 };
 
 interface ActivityInput {
@@ -1241,8 +1266,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     check(await db.from("event_ideas").delete().in("event_id", chunk), "old linked ideas");
     check(await db.from("events").delete().in("id", chunk), "old events");
   }
-  // Internal events, cash boxes and ledger entries of the local demo seed (round 2026-10-30).
-  const internal = check(await db.from("internal_events").select("id").in("created_by", tags), "old internal events").map((e) => e.id);
+  // Internal events (planned by the HR persona) with their cash boxes and ledger entries, and the local demo seed's.
+  const internal = check(await db.from("internal_events").select("id").in("created_by", [...tags, ...demoEmails]), "old internal events").map((e) => e.id);
   for (let i = 0; i < internal.length; i += 100) {
     const chunk = internal.slice(i, i + 100);
     check(await db.from("finance_entries").delete().in("internal_event_id", chunk), "old internal ledger entries");
@@ -1250,6 +1275,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
     check(await db.from("internal_events").delete().in("id", chunk), "old internal events");
   }
   check(await db.from("finance_entries").delete().in("created_by", tags), "old ledger entries");
+  // Cash box history, extra boxes, saved payout details, calendar links.
+  await removeInternalStaging(db, demoEmails, demoIds, tags);
   // The seed's messages in the fake Telegram channel.
   check(await db.from("fake_telegram_messages").delete().eq("chat_id", TELEGRAM_CHAT).gte("message_id", TELEGRAM_IDS[0]).lte("message_id", TELEGRAM_IDS[1]), "old Telegram messages");
   // Event folders of an earlier run that stopped half-way.
