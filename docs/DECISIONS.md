@@ -846,3 +846,23 @@ choice:
   when the staff don't pick one). Its content is filled in as the suggested opening count, and
   the OC's sign-off sets the box to the closing count. Finance then takes the takings out
   ("Take money out") when they go to the bank.
+
+## 2026-11-01 – One demo dataset, a fuller staging demo
+
+- **The local stack and staging use the same demo data** (
+pm run seed:staging). The small
+  local demo seed (seed:demo, scripts/seed-demo*.mjs) is gone: two datasets drifted apart and
+  both needed care with every round. The local sign-in lists the demo personas (signing in with
+  their derived password, lib/staging/password.ts) next to the supabase/seed.sql test
+  accounts, which the automated tests keep using. Tests that count team members ignore demo
+  members (….demo@).
+- **Pointing local development at the hosted staging project was not done:** the DB tests reset
+  and rewrite data, unreviewed migrations would reach a shared database, and the local sign-in
+  needs a Supabase on this machine.
+- **The demo covers the internal side** (lib/staging/internal.ts): office hours, Stammtisch,
+  Tuesday Talks, board meetings and internal events with staff, open slots, cancellations and a
+  full sign-up list; cash boxes with history and reports in every state; the ledger; saved
+  payout details, calendar links and ESN tokens. Personas HR and Vice President; newbies.
+- **Unsubmitted descriptions only in next month.** pg_cron cancels the current month's coming
+  events whose description was never submitted (its deadline has passed); the seed had a draft
+  there, which staging cancelled within a minute. A DB test checks no seeded event qualifies.

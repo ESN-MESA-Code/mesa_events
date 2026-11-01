@@ -6,7 +6,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { WORKSPACE_DOMAIN, safeNext } from "@/lib/auth";
-import { LOCAL_USERS, localLoginEnabled } from "@/lib/localLogin";
+import { LOCAL_DEMO_USERS, LOCAL_USERS, localLoginEnabled } from "@/lib/localLogin";
 
 const ERRORS: Record<string, string> = {
   domain: `Please sign in with your @${WORKSPACE_DOMAIN} Google Workspace account.`,
@@ -83,16 +83,25 @@ function LoginForm() {
             Local test sign-in as
           </label>
           <select id="local-user" name="email" className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm">
-            {LOCAL_USERS.map((u) => (
-              <option key={u.email} value={u.email}>
-                {u.label} – {u.email}
-              </option>
-            ))}
+            <optgroup label="Demo data (npm run seed:staging)">
+              {LOCAL_DEMO_USERS.map((u) => (
+                <option key={u.email} value={u.email}>
+                  {u.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Test accounts (supabase/seed.sql)">
+              {LOCAL_USERS.map((u) => (
+                <option key={u.email} value={u.email}>
+                  {u.label} – {u.email}
+                </option>
+              ))}
+            </optgroup>
           </select>
           <button className="w-full rounded-md border border-dashed border-esn px-4 py-2.5 text-sm font-medium text-esn hover:bg-esn/5">
             Local test sign-in
           </button>
-          <p className="text-xs text-gray-400">Local Supabase in development only – seeded members from supabase/seed.sql.</p>
+          <p className="text-xs text-gray-400">Local Supabase in development only – the demo data&apos;s people and the test accounts.</p>
         </form>
       )}
     </div>

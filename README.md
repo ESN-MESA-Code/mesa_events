@@ -28,29 +28,27 @@ npm run supabase:start
 ```
 
 ```bash
-npm run seed:demo
+npm run seed:staging
 ```
 
 ```bash
 npm run dev:local
 ```
 
-Open http://localhost:3000 and pick a member under **Local test sign-in**. Everyone lands on
+Open http://localhost:3000 and pick someone under **Local test sign-in**. Everyone lands on
 **Home** ("what's next for me": the open volunteer form, their events with the next step and
-deadline, open slots, claims that need something, and a card per team queue for team members) – one seeded account
-per role (member, OC and helper of the demo events, volunteers, Events, Comms, Finance,
-Treasurer, executive, HR, Vice President, admin, and a newcomer who has not accepted the
-confidentiality rules). The
-local sign-in exists only in development against a Supabase on your machine; production builds
-compile it out (tested).
+deadline, open slots, claims that need something, and a card per team queue for team members).
+The list has two groups: the **demo data's people** – the same personas as the staging site's
+demo sign-in (Events team, Member, OC, Helper, Comms, Finance, Treasurer, HR, Vice President,
+Executive, Admin, Newcomer) – and the **test accounts** of `supabase/seed.sql` the automated tests
+use. The local sign-in exists only in development against a Supabase on your machine; production
+builds compile it out (tested).
 
-`seed:demo` prints links to a realistic month: confirmed events around today with Chat spaces
-(each in the cycle of the month it takes place in), an under-staffed hike, a weekend trip, an
-event happening now (attendance open, with the public form link), a past event with receipts for
-Finance, Drive photos and an event report (ready for ESN Activities), an event uploaded to ESN
-Activities, a publishing schedule (one Telegram post publishes itself tomorrow at 10:00), history
-from the bot for "Get inspired", the following month's open volunteer form and ideas for the month
-after. Run it again to start over (it also removes what was added to its cycles by hand).
+`seed:staging` loads the demo data – the same as on the staging site (docs/STAGING.md): about 40
+fictional members and six months around today with every workflow state (ideas, the volunteer
+form, the roster, descriptions, attendance, hand-ins, claims, publishing), office hours, Stammtisch,
+Tuesday Talks, board meetings and internal events, cash boxes and the ledger. Dates move with
+today: run it again to start over (`npm run staging:reset` wipes everything else first).
 
 Good to know:
 

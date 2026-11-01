@@ -200,9 +200,9 @@ Every way refuses unless all staging gates hold, and the database refuses unless
 
 ## Rehearsing locally
 
-- `npm run seed:staging` puts the same data into the local stack (it replaces the small
-  `seed:demo` data, whose months it takes over); `npm run dev:local`'s team roles see all of it.
-  `npm run seed:staging -- --remove` takes it out again, then `npm run seed:demo`.
+- The local stack uses the same demo data (one dataset since 2026-11-01): `npm run seed:staging`
+  loads it, and `npm run dev:local`'s **Local test sign-in** offers the same personas as the demo
+  sign-in. `npm run seed:staging -- --remove` takes it out again.
 - `npm run build:staging && npm run start:staging` runs a real staging build on
   http://localhost:3200 against the local stack, with the local access code
   `local-staging-access-code` (a test value, `scripts/staging/local-env.mjs`).

@@ -20,7 +20,6 @@
     "supabase:reset": "npx -y supabase@2.121.0 db reset",
     "gen:types": "node scripts/gen-types.mjs",
     "gen:actions": "node scripts/gen-actions.mjs",
-    "seed:demo": "node scripts/seed-demo.mjs",
     "seed:staging": "node scripts/seed-staging.mjs",
     "staging:reset": "node scripts/seed-staging.mjs --reset",
     "build:staging": "node scripts/build-staging.mjs",

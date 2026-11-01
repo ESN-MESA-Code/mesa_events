@@ -1,6 +1,7 @@
 // "Local test sign-in" for `npm run dev:local`: Google sign-in cannot work
-// against the local Supabase stack, so the login page offers the seeded
-// members of supabase/seed.sql instead – one per role.
+// against the local Supabase stack, so the login page offers the personas of
+// the demo data (`npm run seed:staging`, the same data as on staging) and the
+// test accounts of supabase/seed.sql – one per role each.
 //
 // It can never be on in a production build: Next.js inlines NODE_ENV
 // ("production" in every `next build`), so the check below is constant-false
@@ -8,10 +9,17 @@
 // and a Supabase on this machine (tests/unit/localLogin.test.ts,
 // tests/bundle/bundle.test.ts).
 
+import { PERSONAS, demoEmail, person } from "@/lib/staging/people";
+
 export interface LocalUser {
   email: string;
   label: string;
 }
+
+const DEMO_DOMAIN = (process.env.NEXT_PUBLIC_GOOGLE_WORKSPACE_DOMAIN || "esnmesa.org").toLowerCase();
+
+/** The demo data's personas (lib/staging/people.ts): they sign in with their derived password. */
+export const LOCAL_DEMO_USERS: LocalUser[] = PERSONAS.map((p) => ({ email: demoEmail(person(p.person), DEMO_DOMAIN), label: `${p.label} – ${person(p.person).name}` }));
 
 /** Seeded members (supabase/seed.sql), local stack only. */
 export const LOCAL_USERS: LocalUser[] = [
@@ -52,4 +60,8 @@ export function localLoginEnabled(
 
 export function isLocalUser(email: string): boolean {
   return LOCAL_USERS.some((u) => u.email === email);
+}
+
+export function isLocalDemoUser(email: string): boolean {
+  return LOCAL_DEMO_USERS.some((u) => u.email === email);
 }

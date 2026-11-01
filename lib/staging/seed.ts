@@ -78,7 +78,7 @@ export interface SeedSummary {
 
 /** created_by of the seed's cycles and events – how a re-run finds its own data. */
 export const stagingTag = (domain: string) => `staging-seed.demo@${domain}`;
-/** The local demo seed's tag (scripts/seed-demo.mjs): its months are taken over. */
+/** The tag of the former small local demo seed (removed 2026-11-01): what it left in a local database goes. */
 const DEMO_SEED_TAG = "demo@esnmesa.org";
 
 // ── Deterministic randomness ────────────────────────────────────────────────

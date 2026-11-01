@@ -1,9 +1,10 @@
-// `npm run seed:staging` – the rich staging demo data (lib/staging/seed.ts):
-// replaces what an earlier run created (and the local demo seed's data).
+// `npm run seed:staging` – the demo data (lib/staging/seed.ts), the same on
+// staging and the local stack: replaces what an earlier run created (and what
+// the former small local demo seed left).
 // `npm run staging:reset` – wipes ALL data first (public.staging_wipe(); members,
 // accepted rules, team roles and settings stay), then seeds.
-// `npm run seed:staging -- --remove` – takes the staging demo out again (data
-// and demo members); `npm run seed:demo` brings back the small local demo.
+// `npm run seed:staging -- --remove` – takes the demo out again (data and
+// demo members).
 //
 // Target: the local Supabase stack by default. With --remote, the project in
 // the environment – and only when every staging gate holds (lib/staging.ts):
@@ -55,7 +56,7 @@ try {
   if (remove) {
     const n = await removeStagingData(db, domain);
     await deleteDemoMembers(db, domain);
-    console.log(`Removed the staging demo (${n} events) and its members.${remote ? "" : " npm run seed:demo brings back the small demo."}`);
+    console.log(`Removed the demo (${n} events) and its members.`);
     process.exit(0);
   }
   const started = Date.now();
@@ -68,9 +69,8 @@ try {
   console.log("  Ideas:", JSON.stringify(summary.ideaStatuses));
   console.log("  Internal events:", JSON.stringify(summary.internal.internalEvents));
   console.log("  Cash reports:", JSON.stringify(summary.internal.cashReports), "– ledger entries:", summary.internal.ledgerEntries);
-  console.log("Demo sign-in personas (staging builds, after the access code):");
+  console.log(remote ? "Demo sign-in personas (after the access code):" : "Personas (npm run dev:local → Local test sign-in):");
   for (const p of PERSONAS) console.log(`  ${p.label.padEnd(18)} ${demoEmail(person(p.person), domain)}`);
-  if (!remote) console.log('Locally, the team roles (Events, Comms, Finance …) of "npm run dev:local" see all of it too.');
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);
   if (!remote) console.error("Is the local stack running? npm run supabase:start");
