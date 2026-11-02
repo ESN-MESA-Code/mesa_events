@@ -109,7 +109,8 @@ function Segmented({ label, short, value, onChange }: { label: string; short: st
             <label
               key={o.label}
               className={cn(
-                "cursor-pointer px-2.5 py-1.5 first:rounded-l-md last:rounded-r-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-esn-accent",
+                // relative: the hidden radio sits inside its own option, not under a neighbour.
+                "relative cursor-pointer px-2.5 py-1.5 first:rounded-l-md last:rounded-r-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-esn-accent",
                 checked ? (o.value ? "bg-esn text-white" : "bg-gray-200 text-gray-800") : "text-gray-600 hover:bg-gray-50"
               )}
             >

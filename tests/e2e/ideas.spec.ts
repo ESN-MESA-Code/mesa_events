@@ -11,16 +11,18 @@ const refs = ["spaces/TESTARCHIVEQUIZ1", "spaces/TESTARCHIVEHIKE1", "spaces/TEST
 
 test("Get inspired → Propose this again", async ({ page, as }) => {
   await admin.from("events").delete().in("archive_ref", refs);
-  // Renamed, so the demo history (which has its own Pub Quiz runs) does not join the group.
-  const records = recordsFromFile(FIXTURE, readFileSync(FIXTURE, "utf8")).map((r: { title: string }) => ({ ...r, title: r.title.replace("Pub Quiz", "Zebraquiz") }));
+  // Renamed, so the demo history (its own Pub Quiz runs) and a real archive imported into the
+  // local stack (its own Herzogstand hikes) do not join the results.
+  const rename = (s: string) => s.replace(/Pub Quiz/g, "Zebraquiz").replace(/Herzogstand/g, "Zebrastand");
+  const records = recordsFromFile(FIXTURE, readFileSync(FIXTURE, "utf8")).map((r: { title: string; description: string; venue: string }) => ({ ...r, title: rename(r.title), description: rename(r.description), venue: rename(r.venue) }));
   await importArchive(admin, records, { createdBy: TEST_TAG });
 
   await as(USERS.member);
   await page.goto("/ideas");
   const results = page.getByTestId("inspiration-results");
-  await page.getByLabel("Search previous events").fill("herzogstand");
+  await page.getByLabel("Search previous events").fill("zebrastand");
   await expect(results.locator("> li")).toHaveCount(1);
-  await expect(results).toContainText("Hike to the Herzogstand");
+  await expect(results).toContainText("Hike to the Zebrastand");
   await expect(results).toContainText("Day trip");
 
   await page.getByLabel("Search previous events").fill("zebraquiz");
