@@ -9,6 +9,7 @@ import { plural } from "@/lib/plural";
 import { formatStats, type Category, type Format } from "@/lib/formats";
 import { CategoryBadge, CategorySelect } from "@/components/Sorting";
 import { IdeaForm } from "./IdeaForm";
+import type { TimelineDays } from "@/lib/timeline";
 
 /** Events per "page" of the infinite scroll. */
 const PAGE = 12;
@@ -21,7 +22,22 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), lab
  * this again" fills the form with a fresh date. Runs of one format are one
  * result; the category filters (round 2026-11-01).
  */
-export function IdeasWorkspace({ pool, today, categories, formats, children }: { pool: PastEvent[]; today: string; categories: Category[]; formats: Format[]; children: React.ReactNode }) {
+export function IdeasWorkspace({
+  pool,
+  earliest,
+  days,
+  categories,
+  formats,
+  children,
+}: {
+  pool: PastEvent[];
+  /** The first day a new idea may be dated (round 2026-11-02). */
+  earliest: string;
+  days: TimelineDays;
+  categories: Category[];
+  formats: Format[];
+  children: React.ReactNode;
+}) {
   const [prefill, setPrefill] = useState<(IdeaPrefill & { nonce: number }) | null>(null);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<EventType | "">("");
@@ -60,7 +76,7 @@ export function IdeasWorkspace({ pool, today, categories, formats, children }: {
           </CardHeader>
           <CardContent>
             {prefill && <p className="mb-3 text-xs text-esn-dark">Filled in from “{prefill.title}” – change anything you like.</p>}
-            <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} />
+            <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} earliest={earliest} days={days} />
           </CardContent>
         </Card>
         {children}
@@ -151,7 +167,7 @@ export function IdeasWorkspace({ pool, today, categories, formats, children }: {
                       variant="outline"
                       className="ml-auto"
                       onClick={() => {
-                        setPrefill({ ...ideaFromEvent(e, earlier, today, format?.name), nonce: Date.now() });
+                        setPrefill({ ...ideaFromEvent(e, earlier, earliest, format?.name), nonce: Date.now() });
                         document.getElementById("propose")?.scrollIntoView({ behavior: "smooth" });
                       }}
                     >

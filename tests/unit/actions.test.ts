@@ -40,6 +40,8 @@ describe("revalidation", () => {
     expect(everything.sort()).toEqual([
       "admin.addManualRole",
       "admin.removeManualRole",
+      // The cycle timeline shows on Home, Ideas, the calendar and the Events pages (round 2026-11-02).
+      "admin.updateSetting",
       // The header's profile menu marks missing payout details (round 2026-10-30).
       "handin.deleteMyPayoutDetails",
       "handin.setMyPayoutDetails",

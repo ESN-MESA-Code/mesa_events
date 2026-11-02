@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { cycleLabel, formatDateTime, isoToBerlinInput, monthStartIso } from "@/lib/dates";
+import { cycleLabel, formatDateTime, isoToBerlinInput, monthStartIso, nowMs } from "@/lib/dates";
+import { cycleTimeline } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 import { plural } from "@/lib/plural";
 import { hasRole } from "@/lib/roles";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
@@ -25,15 +27,18 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
   const { data: cycle } = await supabase.from("planning_cycles").select("*").eq("id", id).maybeSingle();
   if (!cycle) notFound();
 
-  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }, { data: members }] = await Promise.all([
+  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }, { data: members }, days] = await Promise.all([
     supabase.from("events").select("id, title, starts_at, helpers_needed, status").eq("cycle_id", id).neq("status", "dropped").order("starts_at"),
     supabase.rpc("cycle_signups", { cycle: id }),
     supabase.rpc("cycle_responses", { cycle: id }),
     supabase.rpc("cycle_deadline_limits", { cycle: id }),
     // Everyone who has signed in to the app, for "not answered yet" (usability review #19).
     cycle.status === "form_open" ? supabase.from("profiles").select("id, full_name, email").order("full_name") : Promise.resolve({ data: [] }),
+    loadTimelineDays(supabase),
   ]);
   const formLatest = limitRows?.[0]?.form_latest ?? monthStartIso(cycle.month);
+  const timeline = cycleTimeline(cycle.month, days);
+  const now = nowMs();
   const people = responses ?? [];
   const answered = new Set(people.map((r) => r.profile_id));
   const missing = (members ?? []).filter((m) => !answered.has(m.id));
@@ -64,7 +69,21 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
           <p className="text-sm text-gray-600">
             Members pick the events they can do and rank OC and helper per event. {plural(people.length, "volunteer")} answered.
           </p>
-          {canEdit && <FormControls cycleId={cycle.id} month={cycleLabel(cycle.month)} answers={people.length} status={cycle.status} formLatest={{ input: isoToBerlinInput(formLatest), label: formatDateTime(formLatest) }} />}
+          {cycle.status === "planning" && Date.parse(timeline.formOpens) > now && Date.parse(timeline.formCloses) > now && (
+            <p className="text-sm text-gray-700" data-testid="form-opens-auto">
+              🕘 Opens by itself on <strong>{formatDateTime(timeline.formOpens)}</strong> with the events on the schedule, closing {formatDateTime(timeline.formCloses)}. Open it earlier here if the schedule is ready.
+            </p>
+          )}
+          {canEdit && (
+            <FormControls
+              cycleId={cycle.id}
+              month={cycleLabel(cycle.month)}
+              answers={people.length}
+              status={cycle.status}
+              formLatest={{ input: isoToBerlinInput(formLatest), label: formatDateTime(formLatest) }}
+              standard={Date.parse(timeline.formCloses) > now ? { input: isoToBerlinInput(timeline.formCloses), label: formatDateTime(timeline.formCloses) } : null}
+            />
+          )}
           {!["planning", "form_open", "form_closed"].includes(cycle.status) && <p className="text-sm text-gray-500">The allocation has run – the form stays closed.</p>}
         </CardContent>
       </Card>

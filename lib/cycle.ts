@@ -5,6 +5,8 @@
 // current step's main action.
 import type { CycleStatus } from "@/lib/labels";
 import { isAre, plural } from "@/lib/plural";
+import { berlinTime, formatShortDate } from "@/lib/dates";
+import { dayRange, milestoneDay, type CycleTimeline } from "@/lib/timeline";
 
 export type StepId = "ideas" | "schedule" | "form" | "allocation" | "roster" | "descriptions" | "handin" | "done";
 
@@ -29,12 +31,19 @@ export interface CycleFacts {
    * every Beleg with Finance.
    */
   handIn: { total: number; happened: number; done: number };
+  /** The cycle's standard dates (lib/timeline.ts): each step shows its date, the current one turns late. */
+  timeline?: CycleTimeline;
+  now?: number;
 }
 
 export interface Step {
   id: StepId;
   label: string;
   state: "done" | "current" | "todo";
+  /** When the step is due ("by 10 Nov"). */
+  note?: string;
+  /** The current step is behind the timeline. */
+  late?: boolean;
 }
 
 export interface CycleProgress {
@@ -46,6 +55,9 @@ export interface CycleProgress {
   summary: string;
   /** Every step is behind the cycle: it moves to "Past cycles". */
   done: boolean;
+  /** The current step is behind the timeline (it was due at `due`). */
+  late: boolean;
+  due: string | null;
 }
 
 const LABELS: Record<StepId, string> = {
@@ -134,6 +146,32 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
   }
   const finished = current === "done";
   const at = finished ? STEP_ORDER.length : STEP_ORDER.indexOf(current);
-  const steps = STEP_ORDER.map((id, i) => ({ id, label: LABELS[id], state: i < at ? "done" : i === at ? "current" : "todo" }) as Step);
-  return { steps, current: finished ? null : current, action, summary, done: finished };
+
+  // The timeline (round 2026-11-02): a date per step; the current step is late once its date passed.
+  const t = f.timeline;
+  const now = f.now ?? Date.now();
+  const notes: Partial<Record<StepId, string>> = t
+    ? {
+        ideas: `ideas by ${milestoneDay(t.ideasDue)}`,
+        schedule: `by ${milestoneDay(t.formOpens)}`,
+        // A form someone closed before the standard opening day shows its own date only.
+        form: Date.parse(f.formClosesAt ?? t.formCloses) > Date.parse(t.formOpens) ?dayRange(t.formOpens, f.formClosesAt ?? t.formCloses) : `until ${milestoneDay(f.formClosesAt!)}`,
+        roster: `by ${milestoneDay(t.rosterDue)}`,
+        descriptions: `by ${milestoneDay(f.descriptionDeadline ?? t.descriptionsDue)}`,
+      }
+    : {};
+  const dueOf: Partial<Record<StepId, string>> = t ? { ideas: t.formOpens, schedule: t.formOpens, allocation: t.rosterDue, roster: t.rosterDue } : {};
+  const due = finished ? null : (dueOf[current] ?? null);
+  const late = !!due && Date.parse(due) < now;
+  if (late) {
+    action = `Overdue since ${formatShortDate(due!)}: ${action}`;
+  } else if (t && (current === "ideas" || current === "schedule") && Date.parse(t.formOpens) > now) {
+    const opens = `${formatShortDate(t.formOpens)}, ${berlinTime(t.formOpens)}`;
+    action = current === "schedule" ? `Set the event types – the form opens by itself on ${opens} (or open it earlier)` : `${action} – the form opens by itself on ${opens} with the events on the schedule`;
+  }
+
+  const steps = STEP_ORDER.map(
+    (id, i) => ({ id, label: LABELS[id], state: i < at ? "done" : i === at ? "current" : "todo", note: notes[id], late: i === at && late ? true : undefined }) as Step
+  );
+  return { steps, current: finished ? null : current, action, summary, done: finished, late, due };
 }

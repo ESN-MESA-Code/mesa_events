@@ -15,6 +15,7 @@ export function FormControls({
   answers,
   status,
   formLatest,
+  standard,
 }: {
   cycleId: string;
   /** "December 2026" and the answers so far – named in the confirm dialog. */
@@ -23,9 +24,11 @@ export function FormControls({
   status: CycleStatus;
   /** The latest allowed deadline (review 2026-10-29 A5): Berlin input value and label. */
   formLatest: { input: string; label: string };
+  /** The timeline's closing day (round 2026-11-02) while still ahead: the field starts with it. */
+  standard: { input: string; label: string } | null;
 }) {
   const { run, pending, error } = useAction();
-  const [closes, setCloses] = useState("");
+  const [closes, setCloses] = useState(standard?.input ?? "");
   return (
     <div className="space-y-3">
       {(status === "planning" || status === "form_closed") && (
@@ -36,10 +39,11 @@ export function FormControls({
             run(openForm, { cycle_id: cycleId, closes_at: closes }, undefined, `The volunteer form for ${month} is open – members see it on Home.`);
           }}
         >
-          <Field label="Form deadline" htmlFor="form-deadline" hint={`At the latest ${formLatest.label} (the month's first day)`}>
+          <Field label="Form deadline" htmlFor="form-deadline" hint={`${standard ? `Standard: ${standard.label}. ` : ""}At the latest ${formLatest.label} (the month's first day)`}>
             <Input id="form-deadline" type="datetime-local" value={closes} max={formLatest.input} onChange={(e) => setCloses(e.target.value)} required />
           </Field>
           <Button disabled={pending || !closes}>{status === "planning" ? "Open volunteer form" : "Reopen form"}</Button>
+          <OffStandard value={closes} standard={standard} what="Members expect sign-up to close" />
         </form>
       )}
       {status === "form_open" && (
@@ -126,6 +130,7 @@ export function DeadlineControl({
   deadlineLabel,
   passed,
   latest,
+  standard,
   canEdit,
 }: {
   cycleId: string;
@@ -135,10 +140,12 @@ export function DeadlineControl({
   deadlineLabel: string | null;
   passed: boolean;
   latest: { input: string; label: string } | null;
+  /** The timeline's description day (round 2026-11-02) while still ahead: the field starts with it when no deadline is set. */
+  standard: { input: string; label: string } | null;
   canEdit: boolean;
 }) {
   const { run, pending, error } = useAction();
-  const [value, setValue] = useState(deadline);
+  const [value, setValue] = useState(deadline || standard?.input || "");
   if (status !== "confirmed") {
     return (
       <p className="text-sm text-gray-600" data-testid="deadline-not-yet">
@@ -165,14 +172,25 @@ export function DeadlineControl({
       <Field
         label="Description deadline (all events of the month)"
         htmlFor="desc-deadline"
-        hint={`${latest ? `At the latest ${latest.label} (when the first event starts). ` : ""}Events whose description is not submitted by then are cancelled automatically.`}
+        hint={`${standard ? `Standard: ${standard.label}. ` : ""}${latest ? `At the latest ${latest.label} (when the first event starts). ` : ""}Events whose description is not submitted by then are cancelled automatically.`}
       >
         <Input id="desc-deadline" type="datetime-local" value={value} max={latest?.input} onChange={(e) => setValue(e.target.value)} />
       </Field>
       <Button variant="outline" disabled={pending}>
         Save deadline
       </Button>
+      <OffStandard value={value} standard={standard} what="OCs expect the descriptions to be due" />
       {error && <Alert tone="error" className="w-full">{error}</Alert>}
     </form>
+  );
+}
+
+/** A note when a deadline field differs from the timeline's standard date (round 2026-11-02). */
+function OffStandard({ value, standard, what }: { value: string; standard: { input: string; label: string } | null; what: string }) {
+  if (!standard || !value || value === standard.input) return null;
+  return (
+    <p className="w-full text-xs text-amber-800" data-testid="off-standard">
+      Not the standard date – {what.charAt(0).toLowerCase()}{what.slice(1)} on {standard.label}.
+    </p>
   );
 }

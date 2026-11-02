@@ -82,9 +82,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <AddRoleForm />
             <ul className="divide-y divide-gray-100 text-sm">
               {(members ?? []).map((m) => (
-                <li key={`${m.email}-${m.role}-${m.source}`} className="flex items-center gap-3 py-2">
-                  <span className="w-40">{ROLE_LABELS[m.role]}</span>
-                  <span className="mr-auto">{m.email}</span>
+                <li key={`${m.email}-${m.role}-${m.source}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="w-40 shrink-0">{ROLE_LABELS[m.role]}</span>
+                  <span className="mr-auto min-w-0 break-all">{m.email}</span>
                   <Badge tone={m.source === "group" ? "blue" : "gray"}>{m.source === "group" ? "from group" : "manual"}</Badge>
                   {m.source === "manual" && (
                     <ActionButton action={removeManualRole} input={{ email: m.email, role: m.role }} variant="ghost" confirm={`Remove ${m.email} from ${ROLE_LABELS[m.role]}?`}>

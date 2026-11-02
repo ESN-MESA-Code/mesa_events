@@ -1289,6 +1289,11 @@ isOneToOne: false
               "email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
             }[]
                            },
+"cycle_timeline":
+{ Args: { "month": string }; Returns: {
+              "descriptions_due": string,"form_closes": string,"form_opens": string,"ideas_due": string
+            }[]
+                           },
 "decide_preapproval":
 { Args: { "approve": boolean,"decision_note"?: string,"preapproval": string }; Returns: undefined
                            },
@@ -1441,6 +1446,9 @@ isOneToOne: false
 "note_cancellation":
 { Args: { "event": string }; Returns: undefined
                            },
+"open_due_forms":
+{ Args: { "at"?: string }; Returns: number
+                           },
 "open_slots":
 { Args: Record<PropertyKey, never>; Returns: {
               "event_id": string,"open_helpers": number,"open_oc": boolean
@@ -1486,6 +1494,9 @@ isOneToOne: false
                            },
 "reject_reimbursement":
 { Args: { "claim": string,"reason": string }; Returns: undefined
+                           },
+"remind_due_descriptions":
+{ Args: { "at"?: string }; Returns: number
                            },
 "remind_oc":
 { Args: { "about": string,"event": string }; Returns: boolean

@@ -98,15 +98,16 @@ export function teaser(e: Pick<PastEvent, "hook" | "intro">): string {
 }
 
 /**
- * A fresh date for running it again: the same day of the year, in the
- * future (at least two weeks from today), moved to the same weekday as the
+ * A fresh date for running it again: the same day of the year, from
+ * `earliestDay` on (the first day ideas are still open for, lib/timeline.ts
+ * firstOpenIdeaMonth – round 2026-11-02), moved to the same weekday as the
  * original (an event that was on a Thursday stays on a Thursday). "YYYY-MM-DD".
  */
-export function freshDate(originalIso: string, todayIso: string): string {
+export function freshDate(originalIso: string, earliestDay: string): string {
   const day = berlinDate(originalIso);
   const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
-  const earliest = Date.parse(`${todayIso}T12:00:00Z`) + 14 * 86_400_000;
-  let year = Number(todayIso.slice(0, 4));
+  const earliest = Date.parse(`${earliestDay}T12:00:00Z`);
+  let year = Number(earliestDay.slice(0, 4));
   let candidate = Date.parse(`${year}${day.slice(4)}T12:00:00Z`);
   while (Number.isNaN(candidate) || candidate < earliest) {
     year++;
@@ -131,14 +132,14 @@ export interface IdeaPrefill {
 }
 
 /** "Propose this again": the idea form filled from a previous event (named after its format when it has one). */
-export function ideaFromEvent(e: PastEvent, earlier: PastEvent[], todayIso: string, formatTitle?: string): IdeaPrefill {
+export function ideaFromEvent(e: PastEvent, earlier: PastEvent[], earliestDay: string, formatTitle?: string): IdeaPrefill {
   const hook = normalizeHook(e.hook);
   const firstSentence = paragraph(e.intro).split(/(?<=[.!?])\s+/)[0] ?? "";
   const pitch = [hook && `${hook.charAt(0).toUpperCase()}${hook.slice(1)}.`, firstSentence].filter(Boolean).join(" ");
   const runs = [e, ...earlier].map((x) => berlinDate(x.starts_at)).join(", ");
   return {
     title: formatTitle || formatName(e.title.replace(/\s*(#\d+|\b(19|20)\d{2}\b)\s*/g, " ").replace(/\s+/g, " ").trim() || e.title),
-    proposed_date: freshDate(e.starts_at, todayIso),
+    proposed_date: freshDate(e.starts_at, earliestDay),
     pitch: `${pitch}\n\nRan before: ${runs}${e.headcount ? ` (${e.headcount} people the last time)` : ""}.`.trim().slice(0, 2000),
     helpers_needed: e.helpers_needed ?? 2,
     type_suggestion: e.type,

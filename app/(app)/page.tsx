@@ -13,10 +13,12 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, Pag
 import { ClaimStatusBadge, DueLabel, EventStatusBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
-import { InternalCalendarCard, LeaderboardCard } from "@/components/HomeCards";
+import { ComingUpCard, CycleTimelineCard } from "@/components/HomeCards";
 import { StepIcon } from "@/components/StepIcon";
 import { OrientationCard } from "@/components/Orientation";
 import { byUrgency, happeningNow } from "@/lib/myEvents";
+import { cycleTimeline, upcomingCycleMonth } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -27,9 +29,11 @@ const STEP_TONE: Record<NextStep["kind"], string> = {
   done: "border-emerald-200 bg-emerald-50 text-emerald-800",
 };
 
-// "What's next for me": the open volunteer form, my events with their next
-// step, open slots, the internal calendar, my claims that need something,
-// the semester's leaderboard, and one card per team queue for team members.
+// "What's next for me" (reworked in round 2026-11-02): what waits on the
+// member (an open volunteer form, claims), the planning timeline of the
+// coming month, my events with their next step, open slots, what comes up
+// in MESA, and one card per team queue for team members. The leaderboard
+// has its own page; the month at a glance is the Calendar.
 export default async function HomePage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
@@ -95,34 +99,92 @@ export default async function HomePage() {
     : { data: [] };
 
   const needs = (claims ?? []).filter((c) => !c.payout_method || c.status === "not_submitted");
+  const openForms = forms.filter((f) => !f.submittedAt);
+  // What waits on the member besides an event's next step (those are under My events).
+  const waiting = openForms.length + needs.length;
 
   return (
     <>
-      <PageHeader title={`Hi ${viewer.name.split(" ")[0]}`} description="What's next for you." />
+      <PageHeader
+        title={`Hi ${viewer.name.split(" ")[0]}`}
+        description={
+          <>
+            {formatDateTime(new Date(now).toISOString()).slice(0, -7)}
+            {" · "}
+            {waiting ? <span className="font-medium text-amber-800">{plural(waiting, "thing")} waiting for you</span> : "nothing waiting for you right now"}
+          </>
+        }
+      />
       <div className="space-y-6">
-        {!everAssigned && <OrientationCard formOpen={forms.some((f) => !f.submittedAt)} hasPayout={!!payout} />}
-        {forms.map((f) =>
-          f.submittedAt ? (
+        {!everAssigned && <OrientationCard formOpen={openForms.length > 0} hasPayout={!!payout} />}
+
+        {waiting > 0 && (
+          <section aria-labelledby="needs-you" className="rounded-xl border border-amber-200 bg-amber-50/60 p-4" data-testid="home-needs-you">
+            <h2 id="needs-you" className="mb-2 text-sm font-semibold text-amber-900">
+              Waiting for you
+            </h2>
+            <ul className="space-y-2">
+              {openForms.map((f) => (
+                <li key={f.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 shadow-sm" data-testid="home-volunteer">
+                  <span className="text-lg" aria-hidden>
+                    🙋
+                  </span>
+                  <div className="mr-auto min-w-0">
+                    <p className="font-medium text-gray-900">The volunteer form for {cycleLabel(f.month)} is open</p>
+                    <p className="text-xs text-gray-600">
+                      {f.form_closes_at ? <DueLabel iso={f.form_closes_at} now={now} /> : "Open now"} · say which events you can OC or help with
+                    </p>
+                  </div>
+                  <Link href="/volunteer" className={buttonVariants({ size: "sm" })}>
+                    Fill in the form
+                  </Link>
+                </li>
+              ))}
+              {needs.map((c) => {
+                const e = c.events as { id: string; title: string } | null;
+                const r = c.receipts as { vendor: string; amount_cents: number } | null;
+                return (
+                  <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 shadow-sm" data-testid="home-claims">
+                    <span className="text-lg" aria-hidden>
+                      🧾
+                    </span>
+                    <div className="mr-auto min-w-0">
+                      <p className="font-medium text-gray-900">
+                        {r?.vendor} · {formatCents(r?.amount_cents)}
+                      </p>
+                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+                        {e?.title} <ClaimStatusBadge status={c.status as ClaimStatus} />
+                      </p>
+                    </div>
+                    <span className="text-xs text-amber-800">
+                      {!c.payout_method && (
+                        <Link href="/me#claims" className="underline">
+                          Add bank or PayPal details
+                        </Link>
+                      )}
+                      {!c.payout_method && c.status === "not_submitted" && " · "}
+                      {c.status === "not_submitted" && "Hand the paper receipt to Finance"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <CycleTimelineCard viewerId={viewer.id} now={now} />
+        {forms
+          .filter((f) => f.submittedAt)
+          .map((f) => (
             <Alert key={f.id} tone="success" data-testid="home-volunteer">
               Volunteer form for <strong>{cycleLabel(f.month)}</strong>: submitted ✓ – you signed up for {plural(f.events, "event")}.{" "}
               <Link href="/volunteer" className="font-medium underline">
                 See your answers
               </Link>
             </Alert>
-          ) : (
-            <div key={f.id} className="rounded-xl border border-esn/30 bg-esn/5 p-4 flex flex-wrap items-center gap-3" data-testid="home-volunteer">
-              <div className="mr-auto">
-                <p className="font-semibold text-esn-dark">The volunteer form for {cycleLabel(f.month)} is open</p>
-                <p className="text-sm text-gray-600">{f.form_closes_at ? `Open until ${formatDateTime(f.form_closes_at)}.` : "Open now."} Say which events you can OC or help with.</p>
-              </div>
-              <Link href="/volunteer" className={buttonVariants()}>
-                Fill in the form
-              </Link>
-            </div>
-          )
-        )}
+          ))}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <Card>
             <CardHeader>
               <CardTitle>My events</CardTitle>
@@ -132,56 +194,57 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               {!myEvents.length && (
-                <EmptyState>
-                  {forms.some((f) => !f.submittedAt) ? "Nothing planned yet – fill in the volunteer form above, or claim an open slot." : "Nothing planned. Volunteer when the next form opens, or claim an open slot."}
-                </EmptyState>
+                <EmptyState>{openForms.length ? "Nothing planned yet – fill in the volunteer form, or claim an open slot." : "Nothing planned. Volunteer when the next form opens, or claim an open slot."}</EmptyState>
               )}
               <ul className="space-y-3" data-testid="home-my-events">
                 {myEvents.map(({ event, role, step, live }) => (
-                  <li key={event.id} className={cn("rounded-lg border p-3 space-y-2", live ? "border-esn-orange/60 ring-1 ring-esn-orange/40" : "border-gray-200")}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/events/${event.id}?from=home`} className="font-medium text-gray-900 hover:text-esn break-words">
-                        {event.title}
-                      </Link>
-                      <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
-                      {live && (
-                        <Badge tone="amber" data-testid="happening-now">
-                          ● Happening now
-                        </Badge>
-                      )}
-                      {event.status !== "confirmed" && <EventStatusBadge status={event.status} />}
-                      <span className="ml-auto text-xs text-gray-500">{formatDateTime(event.starts_at)}</span>
-                    </div>
-                    {live && (
-                      <Link href={`/events/${event.id}/attendance?from=home`} className={cn(buttonVariants({ size: "sm" }), "w-full sm:w-auto")}>
-                        Happening now – open attendance (QR code)
-                      </Link>
-                    )}
-                    <Link
-                      href={`/events/${event.id}${step.tab ? `/${step.tab}` : ""}?from=home`}
-                      className={cn("flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm hover:underline", STEP_TONE[step.kind])}
-                      data-testid="next-step"
-                    >
-                      <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
-                      <span className="font-medium">{step.label}</span>
-                      {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-xs" />}
-                    </Link>
-                    {/* A helper's way in before the event (usability review #9): when, where, the Chat space. */}
-                    {role === "helper" && step.anchor === "chat-space" && (
-                      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600" data-testid="helper-info">
-                        <span>
-                          Starts {berlinTime(event.starts_at)}
-                          {event.location && ` · ${event.location}`}
-                        </span>
-                        {event.chat_space_url ? (
-                          <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="font-medium text-esn hover:underline">
-                            Open the Chat space ↗
-                          </a>
-                        ) : (
-                          <span>{event.chat_space_requested_at ? "The Chat space is being created." : "The Chat space is created when the month's roster is confirmed."}</span>
+                  <li key={event.id} className={cn("flex gap-3 rounded-lg border p-3", live ? "border-esn-orange/60 ring-1 ring-esn-orange/40" : "border-gray-200")}>
+                    <DateTile iso={event.starts_at} live={live} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/events/${event.id}?from=home`} className="font-medium text-gray-900 hover:text-esn break-words">
+                          {event.title}
+                        </Link>
+                        <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
+                        {live && (
+                          <Badge tone="amber" data-testid="happening-now">
+                            ● Happening now
+                          </Badge>
                         )}
-                      </p>
-                    )}
+                        {event.status !== "confirmed" && <EventStatusBadge status={event.status} />}
+                        <span className="ml-auto text-xs tabular-nums text-gray-500">{berlinTime(event.starts_at)}</span>
+                      </div>
+                      {live && (
+                        <Link href={`/events/${event.id}/attendance?from=home`} className={cn(buttonVariants({ size: "sm" }), "h-auto w-full whitespace-normal py-1.5 sm:w-auto")}>
+                          Happening now – open attendance (QR code)
+                        </Link>
+                      )}
+                      <Link
+                        href={`/events/${event.id}${step.tab ? `/${step.tab}` : ""}?from=home`}
+                        className={cn("flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm hover:underline", STEP_TONE[step.kind])}
+                        data-testid="next-step"
+                      >
+                        <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
+                        <span className="font-medium">{step.label}</span>
+                        {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-xs" />}
+                      </Link>
+                      {/* A helper's way in before the event (usability review #9): when, where, the Chat space. */}
+                      {role === "helper" && step.anchor === "chat-space" && (
+                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600" data-testid="helper-info">
+                          <span>
+                            Starts {berlinTime(event.starts_at)}
+                            {event.location && ` · ${event.location}`}
+                          </span>
+                          {event.chat_space_url ? (
+                            <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="font-medium text-esn hover:underline">
+                              Open the Chat space ↗
+                            </a>
+                          ) : (
+                            <span>{event.chat_space_requested_at ? "The Chat space is being created." : "The Chat space is created when the month's roster is confirmed."}</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -201,13 +264,11 @@ export default async function HomePage() {
                     const s = claimable.find((x) => x.event_id === e.id)!;
                     return (
                       <li key={e.id} className="flex flex-wrap items-center gap-2 py-2">
-                        <Link href={`/events/${e.id}?from=home`} className="font-medium text-gray-900 hover:text-esn">
+                        <span className="w-20 shrink-0 text-xs tabular-nums text-gray-500">{formatShortDate(e.starts_at)}</span>
+                        <Link href={`/events/${e.id}?from=home`} className="min-w-0 flex-1 truncate font-medium text-gray-900 hover:text-esn">
                           {e.title}
                         </Link>
-                        <span className="text-xs text-gray-500">{formatShortDate(e.starts_at)}</span>
-                        <Badge tone="amber" className="ml-auto">
-                          {s.open_oc ? "OC needed" : plural(s.open_helpers, "helper slot")}
-                        </Badge>
+                        <Badge tone="amber">{s.open_oc ? "OC needed" : plural(s.open_helpers, "helper slot")}</Badge>
                       </li>
                     );
                   })}
@@ -215,48 +276,10 @@ export default async function HomePage() {
               </CardContent>
             </Card>
 
-            <InternalCalendarCard viewerId={viewer.id} now={now} />
-
-            {needs.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>My claims need something</CardTitle>
-                  <Badge tone="amber">{needs.length}</Badge>
-                </CardHeader>
-                <CardContent>
-                  <ul className="divide-y divide-gray-100 text-sm" data-testid="home-claims">
-                    {needs.map((c) => {
-                      const e = c.events as { id: string; title: string } | null;
-                      const r = c.receipts as { vendor: string; amount_cents: number } | null;
-                      return (
-                        <li key={c.id} className="py-2 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{r?.vendor}</span>
-                            <span className="text-xs text-gray-500">
-                              {e?.title} · receipt {formatCents(r?.amount_cents)}
-                            </span>
-                            <ClaimStatusBadge status={c.status as ClaimStatus} className="ml-auto" />
-                          </div>
-                          <p className="text-xs text-amber-800">
-                            {!c.payout_method && (
-                              <Link href="/me#claims" className="underline">
-                                Add bank or PayPal details
-                              </Link>
-                            )}
-                            {!c.payout_method && c.status === "not_submitted" && " · "}
-                            {c.status === "not_submitted" && "Hand the paper receipt to Finance"}
-                          </p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
+            <ComingUpCard viewerId={viewer.id} now={now} />
           </div>
         </div>
 
-        {/* Work before the leaderboard (usability review #11). */}
         {(isEvents || isComms || isFinance || isExec) && (
           <section aria-label="Team queues" className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Team queues</h2>
@@ -267,10 +290,23 @@ export default async function HomePage() {
             </div>
           </section>
         )}
-
-        <LeaderboardCard viewerId={viewer.id} now={now} />
       </div>
     </>
+  );
+}
+
+/** An event's day as a small calendar leaf ("Nov / 3 / Tue"). */
+function DateTile({ iso, live }: { iso: string; live: boolean }) {
+  const [weekday, day, month] = formatShortDate(iso).split(" ");
+  return (
+    <div
+      className={cn("flex w-12 shrink-0 flex-col items-center self-start rounded-lg py-1.5 leading-tight", live ? "bg-esn-orange/10 text-esn-orange" : "bg-esn/5 text-esn-dark")}
+      aria-hidden="true"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{month}</span>
+      <span className="text-lg font-bold tabular-nums">{day}</span>
+      <span className="text-[10px] text-gray-500">{weekday}</span>
+    </div>
   );
 }
 
@@ -307,22 +343,32 @@ function Figure({ label, value, tone, href }: { label: string; value: number; to
 
 async function EventsQueue() {
   const supabase = await createSessionClient();
-  const [{ data: cycles }, { data: slots }] = await Promise.all([
+  const [{ data: cycles }, { data: slots }, days] = await Promise.all([
     supabase.from("planning_cycles").select("id, month, status, form_closes_at, description_deadline").order("month"),
     supabase.rpc("open_slots"),
+    loadTimelineDays(supabase),
   ]);
   // Done cycles drop out (review 2026-10-29 A4); only last month to two months ahead are listed, the rest behind "more" (usability review #11).
   const progress = (await cyclesWithProgress(supabase, cycles ?? [])).filter((c) => !c.progress.done);
-  const thisMonth = monthOf(new Date(nowMs()).toISOString());
+  const now = nowMs();
+  const thisMonth = monthOf(new Date(now).toISOString());
   const near = progress.filter((c) => c.month >= addMonths(thisMonth, -1) && c.month <= addMonths(thisMonth, 2));
   const more = progress.length - near.length;
+  // The month the timeline plans now needs a cycle (round 2026-11-02).
+  const upcoming = upcomingCycleMonth(now, days);
+  const missing = !(cycles ?? []).some((c) => c.month === upcoming);
   return (
     <QueueCard title="Events team" href="/team/events" testId="queue-events">
-      {!near.length && <p className="text-gray-500">No cycle running – start the next month.</p>}
+      {missing && (
+        <Link href="/team/events?new=1" className={cn("block text-xs font-medium hover:underline", Date.parse(cycleTimeline(upcoming, days).formOpens) < now ? "text-red-700" : "text-amber-800")}>
+          No cycle for {cycleLabel(upcoming)} yet – plan it →
+        </Link>
+      )}
+      {!near.length && !missing && <p className="text-gray-500">No cycle running – start the next month.</p>}
       <ul className="space-y-1.5">
         {near.map((c) => (
           <li key={c.id}>
-            <Link href={`/team/events?month=${monthParam(c.month)}`} className="font-medium text-esn hover:underline">
+            <Link href={`/team/events?month=${monthParam(c.month)}`} className={cn("font-medium hover:underline", c.progress.late ? "text-red-700" : "text-esn")}>
               {cycleLabel(c.month)}
             </Link>
             <span className="block text-xs text-gray-600">{c.progress.current ? `${c.progress.steps.find((s) => s.state === "current")!.label}: ${c.progress.action}` : c.progress.summary}</span>

@@ -9,13 +9,15 @@ import { stepHref } from "@/lib/cycle";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { plural } from "@/lib/plural";
 import { photosIn } from "@/lib/photos";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { DESCRIPTION_STATUS, EventStatusBadge, Stepper } from "@/components/status";
 import { RemindButton } from "@/components/RemindButton";
 import { cn } from "@/lib/utils";
 import { MonthSelector } from "@/components/MonthSelector";
 import type { EventStatus } from "@/lib/labels";
 import { NewCycleForm } from "./NewCycleForm";
+import { cycleTimeline, upcomingCycleMonth } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 
 export const metadata: Metadata = { title: "Events team" };
 
@@ -41,6 +43,11 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
   );
   const cycle = cycles.find((c) => c.month === month) ?? null;
   const planning = canEdit && (sp.new === "1" || !cycles.length);
+  // The month the timeline plans now (round 2026-11-02): it needs a cycle before its form opens.
+  const days = await loadTimelineDays(supabase);
+  const upcoming = upcomingCycleMonth(now, days);
+  const upcomingTimeline = cycleTimeline(upcoming, days);
+  const missingCycle = !cycles.some((c) => c.month === upcoming);
 
   const [{ data: events }, { data: handIn }] = cycle
     ? await Promise.all([
@@ -75,13 +82,23 @@ export default async function EventsTeamPage({ searchParams }: { searchParams: P
         </Link>
       </PageHeader>
       <div className="space-y-6">
+        {missingCycle && (
+          <Alert tone={Date.parse(upcomingTimeline.formOpens) < now ? "error" : "warning"} data-testid="missing-cycle">
+            No cycle for <strong>{cycleLabel(upcoming)}</strong> yet – ideas are due {formatDateTime(upcomingTimeline.ideasDue)}, the volunteer form opens {formatDateTime(upcomingTimeline.formOpens)}.{" "}
+            {canEdit && !planning && (
+              <Link href="/team/events?new=1" className="font-medium underline">
+                Plan {cycleLabel(upcoming)}
+              </Link>
+            )}
+          </Alert>
+        )}
         {planning && (
           <Card data-testid="new-cycle">
             <CardHeader>
               <CardTitle>Plan a new month</CardTitle>
             </CardHeader>
             <CardContent>
-              <NewCycleForm />
+              <NewCycleForm suggested={missingCycle ? monthParam(upcoming) : ""} />
             </CardContent>
           </Card>
         )}

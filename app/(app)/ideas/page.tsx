@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { berlinDate, formatDate, nowMs } from "@/lib/dates";
+import { addMonths, formatDate, formatDateTime, monthLabel, nowMs } from "@/lib/dates";
+import { cycleTimeline, firstOpenIdeaMonth, relativeDue } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawIdea } from "@/app/actions/planning";
@@ -22,7 +24,7 @@ const STATUS: Record<string, { label: string; tone: "gray" | "green" | "red" | "
 export default async function IdeasPage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
-  const [{ data: ideas }, { data: past }, { categories, formats }] = await Promise.all([
+  const [{ data: ideas }, { data: past }, { categories, formats }, days] = await Promise.all([
     supabase
       .from("event_ideas")
       .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id, category_id")
@@ -31,7 +33,12 @@ export default async function IdeasPage() {
     // Previous events for "Get inspired": only what members may read (published descriptions, headcounts, photo folders).
     supabase.rpc("inspiration_events"),
     loadSorting(supabase),
+    loadTimelineDays(supabase),
   ]);
+  // The ideas window (round 2026-11-02): the next month until its deadline, every later month always.
+  const now = nowMs();
+  const open = firstOpenIdeaMonth(now, days);
+  const due = cycleTimeline(open, days).ideasDue;
   const categoryOf = new Map(categories.map((c) => [c.id, c]));
 
   return (
@@ -40,7 +47,14 @@ export default async function IdeasPage() {
         title="Ideas"
         description="Propose an event – or get inspired by what ran before. The Events team builds each month's schedule from the ideas; by default you become its OC."
       />
-      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} today={berlinDate(new Date(nowMs()).toISOString())} categories={categories} formats={formats}>
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-esn/20 bg-esn/5 px-4 py-3 text-sm" data-testid="ideas-deadline">
+        <span className="text-esn-dark">
+          💡 Ideas for <strong>{monthLabel(open)}</strong> are due <strong>{formatDateTime(due)}</strong>
+          <span className="text-gray-600"> ({relativeDue(due, now)})</span>.
+        </span>
+        <span className="text-gray-600">After that they go into {monthLabel(addMonths(open, 1))} or later – ideas for next year are welcome any time.</span>
+      </div>
+      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats}>
         <Card>
           <CardHeader>
             <CardTitle>Your ideas</CardTitle>

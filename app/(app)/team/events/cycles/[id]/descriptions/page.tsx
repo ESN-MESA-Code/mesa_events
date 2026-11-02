@@ -11,6 +11,8 @@ import { DESCRIPTION_STATUS } from "@/components/status";
 import { DeadlineControl } from "../CycleControls";
 import { RemindButton } from "@/components/RemindButton";
 import { cn } from "@/lib/utils";
+import { cycleTimeline } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 
 export const metadata: Metadata = { title: "Descriptions" };
 
@@ -27,17 +29,21 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
   if (!cycle) notFound();
   const now = nowMs();
 
-  const [{ data: overview }, { data: limitRows }, { data: cancelled }, { data: ocs }] = await Promise.all([
+  const [{ data: overview }, { data: limitRows }, { data: cancelled }, { data: ocs }, days] = await Promise.all([
     supabase.rpc("description_overview"),
     supabase.rpc("cycle_deadline_limits", { cycle: id }),
     supabase.from("events").select("id, title, starts_at, cancelled_by, cancel_reason").eq("cycle_id", id).eq("status", "cancelled").order("starts_at"),
     // Each event's OC, named in the list (usability review #21).
     supabase.from("assignments").select("event_id, profiles(full_name), events!inner(cycle_id)").eq("events.cycle_id", id).eq("role", "oc").eq("status", "active"),
+    loadTimelineDays(supabase),
   ]);
   const ocOf = new Map((ocs ?? []).map((a) => [a.event_id, (a.profiles as { full_name: string } | null)?.full_name ?? null]));
   const canEdit = hasRole(viewer.roles, "events");
   const rows = ((overview ?? []) as Row[]).filter((r) => r.cycle_id === id).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const latest = limitRows?.[0]?.description_latest ?? null;
+  // The timeline's day (round 2026-11-02), offered while it is ahead and allowed.
+  const standardDue = cycleTimeline(cycle.month, days).descriptionsDue;
+  const standard = Date.parse(standardDue) > now && (!latest || Date.parse(standardDue) <= Date.parse(latest)) ? { input: isoToBerlinInput(standardDue), label: formatDateTime(standardDue) } : null;
   const passed = !!cycle.description_deadline && Date.parse(cycle.description_deadline) <= now;
   const inCount = rows.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;
 
@@ -56,6 +62,7 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
             deadlineLabel={cycle.description_deadline ? formatDateTime(cycle.description_deadline) : null}
             passed={passed}
             latest={latest ? { input: isoToBerlinInput(latest), label: formatDateTime(latest) } : null}
+            standard={standard}
             canEdit={canEdit}
           />
         </CardContent>

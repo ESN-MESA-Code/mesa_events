@@ -911,3 +911,60 @@ pm run seed:staging). The small
   gates. The demo seed runs the same for the planned events and the history. Staging was sorted
   with it on 2026-11-02; the page stays for checking and for what no keyword matches.
 - **Staging reset:** "Reset demo data" wipes formats and keeps categories.
+
+## 2026-11-02 – The cycle timeline and a new Home
+
+Requested: make the organisation's timeline (in the month before the events' month: ideas by
+the 7th, helper form opens on the 10th, sign-up until the 15th, descriptions by the 20th)
+part of the app and visible; ideas for later months (next year) must stay possible. And a new
+Home without the leaderboard. Where the user did not choose, the recommended option was taken.
+
+**Timeline**
+- **One definition, two places:** `lib/timeline.ts` (pages) and `public.cycle_timeline(month)`
+  (guards, jobs) compute the same instants (a DB test compares them). Days of the month before;
+  deadlines at 23:59 Berlin, the form opens at 09:00. The days are the admin setting
+  `app_settings.cycle_timeline` (Admin → Settings), checked in the action and the database
+  (whole days 1–28, in order). An Events-only milestone, **roster confirmed**, is two days after
+  the form closes (the 17th): the OCs then have three days to write.
+- **Ideas close per month, never in general:** a member's idea (new, or moved by them) must be
+  dated in a month whose ideas deadline is still ahead (`guard_idea_date`); every later month is
+  open – ideas for next year welcome. The Events team is not bound (they add events anyway).
+  The idea form starts its date at the first open day and says which month's schedule the idea
+  goes into; "Propose this again" picks a date in an open month (`freshDate(…, earliestDay)`,
+  replacing "two weeks ahead").
+- **The form opens by itself** on the 10th (`open_due_forms()`, pg_cron every minute) for a cycle
+  still planning that has events on the schedule, closing on the 15th. An empty schedule stays
+  planning and shows as late; Events can still open earlier or with another deadline. Cycles are
+  **not** created automatically (the demo seed inserts them and would collide); the Events page
+  and Home's Events queue warn when the coming month has no cycle.
+- **The description deadline defaults to the 20th** when the roster is confirmed and none is set
+  (trigger before `guard_cycle_deadlines`, which checks it like a hand-set one: ahead, not after
+  the first event). As the deadline cancels events without a submitted description (round
+  2026-10-30), the 20th is binding from then on; Events can still change it before it passes.
+- **A reminder the day before** the description deadline (`remind_due_descriptions()`, every 15
+  minutes): the same `chat.remind_oc` job as the "Remind OC" button, once per event and
+  deadline, skipped when someone reminded that day already. Ideas and the form get no Chat
+  reminder – there is no members' space; Home, the navigation badge and the Ideas page show them.
+- **Off-standard dates are allowed but visible:** the form and description deadline fields start
+  with the standard date and say when a value differs.
+- **Late steps:** the cycle stepper shows each step's date; the current step turns red once its
+  date passed (ideas/schedule: the form's opening day; allocation/roster: the 17th) and the next
+  action says "Overdue since …".
+- **The calendar** marks the four dates of next month's cycle on their days (not in the
+  "Internal" view).
+
+**Home**
+- **The leaderboard left Home** (it keeps its page and navigation entry). The internal calendar
+  card's month grid and the member's own events in it repeated the Calendar and "My events": it
+  became **Coming up in MESA**, only internal events, meetings and office hours of the next four
+  weeks.
+- **Waiting for you** (only when something waits): unanswered volunteer forms and claims that
+  need payout details or the paper receipt – formerly a banner per form and a claims card.
+  An event's next step stays on the event under My events, never twice.
+- **Planning timeline** of the cycle members work towards (next month's events until their
+  descriptions are due, then the month after): the four dates with "in 5 days", and per date the
+  member's own state (ideas proposed for that month, answered or not, their descriptions as OC).
+  A deadline set on the cycle wins over the standard day.
+- **My events** with a date leaf per event; open slots with their date; team queues unchanged
+  (the Events queue warns about a missing cycle and shows a late cycle in red).
+

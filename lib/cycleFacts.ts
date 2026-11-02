@@ -5,6 +5,8 @@ import type { Db } from "@/lib/supabase/session";
 import { cycleProgress, type CycleFacts, type CycleProgress } from "@/lib/cycle";
 import { nowMs } from "@/lib/dates";
 import type { CycleStatus } from "@/lib/labels";
+import { cycleTimeline, type CycleTimeline } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 
 export interface CycleRow {
   id: string;
@@ -28,6 +30,8 @@ export type CycleWithProgress = CycleRow & {
   progress: CycleProgress;
   /** Events that happened and are not handed in yet, with what is missing. */
   handInOpen: HandInRow[];
+  /** The standard dates of the cycle (round 2026-11-02). */
+  timeline: CycleTimeline;
 };
 
 
@@ -42,10 +46,11 @@ const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)),
 export async function cyclesWithProgress(supabase: Db, cycles: CycleRow[]): Promise<CycleWithProgress[]> {
   if (!cycles.length) return [];
   const ids = cycles.map((c) => c.id);
-  const [{ data: events }, { data: overview }, { data: handIn }] = await Promise.all([
+  const [{ data: events }, { data: overview }, { data: handIn }, days] = await Promise.all([
     supabase.from("events").select("cycle_id").in("cycle_id", ids).neq("status", "dropped"),
     supabase.rpc("description_overview"),
     supabase.rpc("cycle_hand_in", { cycles: ids }),
+    loadTimelineDays(supabase),
   ]);
   const now = nowMs();
   return Promise.all(
@@ -61,8 +66,11 @@ export async function cyclesWithProgress(supabase: Db, cycles: CycleRow[]): Prom
       const mine = (overview ?? []).filter((o) => o.cycle_id === c.id);
       const running = (handIn ?? []).filter((h) => h.cycle_id === c.id && h.status !== "cancelled");
       const happened = running.filter((h) => Date.parse(h.starts_at) <= now);
+      const timeline = cycleTimeline(c.month, days);
       const facts: CycleFacts = {
         status: c.status,
+        timeline,
+        now,
         events: (events ?? []).filter((e) => e.cycle_id === c.id).length,
         openIdeas: ideas ?? 0,
         responses: (responses ?? []).length,
@@ -81,7 +89,7 @@ export async function cyclesWithProgress(supabase: Db, cycles: CycleRow[]): Prom
         },
       };
       const handInOpen = happened.filter((h) => !handedIn(h));
-      return { ...c, facts, progress: cycleProgress(facts), handInOpen };
+      return { ...c, facts, progress: cycleProgress(facts), handInOpen, timeline };
     })
   );
 }

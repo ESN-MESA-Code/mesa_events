@@ -14,7 +14,7 @@ export async function insertRow(table: string, row: Record<string, unknown>, key
   return { [key]: (data as Record<string, string>)[key] };
 }
 
-const idea = () => insertRow("event_ideas", { title: "RLS idea", proposed_date: "2027-01-10", proposer_id: USERS.member.id });
+const idea = () => insertRow("event_ideas", { title: "RLS idea", proposed_date: "2099-01-10", proposer_id: USERS.member.id });
 
 async function response(w: World): Promise<string> {
   const { data } = await admin.from("volunteer_responses").select("id").eq("cycle_id", w.cycle.id).eq("profile_id", USERS.member.id).maybeSingle();
@@ -35,13 +35,13 @@ export const SPECS_EXTRA: Spec[] = [
     insert: [
       {
         name: "own idea",
-        payload: (_w, role) => ({ id: uid(), title: "RLS new idea", proposed_date: "2027-01-11", proposer_id: userOf(role).id }),
+        payload: (_w, role) => ({ id: uid(), title: "RLS new idea", proposed_date: "2099-01-11", proposer_id: userOf(role).id }),
         allowed: MEMBERS,
         match: (p) => ({ id: p.id as string }),
       },
       {
         name: "idea in someone else's name",
-        payload: () => ({ id: uid(), title: "RLS forged idea", proposed_date: "2027-01-11", proposer_id: USERS.executive.id }),
+        payload: () => ({ id: uid(), title: "RLS forged idea", proposed_date: "2099-01-11", proposer_id: USERS.executive.id }),
         allowed: ["executive"],
         match: (p) => ({ id: p.id as string }),
       },

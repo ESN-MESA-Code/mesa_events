@@ -78,13 +78,18 @@ Added in the round of 2026-10-30 (decisions in docs/DECISIONS.md, "Internal even
 17. **Internal events** (not ESN activities): internal events members sign up to, Stammtisch (OC
     and helpers), Tuesday Talks and executive board meetings (presentation link; board meetings
     only for the executive board), office hours (OC and helpers, the same text). HR and the Vice
-    President plan a whole semester by drag and drop and "Repeat"; Home shows an internal calendar.
+    President plan a whole semester by drag and drop and "Repeat"; Home lists what comes up.
 18. **Cash boxes**: office hours (ESNcards sold internal/external) and events that sell drinks or
     the like count the box before and after; the OC signs off; Finance checks and books it.
 19. **Finance ledger**: other income and spending with categories, an event's revenue, Belege paid
     from the MESA account; a per-semester overview with reimbursements and cash boxes, per event.
-20. **Leaderboard** (own page `/leaderboard`, a teaser on Home): most events as OC / helped and most
+20. **Leaderboard** (own page `/leaderboard`; not on Home since 2026-11-02): most events as OC / helped and most
     office hours staffed per semester (earlier semesters browsable), active members and newbies.
+21. **Cycle timeline** (round 2026-11-02): in the month before the events' month, ideas are due
+    on the 7th, the volunteer form opens on the 10th (09:00) and closes on the 15th, descriptions
+    are due on the 20th (23:59 each; the days are an admin setting). Ideas for later months are
+    always welcome. The form opens by itself, the description deadline defaults to the 20th, OCs
+    are reminded the day before; Home, Ideas, the calendar and the Events pages show the dates.
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 

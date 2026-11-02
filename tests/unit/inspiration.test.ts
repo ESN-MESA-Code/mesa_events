@@ -76,12 +76,12 @@ describe("search and filters", () => {
 });
 
 describe("Propose this again", () => {
-  it("a fresh date: same day of the year, two weeks ahead at least, same weekday", () => {
-    // Thursday 6 November 2025 → a Thursday around 6 November 2026.
-    expect(freshDate("2025-11-06T18:00:00Z", "2026-10-01")).toBe("2026-11-05");
-    // Too close (within two weeks) → next year, still a Thursday.
-    expect(freshDate("2025-11-06T18:00:00Z", "2026-10-29")).toBe("2027-11-04");
-    expect(new Date(`${freshDate("2025-01-20T18:00:00Z", "2026-10-29")}T12:00:00Z`).getUTCDay()).toBe(new Date("2025-01-20T12:00:00Z").getUTCDay());
+  it("a fresh date: same day of the year, in a month still open for ideas, same weekday", () => {
+    // Thursday 6 November 2025 → a Thursday around 6 November 2026 (ideas for November still open).
+    expect(freshDate("2025-11-06T18:00:00Z", "2026-11-01")).toBe("2026-11-05");
+    // November closed for ideas → next year, still a Thursday.
+    expect(freshDate("2025-11-06T18:00:00Z", "2026-12-01")).toBe("2027-11-04");
+    expect(new Date(`${freshDate("2025-01-20T18:00:00Z", "2026-12-01")}T12:00:00Z`).getUTCDay()).toBe(new Date("2025-01-20T12:00:00Z").getUTCDay());
   });
 
   it("fills title, pitch from the hook, helpers and type", () => {

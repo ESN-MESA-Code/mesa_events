@@ -1,5 +1,20 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-11-02: Cycle timeline, new Home
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-02 – The
+cycle timeline and a new Home"). New migration `20261102000100`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Timeline | `lib/timeline.ts` + `cycle_timeline()`; admin setting `cycle_timeline` (7 / 10 / 15 / 20) | Unit: dates (DST, year change), open idea months, labels; DB: SQL = TS, setting checked |
+| Ideas | Closed per month after its 7th, later months always open; banner with countdown, date minimum and "goes into …" on /ideas; "Propose this again" dates in an open month | DB: member refused / later month and next year fine / Events free |
+| Form | Opens by itself on the 10th (closing the 15th) when the schedule has events; deadline field prefilled, off-standard note | DB: opens on the day, not before, not when empty, service role only |
+| Descriptions | Deadline defaults to the 20th on confirming; reminder to the OCs the day before | DB: default on confirm, reminder once |
+| Events team | Stepper dates, late step in red with "Overdue since …"; warning when the coming month has no cycle | Unit: notes, lateness |
+| Calendar | The four dates of next month's cycle on their days | – |
+| Home | Leaderboard removed; "Waiting for you"; planning timeline with the member's state; Coming up in MESA (internal only); date leaves | E2E: Home per role, volunteer form, internal sign-up |
+
 ## Round 2026-10-31 (2): Publishing calendar, pretix checklist, cash boxes
 
 Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-10-31 –

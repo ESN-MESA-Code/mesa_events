@@ -65,7 +65,7 @@ export function CycleNav({
       </div>
       <Card>
         <CardContent className="space-y-3 pt-5">
-          <Stepper steps={steps.map((s) => ({ label: s.label, state: s.state, note: s.note }))} label="Steps of this cycle" testId="cycle-stepper" />
+          <Stepper steps={steps.map((s) => ({ label: s.label, state: s.state, note: s.note, late: s.late }))} label="Steps of this cycle" testId="cycle-stepper" />
           <Link
             href={next.href}
             className={next.done ? "block text-sm text-emerald-700" : "block rounded-md border border-esn/30 bg-esn/5 px-3 py-2 text-sm hover:underline"}

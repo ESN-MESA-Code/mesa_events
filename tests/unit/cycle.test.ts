@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cycleProgress, type CycleFacts } from "@/lib/cycle";
+import { cycleTimeline } from "@/lib/timeline";
 
 const base: CycleFacts = {
   status: "planning",
@@ -62,5 +63,23 @@ describe("cycle steps", () => {
     expect(cycleProgress({ ...confirmed, handIn: { total: 2, happened: 1, done: 1 } }).done).toBe(false);
     // Every event dropped or cancelled: nothing left.
     expect(cycleProgress({ ...confirmed, handIn: { total: 0, happened: 0, done: 0 } })).toMatchObject({ done: true, summary: "done · no events ran" });
+  });
+
+  describe("the timeline (round 2026-11-02)", () => {
+    const timeline = cycleTimeline("2026-12-01");
+    it("dates each step; the form opens by itself", () => {
+      const p = cycleProgress({ ...base, events: 3, timeline, now: Date.parse("2026-11-08T10:00:00Z") });
+      expect(p.steps.map((s) => s.note)).toEqual(["ideas by 7 Nov", "by 10 Nov", "10–15 Nov", undefined, "by 17 Nov", "by 20 Nov", undefined, undefined]);
+      expect(p).toMatchObject({ late: false, action: "Set the event types – the form opens by itself on Tue 10 Nov, 09:00 (or open it earlier)" });
+    });
+
+    it("is late when the form did not open, or the roster is not confirmed in time", () => {
+      const p = cycleProgress({ ...base, timeline, now: Date.parse("2026-11-11T10:00:00Z") });
+      expect(p).toMatchObject({ late: true, due: timeline.formOpens });
+      expect(p.action).toMatch(/^Overdue since Tue 10 Nov: Add events/);
+      expect(p.steps.find((s) => s.state === "current")?.late).toBe(true);
+      expect(cycleProgress({ ...base, status: "allocated", timeline, now: Date.parse("2026-11-18T10:00:00Z") }).late).toBe(true);
+      expect(cycleProgress({ ...base, status: "allocated", timeline, now: Date.parse("2026-11-16T10:00:00Z") }).late).toBe(false);
+    });
   });
 });

@@ -10,6 +10,8 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { CalendarSubscribe } from "@/components/CalendarSubscribe";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
+import { cycleTimeline, milestones } from "@/lib/timeline";
+import { loadTimelineDays } from "@/lib/timelineLoad";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -34,7 +36,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const defaultMonth = Number(berlinDate(new Date(now).toISOString()).slice(8)) >= 25 ? addMonths(thisMonth, 1) : thisMonth;
   const month = parseMonthParam(sp.month) ?? defaultMonth;
 
-  const [{ data: events }, { data: internals }, { data: mine }, { data: mineInternal }, { data: slots }, { data: monthsRows }, { data: feed }] = await Promise.all([
+  const [{ data: events }, { data: internals }, { data: mine }, { data: mineInternal }, { data: slots }, { data: monthsRows }, { data: feed }, days] = await Promise.all([
     show === "internal"
       ? Promise.resolve({ data: [] })
       : supabase
@@ -55,6 +57,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     supabase.rpc("open_slots"),
     supabase.from("planning_cycles").select("month").order("month"),
     supabase.from("calendar_feeds").select("created_at, last_used_at").eq("profile_id", viewer.id).maybeSingle(),
+    loadTimelineDays(supabase),
   ]);
 
   // The months offered: a year back to the planned cycles ahead (and half a year of internal plans).
@@ -69,6 +72,25 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const list = events ?? [];
   const inner = (internals ?? []).map((i) => ({ ...i, kind: i.kind as InternalKind }));
   const today = berlinDate(new Date(now).toISOString());
+  // The timeline of next month's cycle falls in this month (round 2026-11-02): its deadlines on their days.
+  const short = monthLabel(addMonths(month, 1)).split(" ")[0];
+  const deadlines =
+    show === "internal"
+      ? []
+      : milestones(cycleTimeline(addMonths(month, 1), days), now).map((m) => ({
+          ...m,
+          day: berlinDate(m.at),
+          text: m.id === "ideas" ? `Ideas for ${short} due` : m.id === "formOpens" ? `Volunteer form for ${short} opens` : m.id === "formCloses" ? `Sign-up for ${short} closes` : `${short} descriptions due`,
+        }));
+  const deadlineStrip = deadlines.length > 0 && (
+    <p className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-900" data-testid="calendar-deadlines">
+      {deadlines.map((d) => (
+        <span key={d.id} className={cn(d.state === "passed" && "text-gray-400 line-through")}>
+          ⏰ {formatDate(d.at).slice(0, -5)} · {d.text}
+        </span>
+      ))}
+    </p>
+  );
   const query = (o: { view?: string; show?: Show }) => {
     const v = o.view ?? view;
     const s = o.show ?? show;
@@ -140,6 +162,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     day ? (
                       <div key={day} className={cn("min-h-24 rounded-md border p-1 space-y-1", day < today ? "border-gray-100 bg-gray-50 opacity-60" : day === today ? "border-esn/40 bg-white" : "border-gray-200 bg-white")}>
                         <p className={cn("text-[11px] font-semibold tabular-nums", day === today ? "text-esn" : "text-gray-500")}>{Number(day.slice(8))}</p>
+                        {deadlines
+                          .filter((d) => d.day === day)
+                          .map((d) => (
+                            <p key={d.id} className="rounded border border-dashed border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[11px] leading-tight text-amber-900" data-testid={`cal-deadline-${d.id}`}>
+                              ⏰ {d.text}
+                            </p>
+                          ))}
                         {list
                           .filter((e) => berlinDate(e.starts_at) === day)
                           .map((e) => (
@@ -187,7 +216,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 </p>
               )}
             </div>
-            {/* Phones: the days with events as a list. */}
+            {/* Phones: the deadlines, then the days with events as a list. */}
+            <div className="sm:hidden">{deadlineStrip}</div>
             <ol className="sm:hidden divide-y divide-gray-100">
               {!rows.length && <EmptyState>Nothing in {monthLabel(month)}.</EmptyState>}
               {rows.map((r) =>
@@ -216,6 +246,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       ) : (
         <Card>
           <CardContent className="p-0">
+            {deadlineStrip && <div className="px-4 pt-3">{deadlineStrip}</div>}
             {!rows.length ? (
               <EmptyState>Nothing in {monthLabel(month)}.</EmptyState>
             ) : (

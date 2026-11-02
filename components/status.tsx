@@ -48,6 +48,8 @@ export interface StepView {
   href?: string;
   /** The page shown is this step's. */
   here?: boolean;
+  /** The current step is behind the cycle's timeline (round 2026-11-02). */
+  late?: boolean;
 }
 
 /**
@@ -77,7 +79,7 @@ export function Stepper({ steps, label, compact = false, testId }: { steps: Step
         const chip = cn(
           "inline-flex flex-col rounded-full px-2 py-0.5 font-medium",
           s.state === "done" && "bg-emerald-50 text-emerald-800",
-          s.state === "current" && "bg-esn text-white",
+          s.state === "current" && (s.late ? "bg-red-600 text-white" : "bg-esn text-white"),
           s.state === "todo" && "bg-gray-100 text-gray-500",
           s.state === "failed" && "bg-red-50 text-red-700",
           s.href && "hover:ring-2 hover:ring-esn/40",
@@ -94,7 +96,7 @@ export function Stepper({ steps, label, compact = false, testId }: { steps: Step
           </>
         );
         return (
-          <li key={s.label} className="flex items-center gap-1" aria-current={s.here ? "page" : s.state === "current" ? "step" : undefined} data-state={s.state}>
+          <li key={s.label} className="flex items-center gap-1" aria-current={s.here ? "page" : s.state === "current" ? "step" : undefined} data-state={s.state} data-late={s.late || undefined}>
             {i > 0 && <span aria-hidden="true" className="text-gray-300">›</span>}
             {s.href ? (
               <Link href={s.href} className={chip}>

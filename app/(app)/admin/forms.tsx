@@ -5,6 +5,7 @@ import { Button, Input, Label, Select } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { APP_ROLES, ROLE_LABELS } from "@/lib/roles";
 import { addManualRole, updateSetting } from "@/app/actions/admin";
+import { FORM_OPENS_AT, parseTimelineDays, timelineDaysError, timelineSetting, type TimelineDays } from "@/lib/timeline";
 
 export function AddRoleForm() {
   const { run, pending, error } = useAction();
@@ -48,7 +49,7 @@ export function SettingsForm({ settings }: { settings: Record<string, unknown> }
   const [threshold, setThreshold] = useState(String(Number(settings.early_payout_threshold_cents ?? 10000) / 100));
   const [notify, setNotify] = useState(settings.chat_notifications !== false);
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -92,11 +93,48 @@ export function SettingsForm({ settings }: { settings: Record<string, unknown> }
           Notify OCs in Chat about roster changes
         </label>
       </div>
+      <TimelineForm value={settings.cycle_timeline} pending={pending} save={(value) => run(updateSetting, { key: "cycle_timeline", value }, undefined, "Timeline saved.")} />
       {error && (
         <p role="alert" className="sm:col-span-3 text-xs text-red-600">
           {error}
         </p>
       )}
     </div>
+  );
+}
+
+/** The cycle's timeline (round 2026-11-02): four days of the month before the events. */
+function TimelineForm({ value, pending, save }: { value: unknown; pending: boolean; save: (v: ReturnType<typeof timelineSetting>) => void }) {
+  const [days, setDays] = useState(() => parseTimelineDays(value));
+  const problem = timelineDaysError(days);
+  const fields: Array<[keyof TimelineDays, string]> = [
+    ["ideasDue", "Ideas due (23:59)"],
+    ["formOpens", `Form opens (${FORM_OPENS_AT})`],
+    ["formCloses", "Sign-up closes (23:59)"],
+    ["descriptionsDue", "Descriptions due (23:59)"],
+  ];
+  return (
+    <form
+      className="sm:col-span-3 space-y-2 border-t border-gray-100 pt-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!problem) save(timelineSetting(days));
+      }}
+      data-testid="timeline-setting"
+    >
+      <p className="text-sm font-medium text-gray-900">Cycle timeline – days of the month before the events&apos; month</p>
+      <div className="flex flex-wrap items-end gap-3">
+        {fields.map(([k, label]) => (
+          <div key={k}>
+            <Label htmlFor={`s-${k}`}>{label}</Label>
+            <Input id={`s-${k}`} type="number" min={1} max={28} className="w-24" value={String(days[k])} onChange={(e) => setDays({ ...days, [k]: Number(e.target.value) })} />
+          </div>
+        ))}
+        <Button variant="outline" disabled={pending || !!problem}>
+          Save
+        </Button>
+      </div>
+      {problem && <p className="text-xs text-amber-800">{problem}</p>}
+    </form>
   );
 }

@@ -129,7 +129,7 @@ test("Events: the month's cycle and events; planning a new month from the list",
 
   await as(USERS.events);
   await page.goto(`/team/events?month=${month}`);
-  await expect(page.getByTestId("month-stepper").locator('[aria-current="step"]')).toHaveText(/Descriptions$/);
+  await expect(page.getByTestId("month-stepper").locator('[aria-current="step"]')).toHaveText(/Descriptions\s*by \d+ \w+$/);
   await expect(page.getByTestId("month-next")).toHaveAttribute("href", `/team/events/cycles/${cycle!.id}/descriptions`);
   await expect(page.getByTestId(`month-event-${short.id}`).getByTestId("staffing")).toHaveText(`OC ${USERS.oc.name} · 0/2 helpers`);
   await expect(page.getByTestId(`month-event-${full.id}`).getByTestId("description")).toHaveText("Description: Waiting for Comms review");

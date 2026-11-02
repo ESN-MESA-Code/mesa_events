@@ -6,10 +6,11 @@ import { Alert, Button, Input, Label } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { createCycle } from "@/app/actions/planning";
 
-export function NewCycleForm() {
+/** `suggested` ("2026-12"): the month the timeline plans next, prefilled. */
+export function NewCycleForm({ suggested = "" }: { suggested?: string }) {
   const router = useRouter();
   const { run, pending, error } = useAction();
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(suggested);
   return (
     <form
       className="flex flex-wrap items-end gap-2"

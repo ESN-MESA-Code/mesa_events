@@ -11,6 +11,8 @@ import { proposeIdea } from "@/app/actions/planning";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/labels";
 import { suggestCategory, type Category, type Format } from "@/lib/formats";
 import type { IdeaPrefill } from "@/lib/inspiration";
+import { cycleTimeline, type TimelineDays } from "@/lib/timeline";
+import { formatDate, formatDateTime, monthLabel } from "@/lib/dates";
 
 const schema = z.object({
   title: z.string().trim().min(1, "Give it a name").max(200),
@@ -30,16 +32,38 @@ const EMPTY: Values = { title: "", proposed_date: "", pitch: "", helpers_needed:
  * `prefill` ("Propose this again" from Get inspired) fills the form (the
  * workspace mounts a new form for each one). The category follows the title (suggested
  * from the keywords) until the member picks one; a format brings its
- * category, type and helpers (round 2026-11-01).
+ * category, type and helpers (round 2026-11-01). The date starts at
+ * `earliest`: months whose ideas deadline passed are closed, every later one
+ * is open (round 2026-11-02).
  */
-export function IdeaForm({ prefill, categories, formats }: { prefill?: (IdeaPrefill & { nonce: number }) | null; categories: Category[]; formats: Format[] }) {
+export function IdeaForm({
+  prefill,
+  categories,
+  formats,
+  earliest,
+  days,
+}: {
+  prefill?: (IdeaPrefill & { nonce: number }) | null;
+  categories: Category[];
+  formats: Format[];
+  earliest: string;
+  days: TimelineDays;
+}) {
   const { run, pending, error } = useAction();
+  const checked = useMemo(
+    () => schema.refine((v) => v.proposed_date >= earliest, { path: ["proposed_date"], message: `Ideas for that month are closed – pick a date from ${formatDate(`${earliest}T12:00:00Z`)} on` }),
+    [earliest]
+  );
   const { register, handleSubmit, reset, setValue, getValues, control, formState } = useForm<Values>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(checked),
     defaultValues: prefill ? { ...EMPTY, ...prefill, category_id: prefill.category_id ?? "", format_id: prefill.format_id ?? "" } : EMPTY,
   });
   const e = formState.errors;
-  const [title, categoryId, formatId] = useWatch({ control, name: ["title", "category_id", "format_id"] });
+  const [title, categoryId, formatId, date] = useWatch({ control, name: ["title", "category_id", "format_id", "proposed_date"] });
+  // Which month's schedule the idea goes into, and until when ideas for it are taken.
+  const dateHint = /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") && date! >= earliest
+    ? `Goes into the ${monthLabel(`${date!.slice(0, 7)}-01`)} schedule – ideas for it are due ${formatDateTime(cycleTimeline(`${date!.slice(0, 7)}-01`, days).ideasDue)}.`
+    : `From ${formatDate(`${earliest}T12:00:00Z`)} on – any later month is fine, next year too.`;
   // The member chose the category (or it came with "Propose this again"): no more suggestions.
   const [picked, setPicked] = useState(!!prefill?.category_id);
 
@@ -66,7 +90,7 @@ export function IdeaForm({ prefill, categories, formats }: { prefill?: (IdeaPref
     <form
       className="space-y-4"
       onSubmit={handleSubmit((v) => {
-        const p = schema.parse(v);
+        const p = checked.parse(v);
         run(proposeIdea, { ...p, type_suggestion: p.type_suggestion || null, category_id: p.category_id || null, format_id: p.format_id || null }, () => {
           setPicked(false);
           reset(EMPTY);
@@ -84,8 +108,8 @@ export function IdeaForm({ prefill, categories, formats }: { prefill?: (IdeaPref
         </Field>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message}>
-          <Input id="idea-date" type="date" {...register("proposed_date")} />
+        <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message} hint={e.proposed_date ? undefined : dateHint}>
+          <Input id="idea-date" type="date" min={earliest} {...register("proposed_date")} />
         </Field>
         <Field label="Helpers needed" htmlFor="idea-helpers" error={e.helpers_needed?.message}>
           <Input id="idea-helpers" type="number" min={0} max={50} {...register("helpers_needed")} />
