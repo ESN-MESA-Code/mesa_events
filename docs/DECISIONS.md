@@ -1069,3 +1069,74 @@ Decisions:
 - **Home, the Comms queue:** a new figure "Upcoming events still to plan" – upcoming events of
   this month and the three ahead (what the board lists) missing a required schedule channel (Telegram, Instagram; skipped posts do not
   count) – leading to the board (`lib/publishingLoad.ts`, `stillToPlan()`).
+
+## 2026-11-03 – Telegram preview first, pictures, publish vs. advertise, Comms stages, hand-in to-do list
+
+- **The preview is what a Telegram post opens on.** Clicking a Telegram post shows the messages as
+  the channel will get them, every time (not only while unconfirmed), with "Confirm for …" and
+  "Confirm and publish now" (or "Publish again") right under them. The separate "Preview &
+  confirm" and "Picture & heading" links are gone.
+- **Pictures are added in the preview.** Choosing a file uploads it and saves it at once (no extra
+  Save); it shows on its message in the preview, where Telegram puts it. "Replace the picture" /
+  "Remove the picture" sit in the same panel, as does the heading of a post of several events. Each change takes the confirmation back, as before. After publishing the
+  upload is deleted (kept rule), so the preview of a published post says the picture is gone.
+- **A post of several events is one message per event.** Each event gets the same message as a
+  post of that event alone (title, full description), in the post's order – the short blocks of a
+  bundle are gone. The heading, when set, becomes its own first message ("📅 This week at ESN
+  MESA"). Each message may carry a picture (see below; photo with caption when it fits 1,024
+  characters, else photo then text – the bot's rule per message).
+- **Sign-up link:** an event whose pretix page is ticked with a link gets "🔗 Sign up: …" under
+  its message – now for single-event posts too (before only bundles listed it).
+- **Re-publishing** edits each message in place when the post still has the same messages (same
+  count and layouts); otherwise the old messages are deleted and the post is sent anew. The
+  stored state is `{ chatId, picture, messages: [{ layout, photoMessageId?, textMessageId? }],
+  messageId }`; posts published before this round (one layout at the top) are read as one
+  message, so they are still edited in place. The 4,096-character check runs per message and
+  names the event when the post has several.
+- **Hand-in status (OC's hand-in tab) as a to-do list.** The four items (attendance list, photos,
+  event report, receipts) are listed top to bottom instead of four columns of circle icons that
+  looked like radio buttons. Each row: a green check when done, an amber "To do" tag or a grey
+  "Later" tag, the item and its detail, and for open items a link to where it is done ("Sign
+  off →", "Write it →" …); the header says "2 of 4 done".
+- **"Publish" and "advertise" are two words now.** *Publish* is the event description in the
+  event's Chat space; *advertise* is the posts on Telegram and Instagram. The Comms board is the
+  **Advertisement schedule** (tab, page title); on it a post is "posted" ("Mark posted", "✓
+  posted", "Confirm and post now", "Post again"), and the channel chips say "posted" (pretix:
+  "set up") – only the Chat space says "published". Database values stay as they were
+  (`publication_posts.status = 'published'`).
+- **Approving publishes.** There is no separate Publish step: "Approve and publish" in the review
+  bar approves the description and requests the Chat publication at once
+  (`private.request_description_publish()` from `review_description()`, migration
+  `20261103000100`). Without a Chat space yet it goes out when the space is created (trigger on
+  `events.chat_space_name`). A re-approval after edits updates the message already posted, as
+  before. Approved descriptions never sent before this round are sent by the migration (upcoming
+  events with a space). `publish_description()` stays as the same request by hand (no button).
+- **The Comms stage track** (Events by stage) is now To write → In review → Approved · in the
+  Chat space → pretix page → Advertised → Event happened → Report. "Published" (merged into
+  Approved) and "ESN Activities uploaded" are gone: ESN Activities is the executive board's work
+  and keeps its own page. **pretix is a stage of its own before the advertising** – a chore for
+  every event, and the posts link to its page; the board warns "pretix page not set up yet" on a
+  post of an event without it (a warning, not a refusal). *Advertised* = posted (or skipped on
+  purpose) on every required advertising channel (Telegram, Instagram). Filters: To write, In
+  review, pretix to set up, To advertise, Waiting for the event, Report missing, Done; "Needs
+  Comms" = review, pretix, advertise, late. Row actions: Review, Tick pretix / Advertise (to the
+  board, event highlighted), Remind OC. The header counts "x of y upcoming advertised" instead of
+  ESN uploads.
+- **Home's Comms queue:** "Approved – ready to publish" is gone; "pretix pages to set up" and
+  "Upcoming events still to advertise" (this month and the three ahead) lead to the board.
+- **A picture per event's message.** In a post of several events every event's message has its
+  own "Add a picture" button (`publication_post_events.picture`, `set_post_event_picture()`,
+  migration `20261103000200`); the heading message keeps the post's picture. A post of one event
+  keeps one picture: the event's (setting it clears the post's own).
+- **Default pictures (Pictures tab, next to the schedule).** Comms chooses once a picture per
+  format (event series, e.g. Language Café) and per event type; an event's message without its own
+  picture takes its format's, else its type's, and the preview marks it "Default picture". They
+  live in the private bucket `advertising-pictures` (`library:<path>`) and are kept – unlike post
+  uploads, which go once the post is out. Comms sets them (`set_default_picture()`); Events and
+  executives see them. A demo reset on staging removes them with the formats.
+- **A clearer picture button:** an outline button with an image icon ("Add a picture" / "Replace
+  the picture") opens the file picker; choosing a file uploads and saves at once.
+- **Event colours on the board:** every event gets a colour dot (by date, ten colours), shown on
+  its list entry, on its date in the calendar and on every post that advertises it (a bundle
+  shows one dot per event). Pointing at an event (list or calendar) highlights its posts, as a
+  click did before. The legend explains it.

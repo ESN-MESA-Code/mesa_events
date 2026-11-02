@@ -99,6 +99,14 @@ Added in the round of 2026-10-30 (decisions in docs/DECISIONS.md, "Internal even
     posts go out; its list also holds the upcoming events of the next three months (big ones –
     specials and trips – first), so their posts are planned on any day before the event. Telegram posts of an
     event without an approved description can be planned, not confirmed.
+24. **Telegram preview first** (round 2026-11-03): a Telegram post opens on its preview, with the
+    pictures (added there, one per event's message; defaults per format or type on the Pictures
+    tab) and the buttons to confirm or post; a post of several events goes out as one message per
+    event, after its heading. The OC's hand-in status is a to-do list.
+25. **Publish vs. advertise** (round 2026-11-03): approving a description publishes it to the
+    Chat space by itself; the Comms board is the Advertisement schedule. The Comms stages are To
+    write → In review → Approved · in the Chat space → pretix page → Advertised → Event happened →
+    Report (ESN Activities has its own page).
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 

@@ -15,7 +15,10 @@ import { EsnUpload } from "@/components/EsnUpload";
 import { loadEsn } from "@/lib/esn/load";
 import type { EventReport } from "@/lib/esn/formData";
 import { hasRole } from "@/lib/roles";
-import { StepIcon } from "@/components/StepIcon";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type HandInState = "done" | "todo" | "later";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
@@ -68,53 +71,84 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
   const started = Date.parse(event.starts_at) <= nowMs();
   // Receipts and photos from the day of the event on (Berlin).
   const handInOpen = berlinDate(new Date(nowMs()).toISOString()) >= berlinDate(event.starts_at);
+  // What is left after the event, as a to-do list (round 2026-11-03).
+  const stateOf = (done: boolean): HandInState => (done ? "done" : started ? "todo" : "later");
+  const statusItems: Array<{ key: string; testId?: string; label: string; state: HandInState; detail: string; href?: string; action?: string }> = [
+    {
+      key: "attendance",
+      label: "Attendance list",
+      state: stateOf(!!list?.signed_off_at),
+      detail: list?.signed_off_at ? `Signed off (${list.headcount} counted)` : started ? "Not signed off yet" : "On the day",
+      href: `/events/${id}/attendance`,
+      action: "Sign off",
+    },
+    {
+      key: "photos",
+      label: "Photos in Drive",
+      state: stateOf(photosIn(photos)),
+      detail: photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "Ticked by hand" : started ? "None yet" : "After the event",
+      href: "#photos",
+      action: "Add photos",
+    },
+    {
+      key: "report",
+      testId: "report-status",
+      label: "Event report",
+      state: stateOf(!!report),
+      detail: report ? "Written" : started ? "Not written yet" : "After the event",
+      href: "#event-report",
+      action: "Write it",
+    },
+    {
+      key: "receipts",
+      testId: "receipts-status",
+      label: "Receipts and paper receipts",
+      state: stateOf(!!s.receipts && !s.belege_missing),
+      detail: receiptsStatus({
+        mine: (claims ?? []).length,
+        myMissing: (claims ?? []).filter((c) => c.status === "not_submitted").length,
+        all: s.receipts ?? 0,
+        allMissing: s.belege_missing ?? 0,
+        onTeam: !!myAssignment,
+      }),
+      href: myAssignment ? "#register-receipt" : undefined,
+      action: "Register one",
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <Card id="hand-in-status" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Hand-in status</CardTitle>
-          {!handInOpen && <Badge>Opens on {formatShortDate(event.starts_at)}</Badge>}
+          {!handInOpen ? <Badge>Opens on {formatShortDate(event.starts_at)}</Badge> : <span className="text-xs text-gray-500" data-testid="handin-count">{statusItems.filter((i) => i.state === "done").length} of {statusItems.length} done</span>}
         </CardHeader>
-        <CardContent className="text-sm grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="handin-status">
-          <p>
-            <StepIcon kind={list?.signed_off_at ? "done" : started ? "todo" : "later"} /> Attendance list{" "}
-            {list?.signed_off_at ? (
-              `signed off (${list.headcount} counted)`
-            ) : started ? (
-              <Link href={`/events/${id}/attendance`} className="text-esn hover:underline">
-                not signed off yet
-              </Link>
-            ) : (
-              <span className="text-gray-500">– on the day</span>
-            )}
-          </p>
-          <p>
-            <StepIcon kind={photosIn(photos) ? "done" : started ? "todo" : "later"} /> Photos in Drive:{" "}
-            {photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "ticked by hand" : started ? "none yet" : <span className="text-gray-500">– after the event</span>}
-          </p>
-          <p data-testid="report-status">
-            <StepIcon kind={report ? "done" : started ? "todo" : "later"} /> Event report{" "}
-            {report ? (
-              "written"
-            ) : started ? (
-              <a href="#event-report" className="text-esn hover:underline">
-                not written yet
-              </a>
-            ) : (
-              <span className="text-gray-500">– after the event</span>
-            )}
-          </p>
-          <p data-testid="receipts-status">
-            <StepIcon kind={s.receipts && !s.belege_missing ? "done" : started ? "todo" : "later"} />{" "}
-            {receiptsStatus({
-              mine: (claims ?? []).length,
-              myMissing: (claims ?? []).filter((c) => c.status === "not_submitted").length,
-              all: s.receipts ?? 0,
-              allMissing: s.belege_missing ?? 0,
-              onTeam: !!myAssignment,
-            })}
-          </p>
+        <CardContent>
+          {/* A to-do list, top to bottom (round 2026-11-03): ✓ done, "To do" open, "Later" not yet – no circles that look like buttons to press. */}
+          <ul className="divide-y divide-gray-100 text-sm" data-testid="handin-status">
+            {statusItems.map((i) => (
+              <li key={i.key} data-testid={i.testId} data-state={i.state} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
+                <span className="mt-0.5 flex w-14 shrink-0 justify-center">
+                  {i.state === "done" ? (
+                    <Check role="img" aria-label="Done" className="h-4 w-4 text-emerald-600" strokeWidth={3} />
+                  ) : (
+                    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", i.state === "todo" ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-500")}>
+                      {i.state === "todo" ? "To do" : "Later"}
+                    </span>
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block font-medium", i.state === "done" ? "text-gray-500" : "text-gray-900")}>{i.label}</span>
+                  <span className="block text-xs text-gray-600">{i.detail}</span>
+                </span>
+                {i.state === "todo" && i.href && (
+                  <Link href={i.href} className="shrink-0 text-xs font-medium text-esn hover:underline">
+                    {i.action} →
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

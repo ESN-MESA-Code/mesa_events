@@ -164,12 +164,12 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await expect(page.getByTestId("description-status")).toHaveText("Waiting for Comms review");
   });
 
-  await test.step("Comms approves and publishes to the Chat space with @all", async () => {
+  await test.step("Comms approves – it goes to the Chat space with @all by itself (round 2026-11-03)", async () => {
     await as(USERS.comms);
     await page.goto(`/events/${quizId}/description`);
-    await page.getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByTestId("description-status")).toHaveText("Approved – ready to publish");
-    await page.getByRole("button", { name: "Publish to the Chat space (@all)" }).click();
+    await page.getByRole("button", { name: "Approve and publish" }).click();
+    await expect(page.getByTestId("description-status")).toHaveText("Approved – going to the Chat space");
+    await expect(page.getByRole("button", { name: /^Publish/ })).toHaveCount(0);
     await expect
       .poll(async () => (await admin.from("descriptions").select("publish_requested_at").eq("event_id", quizId).single()).data!.publish_requested_at)
       .not.toBeNull();

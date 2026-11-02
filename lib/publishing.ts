@@ -10,6 +10,16 @@ export type ChannelState = "published" | "planned" | "skipped" | "not_planned";
 export const STATE_MARK: Record<ChannelState, string> = { published: "✓", planned: "⏰", not_planned: "–", skipped: "⨯" };
 export const STATE_LABEL: Record<ChannelState, string> = { published: "published", planned: "planned", not_planned: "not planned", skipped: "skipped" };
 
+/**
+ * A channel's state in words (round 2026-11-03): "published" is the
+ * description in the Chat space; on the advertising channels a post is
+ * "posted", and the pretix page is "set up".
+ */
+export function stateLabel(channel: string, state: ChannelState): string {
+  if (state !== "published" || channel === "chat") return STATE_LABEL[state];
+  return channel === "pretix" ? "set up" : "posted";
+}
+
 export interface PostEventFacts {
   id: string;
   title: string;
@@ -20,6 +30,8 @@ export interface PostEventFacts {
   price: string;
   /** When the description is due (the cycle's deadline), if known. */
   deadline?: string | null;
+  /** The pretix page is up (or pretix is off); unknown when left out. */
+  pretix?: boolean;
 }
 
 /** Why the platform will not post this to Telegram (the bot's rules): an unapproved description or a TBA price. */
@@ -33,8 +45,8 @@ export function telegramRefusal(events: PostEventFacts[]): string | null {
 
 /**
  * Warnings on a post card: planned before the description is approved,
- * after the event, a TBA price on Telegram, an event planned twice on the
- * same channel. `plannedOnChannel`: how many posts of this channel hold
+ * after the event, a TBA price on Telegram, no pretix page yet, an event
+ * planned twice on the same channel. `plannedOnChannel`: how many posts of this channel hold
  * the event (all of them, this one included).
  */
 export function postWarnings(post: { channel: string; scheduledFor: string; status: string }, events: PostEventFacts[], plannedOnChannel: Map<string, number>): string[] {
@@ -45,6 +57,8 @@ export function postWarnings(post: { channel: string; scheduledFor: string; stat
     if (!["approved", "published"].includes(e.description)) out.push(`“${e.title}”: description not approved yet${e.deadline ? ` (due ${formatShortDate(e.deadline)})` : ""}`);
     if (day > berlinDate(e.startsAt)) out.push(`“${e.title}”: planned after the event`);
     if (post.channel === "telegram" && isTbaPrice(e.price)) out.push(`“${e.title}”: price still TBA`);
+    // pretix comes before the advertising (round 2026-11-03): the posts link to it.
+    if (e.pretix === false) out.push(`“${e.title}”: pretix page not set up yet`);
     if ((plannedOnChannel.get(e.id) ?? 0) > 1) out.push(`“${e.title}”: planned more than once on this channel`);
   }
   return out;

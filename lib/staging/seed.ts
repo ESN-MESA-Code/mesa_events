@@ -1067,7 +1067,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
       const html = eventMessage(items[0]!).html;
       telegramId += 1;
       telegramMessages.push({ chat_id: TELEGRAM_CHAT, message_id: telegramId, kind: "text", text: html, created_at: iso(when), updated_at: iso(when) });
-      Object.assign(row, { link: `https://t.me/${TELEGRAM_CHAT.slice(1)}/${telegramId}`, telegram: json({ chatId: TELEGRAM_CHAT, layout: "text", picture: null, textMessageId: telegramId, messageId: telegramId }) });
+      Object.assign(row, { link: `https://t.me/${TELEGRAM_CHAT.slice(1)}/${telegramId}`, telegram: json({ chatId: TELEGRAM_CHAT, picture: null, messages: [{ layout: "text", textMessageId: telegramId }], messageId: telegramId }) });
     }
     if (channel === "telegram" && status === "planned") {
       jobs.push({ kind: "telegram.publish_post", payload: json({ post_id: id, version: 1 }), idempotency_key: `telegram.publish_post:${id}:1`, status: "pending", run_after: iso(when), created_at: row.created_at! });

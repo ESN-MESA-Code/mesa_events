@@ -9,12 +9,14 @@ import { coerceFields } from "@/lib/description/template";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
 import { CommsTabs } from "@/components/CommsTabs";
-import { bundleMessage, bundlePrice, eventMessage, plainText } from "@/lib/telegram/messages";
-import { ScheduleBoard, type BoardChannel, type BoardEvent, type BoardPost, type Coverage, type PretixChecklist } from "./ScheduleBoard";
+import { hasHeading, messagePictures, plainText, postMessages } from "@/lib/telegram/messages";
+import { loadDefaultPictures } from "@/lib/publishingLoad";
+import { ScheduleBoard, type BoardChannel, type BoardEvent, type BoardPost, type Coverage, type PreviewMessage, type PretixChecklist } from "./ScheduleBoard";
 
-export const metadata: Metadata = { title: "Publishing schedule" };
+export const metadata: Metadata = { title: "Advertisement schedule" };
 
-// The publishing schedule (brief 2026-10-29, E3; round 2026-10-31): the
+// The advertisement schedule (brief 2026-10-29, E3; round 2026-10-31; named so in round 2026-11-03 –
+// "publish" is the description in the Chat space): the
 // month's events listed on the left, the month as a calendar with the
 // events on their dates and the posts on theirs; Comms plans, bundles,
 // moves and publishes, and ticks pretix off per event. Events and
@@ -22,7 +24,7 @@ export const metadata: Metadata = { title: "Publishing schedule" };
 // go out; the list also holds the upcoming events of later months (big
 // ones first), so a party or trip weeks ahead is advertised from now on.
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ month?: string; event?: string }> }) {
-  const viewer = await requirePageRole(["comms", "events"], { executiveMayRead: true, page: "Publishing schedule" });
+  const viewer = await requirePageRole(["comms", "events"], { executiveMayRead: true, page: "Advertisement schedule" });
   const editable = hasRole(viewer.roles, "comms");
   const sp = await searchParams;
   const supabase = await createSessionClient();
@@ -41,7 +43,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     supabase.from("publication_channels").select("key, name, kind, schedulable, enabled, required").order("position"),
     supabase
       .from("publication_posts")
-      .select("id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, confirmed_at, publication_post_events(event_id, position)")
+      .select("id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, confirmed_at, publication_post_events(event_id, position, picture)")
       .gte("scheduled_for", new Date(Date.parse(`${from}T00:00:00Z`) - 86_400_000).toISOString())
       .order("scheduled_for"),
   ]);
@@ -69,26 +71,33 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const ids = [...new Set([...monthEvents.map((r) => r.event_id), ...monthPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id))])];
   const [{ data: eventRows }, { data: descriptions }] = ids.length
     ? await Promise.all([
-        supabase.from("events").select("id, title, starts_at, type, planning_cycles(description_deadline)").in("id", ids),
+        supabase.from("events").select("id, title, starts_at, type, format_id, planning_cycles(description_deadline)").in("id", ids),
         supabase.from("descriptions").select("event_id, status, fields, approved_fields").in("event_id", ids),
       ])
     : [{ data: [] }, { data: [] }];
   const desc = new Map((descriptions ?? []).map((d) => [d.event_id, d]));
   const fieldsOf = (id: string) => coerceFields(desc.get(id)?.approved_fields ?? desc.get(id)?.fields ?? {});
   const titleOf = (id: string) => (eventRows ?? []).find((e) => e.id === id)?.title ?? "";
-  // The Telegram text Comms looks at before confirming (what the job posts; sign-up links are added then).
-  const telegramPreview = (ids: string[], note: string) =>
-    plainText(
-      ids.length === 1
-        ? eventMessage({ ...fieldsOf(ids[0]), title: fieldsOf(ids[0]).title || titleOf(ids[0]) }).html
-        : bundleMessage(note, ids.map((id) => ({ title: fieldsOf(id).title || titleOf(id), startsAt: facts.get(id)?.startsAt ?? "", price: bundlePrice(fieldsOf(id)) }))).html
-    );
+  // The defaults of the Pictures tab (round 2026-11-03): an event's format's, else its type's.
+  const defaults = await loadDefaultPictures(supabase, eventRows ?? []);
+  // The Telegram messages Comms looks at before confirming – what the job posts, one per event, each with its picture (round 2026-11-03).
+  const telegramPreview = (evs: Array<{ event_id: string; picture: string | null }>, note: string, postPicture: string | null): PreviewMessage[] => {
+    const ids = evs.map((x) => x.event_id);
+    const texts = postMessages(note, ids.map((id) => ({ fields: { ...fieldsOf(id), title: fieldsOf(id).title || titleOf(id) }, link: pretix.done[id]?.link ?? null })));
+    const pictures = messagePictures(note, postPicture, evs.map((x) => ({ own: x.picture, fallback: defaults.get(x.event_id) ?? null })));
+    const head = hasHeading(note, ids.length);
+    return texts.map((t, i) => {
+      const eventId = head ? (i === 0 ? null : ids[i - 1]) : ids[i];
+      const own = eventId ? (evs.find((x) => x.event_id === eventId)?.picture ?? (!head && i === 0 ? postPicture : null)) : postPicture;
+      return { text: plainText(t.html), eventId, picture: pictures[i], isDefault: !!pictures[i] && !own };
+    });
+  };
   const facts = new Map<string, PostEventFacts>(
     (eventRows ?? []).map((e) => {
       const d = desc.get(e.id);
       return [
         e.id,
-        { id: e.id, title: e.title, startsAt: e.starts_at, description: d?.status ?? "missing", price: coerceFields(d?.approved_fields ?? d?.fields ?? {}).price, deadline: e.planning_cycles?.description_deadline ?? null },
+        { id: e.id, title: e.title, startsAt: e.starts_at, description: d?.status ?? "missing", price: coerceFields(d?.approved_fields ?? d?.fields ?? {}).price, deadline: e.planning_cycles?.description_deadline ?? null, pretix: !pretix.enabled || !!pretix.done[e.id] },
       ];
     })
   );
@@ -110,7 +119,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     }
   }
   const boardPosts: BoardPost[] = monthPosts.map((p) => {
-    const evs = [...p.publication_post_events].sort((a, b) => a.position - b.position).map((x) => x.event_id);
+    const ordered = [...p.publication_post_events].sort((a, b) => a.position - b.position);
+    const evs = ordered.map((x) => x.event_id);
     return {
       id: p.id,
       channel: p.channel,
@@ -127,7 +137,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       // Telegram: what the job would refuse – then there is nothing to confirm yet.
       refusal: p.channel === "telegram" && p.status === "planned" ? telegramRefusal(evs.map((id) => facts.get(id)!).filter(Boolean)) : null,
       warnings: postWarnings({ channel: p.channel, scheduledFor: p.scheduled_for, status: p.status }, evs.map((id) => facts.get(id)!).filter(Boolean), counts.get(p.channel) ?? new Map()),
-      preview: p.channel === "telegram" && evs.length ? telegramPreview(evs, p.note) : null,
+      preview: p.channel === "telegram" && evs.length ? telegramPreview(ordered, p.note, p.picture) : null,
     };
   });
   const boardEvents = monthEvents
@@ -145,7 +155,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Comms" description="Every event goes out on Telegram and Instagram: drag it from the list onto a day, bundle posts, publish – and tick pretix off once its page is up. The list also holds the events of later months, so big ones can be advertised weeks ahead. Telegram posts go out by themselves once confirmed.">
+      <PageHeader title="Comms" description="Every event is advertised on Telegram and Instagram once its pretix page is up: tick pretix off, drag the event from the list onto a day, bundle posts, post. The list also holds the events of the next months, so big ones can be advertised weeks ahead. Telegram posts go out by themselves once confirmed.">
         <div className="flex flex-wrap items-center gap-3">
           <MonthSelector
             options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}

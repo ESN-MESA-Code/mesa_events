@@ -59,3 +59,11 @@ export async function deletePost(input: unknown) {
 export async function setChannelEnabled(input: unknown) {
   return run(A.setChannelEnabled, input);
 }
+
+export async function setPostEventPicture(input: unknown) {
+  return run(A.setPostEventPicture, input);
+}
+
+export async function setDefaultPicture(input: unknown) {
+  return run(A.setDefaultPicture, input);
+}

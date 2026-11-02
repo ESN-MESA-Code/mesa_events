@@ -19,6 +19,26 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"advertising_pictures": {
+                  Row: {
+                    "event_type": Database["public"]['Enums']["event_type"] | null,"format_id": string | null,"id": string,"picture": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "advertising_pictures_format_id_fkey"
+      columns: ["format_id"]
+isOneToOne: true
+      referencedRelation: "event_formats"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"app_settings": {
                   Row: {
                     "key": string,"updated_at": string,"updated_by": string | null,"value": NonNullable<Json>
@@ -881,14 +901,14 @@ isOneToOne: true
                   ]
                 },"publication_post_events": {
                   Row: {
-                    "event_id": string,"position": number,"post_id": string
+                    "event_id": string,"picture": string | null,"position": number,"post_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "event_id": string,"position"?: number,"post_id": string
+                    "event_id": string,"picture"?: string | null,"position"?: number,"post_id": string
                   }
                   Update: {
-                    "event_id"?: string,"position"?: number,"post_id"?: string
+                    "event_id"?: string,"picture"?: string | null,"position"?: number,"post_id"?: string
                   }
                   Relationships: [
                     {
@@ -1572,6 +1592,9 @@ isOneToOne: false
 "set_channel_enabled":
 { Args: { "channel": string,"enabled": boolean }; Returns: undefined
                            },
+"set_default_picture":
+{ Args: { "format": string,"picture": string,"type": string }; Returns: undefined
+                           },
 "set_esncard_prices":
 { Args: { "external_cents": number,"internal_cents": number }; Returns: undefined
                            },
@@ -1583,6 +1606,9 @@ isOneToOne: false
                            },
 "set_payout_details":
 { Args: { "account_holder"?: string,"claim": string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: undefined
+                           },
+"set_post_event_picture":
+{ Args: { "event": string,"picture": string,"post": string }; Returns: undefined
                            },
 "set_pretix_ready":
 { Args: { "event": string,"link"?: string,"ready": boolean }; Returns: undefined

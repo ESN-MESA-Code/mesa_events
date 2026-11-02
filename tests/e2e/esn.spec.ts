@@ -39,14 +39,14 @@ test("report → ready to upload → link pasted by an executive → uploaded", 
   // The OC writes the report (prefilled from the list and the roster).
   await signInAs(context, baseURL!, USERS.oc);
   await page.goto(`/events/${event.id}/hand-in`);
-  await expect(page.getByTestId("report-status")).toContainText("not written yet");
+  await expect(page.getByTestId("report-status")).toContainText("Not written yet");
   const form = page.getByTestId("event-report-form");
   await expect(form.getByLabel("International participants")).toHaveValue("28");
   await expect(form.getByLabel("Organizers / volunteers")).toHaveValue("2");
   await form.getByLabel("What went well?").fill("Great mix of teams, lots of laughs.");
   await form.getByRole("button", { name: "Save the report" }).click();
   await expect(form.getByText("Thanks! Report saved.")).toBeVisible();
-  await expect(page.getByTestId("report-status")).toContainText("written");
+  await expect(page.getByTestId("report-status")).toContainText("Written");
   // The OC does not see the upload status (Comms, Events and executives only).
   await expect(page.locator("#esn-activities")).toHaveCount(0);
 

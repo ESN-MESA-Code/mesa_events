@@ -17,6 +17,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { PictureButton, UploadedPicture, pictureProblem } from "@/components/PostPicture";
 import { Alert, Badge, Button, Card, Input, Select } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import {
@@ -30,6 +31,7 @@ import {
   publishPostNow,
   removeFromPost,
   reorderPost,
+  setPostEventPicture,
   setPretixReady,
   skipPost,
 } from "@/app/actions/publishing";
@@ -37,7 +39,6 @@ import { DESCRIPTION_STATUS } from "@/components/status";
 import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
 import { calendarWeeks, dayDiff } from "@/lib/month";
 import { defaultPostDay, isBigEvent, trayGroups } from "@/lib/publishing";
-import { uploadPath } from "@/lib/telegram/picture";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +58,8 @@ export interface BoardEvent {
   description: string;
   /** standard, special, day_trip, weekend_trip – the big ones lead a later month in the list. */
   type: string | null;
+  /** Its colour on the board (set by the board): the same dot on the list, its date and its posts. */
+  color?: string;
 }
 
 /** An event's best post per channel, from every month (published wins over planned). */
@@ -66,6 +69,18 @@ export type Coverage = Record<string, Record<string, { status: "planned" | "publ
 export interface PretixChecklist {
   enabled: boolean;
   done: Record<string, { link: string | null }>;
+}
+
+/** One Telegram message of a post as the preview shows it (round 2026-11-03). */
+export interface PreviewMessage {
+  /** Plain text. */
+  text: string;
+  /** The event of the message; null for the heading. */
+  eventId: string | null;
+  /** Its picture: its own, else the default of its format or type. */
+  picture: string | null;
+  /** The picture is a default (Pictures tab), not one of this post. */
+  isDefault: boolean;
 }
 
 export interface BoardPost {
@@ -86,8 +101,8 @@ export interface BoardPost {
   warnings: string[];
   /** Telegram, planned: why the job would not post it (description not approved, TBA price) – nothing to confirm yet. */
   refusal: string | null;
-  /** Telegram: the text as it will be posted (plain). */
-  preview: string | null;
+  /** Telegram: the messages as they will be posted, one per event, each with its picture (round 2026-11-03). */
+  preview: PreviewMessage[] | null;
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -98,6 +113,17 @@ const CHANNEL_CHIP: Record<string, string> = {
   instagram: "border-pink-300 bg-pink-50 text-pink-900",
 };
 const chipOf = (channel: string) => CHANNEL_CHIP[channel] ?? "border-gray-300 bg-gray-50 text-gray-800";
+
+/**
+ * An event's colour (round 2026-11-03): its dot on the list, on its date and
+ * on every post that advertises it, so a post and its event are matched at a
+ * glance. By date order, so neighbours differ.
+ */
+const EVENT_COLORS = ["bg-rose-500", "bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-violet-500", "bg-orange-500", "bg-teal-500", "bg-fuchsia-500", "bg-lime-600", "bg-indigo-500"];
+
+function EventDot({ color, className }: { color?: string; className?: string }) {
+  return <span aria-hidden="true" className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white", color ?? "bg-gray-300", className)} />;
+}
 
 /** "in 3 days", "on the day", "2 days after!" – a post's day relative to its event. */
 function leadTime(postDay: string, eventStart: string): { text: string; late: boolean } {
@@ -126,13 +152,13 @@ function Draggable({ id, disabled, className, children, testId }: { id: string; 
 }
 
 /**
- * The publishing schedule (brief 2026-10-29, E3; round 2026-10-31): the
+ * The advertisement schedule (brief 2026-10-29, E3; round 2026-10-31): the
  * month's events listed on the left (as the roster lists its volunteers),
  * each with a chip per channel; the month as a calendar like the other
  * calendars, with the events on the day they take place (📅) and the posts
  * on the day they go out. Drag a channel chip onto a day to plan that
  * post, onto a post of the same channel to bundle the event into it, a
- * post to another day to move it. Click a post for its details (preview,
+ * post to another day to move it. Click a post for its details (Telegram's preview,
  * confirm, publish, skip …), an event to highlight its date and posts.
  * pretix is not scheduled: a tick per event once its page is up.
  * Round 2026-11-02: below the month's events the list holds the upcoming
@@ -172,7 +198,9 @@ export function ScheduleBoard({
   const [open, setOpen] = useState<string | null>(null);
   const [others, setOthers] = useState<string[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
-  const byId = new Map(events.map((e) => [e.id, e]));
+  const [hover, setHover] = useState<string | null>(null);
+  const colored = [...events].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).map((e, i) => ({ ...e, color: EVENT_COLORS[i % EVENT_COLORS.length] }));
+  const byId = new Map(colored.map((e) => [e.id, e]));
   const channelOf = new Map(channels.map((c) => [c.key, c]));
   const weeks = calendarWeeks(month);
   const days = weeks.flat().filter((d): d is string => !!d);
@@ -242,15 +270,18 @@ export function ScheduleBoard({
           key={e.id}
           type="button"
           onClick={() => setFocus(focus === e.id ? null : e.id)}
+          onMouseEnter={() => setHover(e.id)}
+          onMouseLeave={() => setHover(null)}
           className={cn("block w-full rounded bg-amber-100 px-1 py-0.5 text-left text-[11px] leading-tight text-amber-950 hover:bg-amber-200", focus === e.id && "ring-2 ring-amber-500")}
           aria-pressed={focus === e.id}
           data-testid={`cal-event-${e.id}`}
         >
+          <EventDot color={byId.get(e.id)?.color} className="mr-1 align-middle" />
           📅 <span className="tabular-nums font-semibold">{berlinTime(e.startsAt)}</span> <span className="break-words">{e.title}</span>
         </button>
       ))}
       {postsOn(d).map((p) => (
-        <PostChip key={p.id} post={p} byId={byId} editable={editable} focus={focus} onOpen={() => setOpen(p.id)} phone={phone} />
+        <PostChip key={p.id} post={p} byId={byId} editable={editable} focus={hover ?? focus} onOpen={() => setOpen(p.id)} phone={phone} />
       ))}
     </>
   );
@@ -261,12 +292,15 @@ export function ScheduleBoard({
         {others.length > 0 && <p className="text-xs text-gray-500">Also on the board: {others.join(", ")}</p>}
         {error && <Alert tone="error">{error}</Alert>}
         <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-          <EventList month={month} events={events} today={today} channels={channels} coverage={coverage} pretix={pretix} days={days} posts={posts} editable={editable} byId={byId} focus={focus} setFocus={setFocus} />
+          <EventList month={month} events={colored} setHover={setHover} today={today} channels={channels} coverage={coverage} pretix={pretix} days={days} posts={posts} editable={editable} byId={byId} focus={focus} setFocus={setFocus} />
 
           <Card className="p-3">
             <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600" data-testid="board-legend">
               <span>
                 <span className="rounded bg-amber-100 px-1 text-amber-900">📅 Event</span> = when it takes place
+              </span>
+              <span>
+                <EventDot color="bg-rose-500" className="align-middle" /> = one event: its dot is on its date and on every post advertising it (point at an event to see its posts)
               </span>
               {channels.map((c) => (
                 <span key={c.key}>
@@ -367,6 +401,11 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
             unconfirmed && "border-dashed"
           )}
         >
+          <span className="mr-1 inline-flex gap-0.5 align-middle" data-testid="event-dots">
+            {post.events.map((id) => (
+              <EventDot key={id} color={byId.get(id)?.color} />
+            ))}
+          </span>
           <span className="font-semibold">{SHORT[post.channel] ?? post.channel}</span> <span className="tabular-nums">{berlinTime(post.scheduledFor)}</span> {mark}
           {post.warnings.length > 0 && (
             <span className="text-amber-700" aria-label="Has warnings">
@@ -388,6 +427,7 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
 function EventList({
   month,
   events,
+  setHover,
   today,
   channels,
   coverage,
@@ -401,6 +441,7 @@ function EventList({
 }: {
   month: string;
   events: BoardEvent[];
+  setHover: (id: string | null) => void;
   today: string;
   channels: BoardChannel[];
   coverage: Coverage;
@@ -421,8 +462,15 @@ function EventList({
   const item = (e: BoardEvent) => {
     const past = berlinDate(e.startsAt) < today;
     return (
-      <li key={e.id} data-testid={`tray-${e.id}`} className={cn("rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}>
-        <button type="button" className="block text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
+      <li
+        key={e.id}
+        data-testid={`tray-${e.id}`}
+        onMouseEnter={() => setHover(e.id)}
+        onMouseLeave={() => setHover(null)}
+        className={cn("rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}
+      >
+        <button type="button" className="flex items-center gap-1.5 text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
+          <EventDot color={e.color} />
           {e.title}
           {isBigEvent(e.type) && (
             <Badge tone="amber" className="ml-1 align-middle">
@@ -446,7 +494,7 @@ function EventList({
                 testId={`chip-${c.key}-${e.id}`}
                 className={cn("rounded border px-1.5 py-0.5", chipOf(c.key), !p && c.required && "border-red-300 bg-red-50 text-red-800", p?.status === "published" && "border-emerald-400")}
               >
-                <span title={`${c.name}: ${!p ? "not planned" : p.status}`}>
+                <span title={`${c.name}: ${!p ? "not planned" : p.status === "published" ? "posted" : p.status}`}>
                   {SHORT[c.key] ?? c.name} {mark}
                 </span>
               </Draggable>
@@ -485,7 +533,7 @@ function EventList({
   );
 }
 
-/** pretix: ticked once the event's pretix page is up; the link (optional) goes into Telegram bundles. */
+/** pretix: ticked once the event's pretix page is up; the link (optional) goes under the event's Telegram message ("Sign up"). */
 function PretixTick({ event, state, editable }: { event: BoardEvent; state: { link: string | null } | null; editable: boolean }) {
   const { run, pending, error } = useAction();
   const [link, setLink] = useState(state?.link ?? "");
@@ -597,37 +645,124 @@ function PostDialog({ title, onClose, children }: { title: string; onClose: () =
   );
 }
 
-/** A picture uploaded for a Telegram post, shown from the private bucket. */
-function UploadedPicture({ picture }: { picture: string | null }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const path = uploadPath(picture);
-  useEffect(() => {
-    if (!path) return;
-    let alive = true;
-    supabase.storage
-      .from("post-pictures")
-      .createSignedUrl(path, 600)
-      .then(({ data }) => alive && setUrl(data?.signedUrl ?? null));
-    return () => {
-      alive = false;
-    };
-  }, [path]);
-  if (!path) return picture ? <p className="truncate text-gray-500">🖼 {picture}</p> : null;
-  // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed URL of a private file
-  return url ? <img src={url} alt="Picture of the post" className="max-h-40 rounded border border-gray-200 object-contain" /> : <p className="text-gray-500">🖼 Loading the picture…</p>;
+/**
+ * A Telegram post as the channel will show it (round 2026-11-03): open by
+ * default, one bubble per message (one per event, after the heading of a
+ * post of several), each with its picture – its own, else the default of
+ * its format or type – and a button to add, replace or remove it (saved at
+ * once); then confirmed or posted from the same panel.
+ */
+function TelegramPanel({ post, postName, editable, byId }: { post: BoardPost; postName: string; editable: boolean; byId: Map<string, BoardEvent> }) {
+  const { run, pending, error, setError, confirm } = useAction();
+  const [uploading, setUploading] = useState<number | null>(null);
+  const [note, setNote] = useState(post.note);
+  const messages = post.preview ?? [];
+  const canEdit = editable && post.status !== "skipped";
+
+  async function upload(i: number, file: File) {
+    setError(null);
+    const problem = pictureProblem(file);
+    if (problem) return setError(problem);
+    setUploading(i);
+    const path = `${post.id}/${crypto.randomUUID()}.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
+    const { error: e } = await supabase.storage.from("post-pictures").upload(path, file, { contentType: file.type });
+    setUploading(null);
+    if (e) return setError(`Upload failed: ${e.message}`);
+    setPicture(messages[i], `upload:${path}`);
+  }
+  // The heading's picture is the post's; an event's is its own in this post.
+  const setPicture = (m: PreviewMessage, picture: string) =>
+    m.eventId ? run(setPostEventPicture, { post_id: post.id, event_id: m.eventId, picture }) : run(editPost, { post_id: post.id, picture, note: post.note });
+
+  return (
+    <div className="space-y-2 rounded border border-esn/30 bg-esn/5 p-2" data-testid="telegram-preview">
+      <p className="font-medium text-esn-dark">
+        This goes to the Telegram channel{messages.length > 1 ? ` as ${messages.length} messages` : ""}:
+      </p>
+      <ol className="max-h-[55vh] space-y-2 overflow-auto">
+        {messages.map((m, i) => (
+          <li key={i} className="space-y-1.5 rounded bg-white p-1.5 shadow-sm" data-testid="telegram-message">
+            {messages.length > 1 && (
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-gray-400">
+                {m.eventId && <EventDot color={byId.get(m.eventId)?.color} />}
+                Message {i + 1}
+                {m.eventId ? ` · ${byId.get(m.eventId)?.title ?? "Event"}` : " · heading"}
+              </p>
+            )}
+            {m.picture && <UploadedPicture picture={m.picture} />}
+            {m.picture && m.isDefault && <p className="text-xs text-gray-500">Default picture (Pictures tab)</p>}
+            <pre className="whitespace-pre-wrap break-words font-sans text-xs text-gray-800">{m.text}</pre>
+            {canEdit && (
+              <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-1.5" data-testid="telegram-picture">
+                <PictureButton label={m.picture && !m.isDefault ? "Replace the picture" : "Add a picture"} disabled={uploading !== null || pending} onFile={(f) => upload(i, f)} />
+                {m.picture && !m.isDefault && (
+                  <button type="button" className="text-xs text-gray-600 hover:underline" disabled={pending} onClick={() => setPicture(m, "")}>
+                    Remove the picture
+                  </button>
+                )}
+                {uploading === i && <span className="text-xs text-gray-500">Uploading…</span>}
+              </div>
+            )}
+          </li>
+        ))}
+        {!messages.length && <li className="text-gray-500">–</li>}
+      </ol>
+      {canEdit && post.events.length > 1 && (
+        <form className="flex gap-1" onSubmit={(e) => (e.preventDefault(), run(editPost, { post_id: post.id, picture: post.picture ?? "", note }))}>
+          <Input aria-label="Heading of the bundle" placeholder="Heading message, e.g. This week at ESN MESA (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          {note.trim() !== post.note && (
+            <Button size="sm" variant="outline" disabled={pending}>
+              Save
+            </Button>
+          )}
+        </form>
+      )}
+      {post.refusal && (
+        <p className="text-amber-800" data-testid="telegram-refusal">
+          {post.refusal} It can stay planned; confirm it once that is sorted – until then it does not go out.
+        </p>
+      )}
+      {canEdit && !post.refusal && (
+        <div className="flex flex-wrap gap-2">
+          {post.status === "planned" && !post.confirmed && (
+            <Button size="sm" disabled={pending || uploading !== null} onClick={() => run(confirmPost, { post_id: post.id })}>
+              Confirm for {formatDateTime(post.scheduledFor)}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={post.status === "published" ? "default" : "outline"}
+            disabled={pending || uploading !== null}
+            onClick={async () => {
+              const again = post.status === "published";
+              if (
+                await confirm({
+                  title: again ? "Edit the Telegram post now?" : "Post this to the Telegram channel now?",
+                  body: again ? `The channel's messages for ${postName} are replaced with the preview.` : `${postName} goes out to everyone in the channel at once, not at its planned time.`,
+                  confirmLabel: again ? "Edit the post" : "Post now",
+                })
+              )
+                run(publishPostNow, { post_id: post.id }, undefined, again ? "Telegram post updated." : "Posted to the Telegram channel.");
+            }}
+          >
+            {post.status === "published" ? "Post again (edits the messages)" : "Confirm and post now"}
+          </Button>
+        </div>
+      )}
+      {post.confirmed && post.status === "planned" && <p className="text-xs text-gray-500">Confirmed – it goes out by itself at its time. Any change takes the confirmation back.</p>}
+      {error && <p className="text-red-600">{error}</p>}
+    </div>
+  );
 }
 
 function PostDetails({ post, channel, byId, editable }: { post: BoardPost; channel: BoardChannel; byId: Map<string, BoardEvent>; editable: boolean }) {
-  const { run, pending, error, setError, confirm } = useAction();
+  const { run, pending, error, confirm } = useAction();
   // What a confirm dialog names (usability review #8).
   const postName = `the ${channel.name} post of ${formatDateTime(post.scheduledFor)} (${post.events.map((id) => byId.get(id)?.title ?? "?").join(", ")})`;
-  const [mode, setMode] = useState<"" | "move" | "edit" | "publish" | "skip" | "preview">(post.channel === "telegram" && post.status === "planned" && !post.confirmed ? "preview" : "");
+  const [mode, setMode] = useState<"" | "move" | "publish" | "skip">("");
   const [day, setDay] = useState(berlinDate(post.scheduledFor));
   const [time, setTime] = useState(berlinTime(post.scheduledFor));
   const [text, setText] = useState("");
-  const [picture, setPicture] = useState(post.picture ?? "");
-  const [uploading, setUploading] = useState(false);
-  const [note, setNote] = useState(post.note);
   const telegram = channel.key === "telegram";
   const postDay = berlinDate(post.scheduledFor);
   const move = (i: number, by: number) => {
@@ -636,21 +771,9 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
     run(reorderPost, { post_id: post.id, event_ids: ids });
   };
 
-  async function upload(file: File) {
-    setError(null);
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return setError("Telegram takes JPG, PNG or WebP pictures (no HEIC).");
-    if (file.size > 10 * 1024 * 1024) return setError("The picture is larger than 10 MB – use a smaller copy.");
-    setUploading(true);
-    const path = `${post.id}/${crypto.randomUUID()}.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
-    const { error: e } = await supabase.storage.from("post-pictures").upload(path, file, { contentType: file.type });
-    setUploading(false);
-    if (e) return setError(`Upload failed: ${e.message}`);
-    setPicture(`upload:${path}`);
-  }
-
   const badge =
     post.status === "published"
-      ? { tone: "green" as const, text: "✓ published" }
+      ? { tone: "green" as const, text: "✓ posted" }
       : post.status === "skipped"
         ? { tone: "gray" as const, text: "⨯ skipped" }
         : telegram && !post.confirmed
@@ -710,21 +833,13 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
           ⚠ {w}
         </p>
       ))}
-      {editable && post.status !== "skipped" && (
+      {/* Telegram: the preview first, with the picture and the buttons to post (round 2026-11-03). */}
+      {telegram && post.status !== "skipped" && <TelegramPanel key={`${post.id}:${post.note}`} post={post} postName={postName} editable={editable} byId={byId} />}
+      {editable && post.status !== "skipped" && (channel.kind === "manual" || post.status === "planned") && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-gray-100 pt-2">
-          {telegram && (
-            <>
-              <button type="button" className="font-medium text-esn hover:underline" onClick={() => setMode(mode === "preview" ? "" : "preview")}>
-                {post.status === "published" ? "Preview & publish again" : post.confirmed ? "Preview" : "Preview & confirm"}
-              </button>
-              <button type="button" className="text-esn hover:underline" onClick={() => setMode(mode === "edit" ? "" : "edit")}>
-                Picture & heading
-              </button>
-            </>
-          )}
           {channel.kind === "manual" && post.status === "planned" && (
             <button type="button" className="text-esn hover:underline" onClick={() => setMode(mode === "publish" ? "" : "publish")}>
-              Mark published
+              Mark posted
             </button>
           )}
           {post.status === "planned" && (
@@ -749,44 +864,6 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
           )}
         </div>
       )}
-      {mode === "preview" && telegram && (
-        <div className="space-y-1.5 rounded border border-esn/30 bg-esn/5 p-2" data-testid="telegram-preview">
-          <p className="font-medium text-esn-dark">This goes to the Telegram channel:</p>
-          <UploadedPicture picture={post.picture} />
-          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-1.5 font-sans text-xs text-gray-800">{post.preview ?? "–"}</pre>
-          {post.refusal && (
-            <p className="text-amber-800" data-testid="telegram-refusal">
-              {post.refusal} It can stay planned; confirm it once that is sorted – until then it does not go out.
-            </p>
-          )}
-          <div className={cn("flex flex-wrap gap-2", post.refusal && "hidden")}>
-            {post.status === "planned" && !post.confirmed && (
-              <Button size="sm" disabled={pending} onClick={() => run(confirmPost, { post_id: post.id })}>
-                Confirm for {formatDateTime(post.scheduledFor)}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant={post.status === "published" ? "default" : "outline"}
-              disabled={pending}
-              onClick={async () => {
-                const again = post.status === "published";
-                if (
-                  await confirm({
-                    title: again ? "Edit the published Telegram post now?" : "Post this to the Telegram channel now?",
-                    body: again ? `The channel's message for ${postName} is replaced with the text above.` : `${postName} goes out to everyone in the channel at once, not at its planned time.`,
-                    confirmLabel: again ? "Edit the post" : "Publish now",
-                  })
-                )
-                  run(publishPostNow, { post_id: post.id }, () => setMode(""), again ? "Telegram post updated." : "Posted to the Telegram channel.");
-              }}
-            >
-              {post.status === "published" ? "Publish again (edits the post)" : "Confirm and publish now"}
-            </Button>
-          </div>
-          {post.confirmed && post.status === "planned" && <p className="text-xs text-gray-500">Confirmed – it goes out by itself at its time. Any change takes the confirmation back.</p>}
-        </div>
-      )}
       {mode === "move" && (
         <form className="flex flex-wrap gap-1" onSubmit={(e) => (e.preventDefault(), run(movePost, { post_id: post.id, day, time }, () => setMode("")))}>
           <Input aria-label="New day" type="date" className="w-40" value={day} onChange={(e) => setDay(e.target.value)} />
@@ -809,32 +886,6 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
           <Input aria-label="Why skip it" placeholder="e.g. the event is full" value={text} onChange={(e) => setText(e.target.value)} />
           <Button size="sm" variant="outline" disabled={pending}>
             Skip
-          </Button>
-        </form>
-      )}
-      {mode === "edit" && (
-        <form className="grid gap-1" onSubmit={(e) => (e.preventDefault(), run(editPost, { post_id: post.id, picture, note }, () => setMode("")))}>
-          <label className="text-gray-600">
-            Picture (JPG, PNG or WebP, up to 10 MB – kept until the post is out)
-            <input
-              aria-label="Upload a picture"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="mt-0.5 block w-full text-xs"
-              disabled={uploading}
-              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
-            />
-          </label>
-          {uploading && <p className="text-gray-500">Uploading…</p>}
-          {picture && <UploadedPicture picture={picture} />}
-          {picture && (
-            <button type="button" className="justify-self-start text-gray-600 hover:underline" onClick={() => setPicture("")}>
-              Remove the picture
-            </button>
-          )}
-          {post.events.length > 1 && <Input aria-label="Heading of the bundle" placeholder="e.g. This week at ESN MESA" value={note} onChange={(e) => setNote(e.target.value)} />}
-          <Button size="sm" disabled={pending || uploading}>
-            Save
           </Button>
         </form>
       )}

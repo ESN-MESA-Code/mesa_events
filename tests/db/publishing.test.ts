@@ -41,10 +41,14 @@ async function post(channel: string, events: string[], h = 48) {
   return r.data.id;
 }
 const row = async (id: string) => (await admin.from("publication_posts").select("*").eq("id", id).single()).data!;
+// The sent messages of a post, in order (one per event since round 2026-11-03).
+type SentState = { chatId: string; messages: Array<{ textMessageId?: number; photoMessageId?: number }> };
+const sentIds = (t: SentState) => t.messages.flatMap((m) => [m.photoMessageId, m.textMessageId]).filter((x): x is number => !!x);
 const tgMessages = async (id: string) => {
-  const t = (await row(id)).telegram as { chatId: string; textMessageId?: number } | null;
-  if (!t?.textMessageId) return [];
-  return (await admin.from("fake_telegram_messages").select("text, edits, deleted").eq("chat_id", t.chatId).eq("message_id", t.textMessageId)).data ?? [];
+  const t = (await row(id)).telegram as SentState | null;
+  if (!t?.messages?.length) return [];
+  const { data } = await admin.from("fake_telegram_messages").select("text, edits, deleted").eq("chat_id", t.chatId).in("message_id", sentIds(t)).order("message_id");
+  return data ?? [];
 };
 
 beforeAll(async () => {
@@ -62,8 +66,8 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   const { data } = await admin.from("publication_posts").select("telegram").in("id", posts);
-  for (const t of (data ?? []).map((d) => d.telegram as { chatId: string; textMessageId?: number; photoMessageId?: number } | null).filter(Boolean)) {
-    await admin.from("fake_telegram_messages").delete().eq("chat_id", t!.chatId).in("message_id", [t!.textMessageId ?? -1, t!.photoMessageId ?? -1]);
+  for (const t of (data ?? []).map((d) => d.telegram as SentState | null).filter(Boolean)) {
+    await admin.from("fake_telegram_messages").delete().eq("chat_id", t!.chatId).in("message_id", sentIds(t!));
   }
   await admin.from("publication_posts").delete().in("id", posts);
   await admin.from("fake_chat_messages").delete().eq("space", space);
@@ -188,15 +192,41 @@ describe("Telegram", () => {
     }
   });
 
-  it("a bundle posts a short block per event, in its order, under its heading", async () => {
+  it("a post of several events: its heading, then one message per event, in its order (round 2026-11-03)", async () => {
     const id = await post("telegram", [free]);
     expect((await P.addToPost(await actionContext(USERS.comms), { post_id: id, event_id: approved })).ok).toBe(true);
     expect((await P.editPost(await actionContext(USERS.comms), { post_id: id, picture: "", note: "This week" })).ok).toBe(true);
     expect((await P.reorderPost(await actionContext(USERS.comms), { post_id: id, event_ids: [approved, free] })).ok).toBe(true);
     await P.publishPostNow(await actionContext(USERS.comms), { post_id: id });
     await runJobs();
-    const [m] = await tgMessages(id);
-    expect(m.text).toMatch(/^<b>📅 This week<\/b>\n\n<b>Pub approved<\/b>\n🗓️ .*\n💸 € 5.00\n\n<b>Pub free<\/b>\n🗓️ .*\n💸 FREE$/);
+    const ms = await tgMessages(id);
+    expect(ms.map((m) => m.text.split("\n")[0])).toEqual(["<b>📅 This week</b>", "<b>Pub approved</b>", "<b>Pub free</b>"]);
+    expect(ms[1].text).toContain("💸 € 5.00");
+    expect(ms[2].text).toContain("FREE");
+    // Published again with the same messages: each is edited in place, none sent anew.
+    await admin.from("descriptions").update({ approved_fields: { ...fields("Pub free", "free"), hook: "a bundled change" } }).eq("event_id", free);
+    expect((await P.publishPostNow(await actionContext(USERS.comms), { post_id: id })).ok).toBe(true);
+    await runJobs();
+    const again = await tgMessages(id);
+    expect(again).toHaveLength(3);
+    expect(again[2]).toMatchObject({ edits: 1, deleted: false });
+    expect(again[2].text).toContain("a bundled change");
+  });
+
+  it("a post saved before one message per event (one layout, no list) is still edited in place", async () => {
+    const id = await post("telegram", [approved]);
+    await P.publishPostNow(await actionContext(USERS.comms), { post_id: id });
+    await runJobs();
+    const t = (await row(id)).telegram as SentState & { messageId: number };
+    const textMessageId = t.messages[0].textMessageId!;
+    await admin.from("publication_posts").update({ telegram: { chatId: t.chatId, layout: "text", picture: null, textMessageId, messageId: t.messageId } }).eq("id", id);
+    await admin.from("descriptions").update({ approved_fields: { ...fields("Pub approved"), hook: "an old state" } }).eq("event_id", approved);
+    expect((await P.publishPostNow(await actionContext(USERS.comms), { post_id: id })).ok).toBe(true);
+    await runJobs();
+    const { data } = await admin.from("fake_telegram_messages").select("text, edits, deleted").eq("chat_id", t.chatId).eq("message_id", textMessageId).single();
+    expect(data).toMatchObject({ edits: 1, deleted: false });
+    expect(data!.text).toContain("an old state");
+    expect(await tgMessages(id)).toHaveLength(1);
   });
 });
 
@@ -278,7 +308,9 @@ describe("events weeks ahead (round 2026-11-02)", () => {
     expect(await P.createPost(await actionContext(USERS.comms), { channel: "instagram", day: day(48), event_ids: [draft.id] })).toMatchObject({ ok: false, message: "This event cannot be published" });
 
     // Home's figure: the trip is still missing Telegram, whichever month it is in.
-    const ids = async () => (await loadStillToPlan(await as(USERS.comms), Date.now())).map((e) => e.id);
+    const ids = async () => (await loadStillToPlan(await as(USERS.comms), Date.now())).toPlan.map((e) => e.id);
+    // Its pretix page is not up either.
+    expect((await loadStillToPlan(await as(USERS.comms), Date.now())).pretix.map((e) => e.id)).toContain(trip.id);
     expect(await ids()).toContain(trip.id);
     expect(await ids()).not.toContain(draft.id);
     const tg = await post("telegram", [trip.id], 72);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
   CONFIG,
@@ -26,7 +25,7 @@ import { searchTemplates, type SearchEntry } from "@/lib/description/search";
 import { ACCESS_LABELS, ESN_RATINGS, RATING_LABELS, SUSTAIN_LABELS, esnGoal, parseRatings } from "@/lib/esn/formData";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
 import { describeError, useAction } from "@/components/ActionButton";
-import { publishDescription, reviewDescription, saveDescription, submitDescription } from "@/app/actions/descriptions";
+import { reviewDescription, saveDescription, submitDescription } from "@/app/actions/descriptions";
 import { cn } from "@/lib/utils";
 import type { EventAddress } from "@/lib/address";
 import type { EventMeeting } from "@/lib/meeting";
@@ -40,7 +39,7 @@ const STATUS: Record<string, { label: string; tone: "gray" | "blue" | "amber" | 
   draft: { label: "Draft", tone: "gray" },
   submitted: { label: "Waiting for Comms review", tone: "blue" },
   changes_requested: { label: "Changes requested", tone: "amber" },
-  approved: { label: "Approved – ready to publish", tone: "green" },
+  approved: { label: "Approved – going to the Chat space", tone: "green" },
   published: { label: "Published", tone: "purple" },
 };
 
@@ -78,7 +77,6 @@ interface Props {
 }
 
 export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, lastRun, sorting, reviews, place, eventPriceCents, lastRequest }: Props) {
-  const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
   // "new": no description yet – the fields are prefilled from the event and
@@ -255,7 +253,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
   const reviewing = can.review && status === "submitted";
 
   function approve() {
-    run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"), "Approved – it can be published now.");
+    run(reviewDescription, { event_id: eventId, decision: "approved", comment }, () => setStatus("approved"), "Approved – it goes to the Chat space by itself.");
   }
   function requestChanges() {
     run(reviewDescription, { event_id: eventId, decision: "changes_requested", comment }, () => setStatus("changes_requested"), "Sent back to the OC with your comment.");
@@ -280,8 +278,9 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
         <div className="sticky top-0 z-20 xl:col-span-2 rounded-xl border border-esn/30 bg-white/95 p-3 shadow-md backdrop-blur space-y-2" data-testid="review-bar">
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-auto text-sm font-semibold text-esn-dark">Waiting for your review</span>
-            <Button variant="success" size="sm" disabled={pending || !validation.ok} onClick={approve}>
-              Approve
+            {/* Approving publishes it to the Chat space (round 2026-11-03). */}
+            <Button variant="success" size="sm" disabled={pending || !validation.ok} onClick={approve} title="Approves the description and publishes it to the event's Chat space">
+              Approve and publish
             </Button>
             <Button variant="outline" size="sm" disabled={pending || !comment.trim()} onClick={requestChanges}>
               Request changes
@@ -572,14 +571,11 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
             {status === "submitted" && !can.review && <p className="text-gray-600">Waiting for the Comms team.</p>}
             {reviewing && <p className="text-gray-600">Approve or request changes in the bar at the top.</p>}
             {reviewing && !validation.ok && <OpenErrors errors={openErrors} />}
-            {can.review && status === "approved" && (
-              <div>
-                <Button disabled={pending || !can.hasSpace} onClick={() => run(publishDescription, { event_id: eventId }, () => router.refresh(), "Publishing to the Chat space…")}>
-                  {initial.publishedAt ? "Publish the update" : "Publish to the Chat space (@all)"}
-                </Button>
-                {!can.hasSpace && <p className="text-xs text-gray-500 mt-1">The event has no Chat space yet.</p>}
-                {initial.publishRequested && <p className="text-xs text-gray-500 mt-1">Publishing is under way…</p>}
-              </div>
+            {/* Approved = published: the job posts it (with @all), or edits the message already there (round 2026-11-03). */}
+            {status === "approved" && (
+              <p className="text-gray-600" data-testid="chat-publishing">
+                {!can.hasSpace ? "Approved – it goes to the Chat space (@all) as soon as the event has one." : initial.publishedAt ? "Approved – the Chat space message is being updated." : "Approved – it is being published to the Chat space (@all)."}
+              </p>
             )}
             {error && !reviewing && <Alert tone="error">{error}</Alert>}
             {reviews.length > 0 && (

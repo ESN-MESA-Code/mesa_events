@@ -10,7 +10,7 @@ import { CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient"
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { EventChecklist } from "./EventChecklist";
 import { isAre, plural } from "@/lib/plural";
-import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
+import { STATE_MARK, stateLabel, type ChannelState } from "@/lib/publishing";
 import { eventAddress, formatVenue, hasAddress } from "@/lib/address";
 import { eventMeeting, meetingLine } from "@/lib/meeting";
 
@@ -249,7 +249,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
         {(published ?? []).length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Published on</CardTitle>
+              <CardTitle>Chat space and advertising</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-1 text-sm" data-testid="published-on">
@@ -259,7 +259,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                     <li key={p.channel} className="flex flex-wrap items-center gap-2">
                       <span className="w-28 text-gray-600">{channelName.get(p.channel) ?? p.channel}</span>
                       <span className={state === "published" ? "text-emerald-700" : state === "planned" ? "text-esn" : "text-gray-500"}>
-                        {STATE_MARK[state]} {STATE_LABEL[state]}
+                        {STATE_MARK[state]} {stateLabel(p.channel, state)}
                         {p.at && state !== "not_planned" ? ` ${formatShortDate(p.at)}` : ""}
                       </span>
                       {state === "published" && p.link && (

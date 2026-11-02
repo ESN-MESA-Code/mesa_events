@@ -4,7 +4,7 @@
 // pretix off, mark an Instagram post published, confirm a Telegram post
 // after its preview and see it publish itself through the job runner.
 import { TEST_TAG, USERS, admin, createEvent } from "../helpers/local";
-import { drag, expect, freshMonth, runJobs, test } from "./fixtures";
+import { answerConfirm, drag, expect, freshMonth, runJobs, test } from "./fixtures";
 import { addMonths, monthLabel } from "@/lib/dates";
 
 const fields = (title: string) => ({ title, dateIso: "2045-01-10", time: "19:00", venue: "Shamrock", price: "5", hook: "a test", intro: "A test event.", program: "Testing", bring: "Nothing", closing: "see you" });
@@ -74,10 +74,10 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
 
   // Instagram is published by hand: the link.
   await igPost.locator("button").click();
-  await dialog.getByRole("button", { name: "Mark published" }).click();
+  await dialog.getByRole("button", { name: "Mark posted" }).click();
   await dialog.getByLabel("Link of the published post").fill("https://www.instagram.com/p/e2e-test/");
   await dialog.getByRole("button", { name: "Save link" }).click();
-  await expect(dialog).toContainText("✓ published");
+  await expect(dialog).toContainText("✓ posted");
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(igPost).toContainText("IG 10:00 ✓");
 
@@ -89,12 +89,13 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
   await page.reload();
   await expect(tgChip).toContainText("TG 10:00 ✓");
   await tgChip.locator("button").click();
-  await expect(dialog).toContainText("✓ published");
+  await expect(dialog).toContainText("✓ posted");
   await expect(dialog.getByRole("link", { name: "Open the post" })).toHaveAttribute("href", /^https:\/\/t\.me\/mesa_fake_channel\/\d+$/);
   await dialog.getByRole("button", { name: "Close" }).click();
   const { data: post } = await admin.from("publication_posts").select("telegram").eq("id", tgPost!.post_id).single();
-  const tg = post!.telegram as { chatId: string; textMessageId: number };
-  const { data: msg } = await admin.from("fake_telegram_messages").select("text").eq("chat_id", tg.chatId).eq("message_id", tg.textMessageId).single();
+  const tg = post!.telegram as { chatId: string; messages: Array<{ textMessageId: number }> };
+  const textMessageId = tg.messages[0].textMessageId;
+  const { data: msg } = await admin.from("fake_telegram_messages").select("text").eq("chat_id", tg.chatId).eq("message_id", textMessageId).single();
   expect(msg!.text.startsWith(`<b>${quiz.title}</b>`)).toBe(true);
 
   // The Comms row and the event page show where the quiz is out.
@@ -108,9 +109,9 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
   await as(USERS.oc);
   await page.goto(`/events/${quiz.id}`);
   await expect(page.getByTestId("published-on")).toContainText("Telegram");
-  await expect(page.getByTestId("published-on")).toContainText("✓ published");
+  await expect(page.getByTestId("published-on")).toContainText("✓ posted");
 
-  await admin.from("fake_telegram_messages").delete().eq("chat_id", tg.chatId).eq("message_id", tg.textMessageId);
+  await admin.from("fake_telegram_messages").delete().eq("chat_id", tg.chatId).eq("message_id", textMessageId);
   await admin.from("fake_chat_messages").delete().like("text", `%${tag}%`);
 });
 
@@ -165,4 +166,65 @@ test("plan posts for a big event two months ahead", async ({ page, as }) => {
 
   await admin.from("publication_posts").delete().in("id", ((await admin.from("publication_post_events").select("post_id").eq("event_id", trip.id)).data ?? []).map((r) => r.post_id));
   await admin.from("events").delete().in("id", [trip.id, stammtisch.id, quiz.id]);
+});
+
+// Round 2026-11-03: a Telegram post opens on its preview – one message per
+// event, the picture (added right there) on the first – and is posted from it.
+test("a Telegram post of two events: preview with the picture, posted as separate messages", async ({ page, as, baseURL }) => {
+  const month = freshMonth();
+  const tag = Math.random().toString(36).slice(2, 7);
+  const ev = async (title: string, d: number) => {
+    const e = await createEvent({ title: `${title} ${tag}`, starts_at: `${month}-${String(d).padStart(2, "0")}T18:00:00Z`, oc: USERS.oc, helpers_needed: 1 });
+    await admin.from("descriptions").upsert({ event_id: e.id, status: "approved", fields: fields(e.title), approved_fields: fields(e.title) });
+    return e;
+  };
+  const karaoke = await ev("Karaoke", 12);
+  const brunch = await ev("Brunch", 14);
+  // Planned as Comms would (create_post checks the Comms role, so straight into the tables here).
+  const { data: created } = await admin.from("publication_posts").insert({ channel: "telegram", scheduled_for: `${month}-08T09:00:00Z` }).select("id").single();
+  await admin.from("publication_post_events").insert([
+    { post_id: created!.id, event_id: karaoke.id, position: 0 },
+    { post_id: created!.id, event_id: brunch.id, position: 1 },
+  ]);
+
+  await as(USERS.comms);
+  await page.goto(`/team/comms/schedule?month=${month}`);
+  const chip = page.getByTestId(`day-${month}-08`).locator('[data-testid^="post-"]');
+  await chip.locator("button").click();
+  const dialog = page.getByTestId("post-dialog");
+  // The preview is there at once: two messages, in the post's order.
+  const preview = dialog.getByTestId("telegram-preview");
+  await expect(preview).toContainText("as 2 messages");
+  await expect(preview.getByTestId("telegram-message")).toHaveCount(2);
+  await expect(preview.getByTestId("telegram-message").nth(0)).toContainText(karaoke.title);
+  await expect(preview.getByTestId("telegram-message").nth(1)).toContainText(brunch.title);
+
+  // The picture is added in the same panel and shows on the first message.
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
+  // Each message has its own button; the karaoke's message gets the picture.
+  await expect(preview.getByLabel("Add a picture")).toHaveCount(2);
+  await preview.getByTestId("telegram-message").nth(0).getByLabel("Add a picture").setInputFiles({ name: "party.png", mimeType: "image/png", buffer: png });
+  await expect(preview.getByTestId("telegram-message").nth(0).getByRole("img", { name: "Picture of the post" })).toBeVisible();
+  await expect(preview.getByTestId("telegram-message").nth(0).getByLabel("Replace the picture")).toHaveCount(1);
+  await expect(preview.getByTestId("telegram-message").nth(1).getByRole("img")).toHaveCount(0);
+
+  // Posted from the preview.
+  await preview.getByRole("button", { name: "Confirm and post now" }).click();
+  await answerConfirm(page);
+  await expect(page.getByText("Posted to the Telegram channel.")).toBeVisible();
+  const { data: pe } = await admin.from("publication_post_events").select("post_id").eq("event_id", karaoke.id).single();
+  const { data: version } = await admin.from("publication_posts").select("version").eq("id", pe!.post_id).single();
+  await admin.from("jobs").update({ run_after: new Date(Date.now() - 60_000).toISOString() }).eq("idempotency_key", `telegram.publish_post:${pe!.post_id}:${version!.version}`);
+  await runJobs(baseURL!);
+  const { data: post } = await admin.from("publication_posts").select("status, telegram").eq("id", pe!.post_id).single();
+  expect(post!.status).toBe("published");
+  const tg = post!.telegram as { chatId: string; messages: Array<{ layout: string; photoMessageId?: number; textMessageId?: number }> };
+  expect(tg.messages.map((m) => m.layout)).toEqual(["photo", "text"]);
+  const ids = tg.messages.flatMap((m) => [m.photoMessageId, m.textMessageId]).filter((x): x is number => !!x);
+  const { data: sent } = await admin.from("fake_telegram_messages").select("kind, text").eq("chat_id", tg.chatId).in("message_id", ids).order("message_id");
+  expect(sent!.map((m) => [m.kind, m.text.split("\n")[0]])).toEqual([
+    ["photo", `<b>${karaoke.title}</b>`],
+    ["text", `<b>${brunch.title}</b>`],
+  ]);
+  await admin.from("fake_telegram_messages").delete().eq("chat_id", tg.chatId).in("message_id", ids);
 });

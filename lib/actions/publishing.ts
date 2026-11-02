@@ -1,4 +1,4 @@
-// The publishing schedule (brief 2026-10-29, E3): posts on a channel and
+// The advertisement schedule (brief 2026-10-29, E3): posts on a channel and
 // day, bundles of events, moving, publishing (Telegram by the platform,
 // the manual channels marked with a link), skipping. Comms only; the
 // database checks again. Admins switch channels on and off.
@@ -6,7 +6,7 @@ import { z } from "zod";
 import { ActionError, dbError, defineAction, PAGES, requireRole, uuid } from "@/lib/actions/core";
 import { berlinInputToIso } from "@/lib/dates";
 import { DEFAULT_POST_HOUR } from "@/lib/publishing";
-import { uploadPath } from "@/lib/telegram/picture";
+import { libraryPath, uploadPath } from "@/lib/telegram/picture";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a day");
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM");
@@ -115,3 +115,50 @@ export const setChannelEnabled = defineAction(z.object({ channel, enabled: z.boo
   requireRole(ctx, "admin");
   dbError((await ctx.supabase.rpc("set_channel_enabled", { channel: i.channel, enabled: i.enabled })).error);
 }, { revalidate: [PAGES.admin, PAGES.schedule, PAGES.comms] });
+
+const uploaded = (postId: string) =>
+  z
+    .string()
+    .trim()
+    .max(500)
+    .refine((p) => !p || p.startsWith(`upload:${postId}/`), "Upload the picture for this post.");
+
+/** One event's own picture in a post (round 2026-11-03): uploaded first (post-pictures/<post id>/…); a replaced upload is removed. */
+export const setPostEventPicture = defineAction(z.object({ post_id: uuid, event_id: uuid, picture: z.string().trim().max(500).default("") }), async (ctx, i) => {
+  requireRole(ctx, "comms");
+  if (i.picture && !uploaded(i.post_id).safeParse(i.picture).success) throw new ActionError("failed", "Upload the picture for this post.");
+  const [{ data: before }, { data: post }] = await Promise.all([
+    ctx.supabase.from("publication_post_events").select("picture").eq("post_id", i.post_id).eq("event_id", i.event_id).maybeSingle(),
+    ctx.supabase.from("publication_posts").select("picture").eq("id", i.post_id).maybeSingle(),
+  ]);
+  dbError((await ctx.supabase.rpc("set_post_event_picture", { post: i.post_id, event: i.event_id, picture: i.picture })).error);
+  const { data: after } = await ctx.supabase.from("publication_posts").select("picture").eq("id", i.post_id).maybeSingle();
+  // The replaced picture of the event – and the post's own when the event's took its place.
+  const gone = [before?.picture !== i.picture ? before?.picture : null, post?.picture && !after?.picture ? post.picture : null].map((p) => uploadPath(p)).filter((p): p is string => !!p);
+  if (gone.length) await ctx.supabase.storage.from("post-pictures").remove(gone);
+}, { revalidate: [PAGES.schedule] });
+
+/** The default picture of a format or an event type (the Pictures tab, round 2026-11-03); an empty picture removes it. */
+export const setDefaultPicture = defineAction(
+  z
+    .object({
+      format_id: uuid.optional(),
+      event_type: z.enum(["standard", "special", "day_trip", "weekend_trip"]).optional(),
+      picture: z
+        .string()
+        .trim()
+        .max(500)
+        .refine((p) => !p || /^library:[\w/.-]+$/.test(p), "Upload the picture again.")
+        .default(""),
+    })
+    .refine((i) => !!i.format_id !== !!i.event_type, "A default picture is for a format or for a type."),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    const q = ctx.supabase.from("advertising_pictures").select("picture");
+    const { data: before } = await (i.format_id ? q.eq("format_id", i.format_id) : q.eq("event_type", i.event_type!)).maybeSingle();
+    dbError((await ctx.supabase.rpc("set_default_picture", { format: (i.format_id ?? null) as unknown as string, type: (i.event_type ?? null) as unknown as string, picture: i.picture })).error);
+    const old = libraryPath(before?.picture);
+    if (old && before?.picture !== i.picture) await ctx.supabase.storage.from("advertising-pictures").remove([old]);
+  },
+  { revalidate: [PAGES.pictures, PAGES.schedule] }
+);

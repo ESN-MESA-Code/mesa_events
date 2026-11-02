@@ -35,7 +35,7 @@ export const DESCRIPTION_STATUS: Record<string, { label: string; tone: "gray" | 
   draft: { label: "Draft", tone: "gray" },
   submitted: { label: "Waiting for Comms review", tone: "blue" },
   changes_requested: { label: "Changes requested", tone: "amber" },
-  approved: { label: "Approved – ready to publish", tone: "green" },
+  approved: { label: "Approved – going to the Chat space", tone: "green" },
   published: { label: "Published", tone: "purple" },
 };
 

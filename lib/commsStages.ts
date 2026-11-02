@@ -1,32 +1,34 @@
-// The Comms page by stage (brief 2026-10-29, C): one track per event,
-//   Description To write → In review → Approved → Published → Event happened
-//   → Report → ESN Activities uploaded,
+// The Comms page by stage (brief 2026-10-29, C; round 2026-11-03): one track per event,
+//   Description To write → In review → Approved (it goes to the Chat space by
+//   itself) → pretix page → Advertised (Telegram, Instagram) → Event happened
+//   → Report,
 // the current stage with Comms' action, marks (late, missed), the filter it
-// falls under and whether it needs Comms. Pure (tests/unit/commsStages.test.ts).
+// falls under and whether it needs Comms. "Publish" is the description in
+// the Chat space, "advertise" the posts on the channels; ESN Activities is
+// the executive board's and has its own tab. Pure (tests/unit/month.test.ts).
 import type { StepView } from "@/components/status";
-import type { EsnStatus } from "@/lib/esn/formData";
 
-export type StageId = "write" | "review" | "approved" | "published" | "happened" | "report" | "esn";
+export type StageId = "write" | "review" | "approved" | "pretix" | "advertise" | "happened" | "report";
 
 export const STAGES: Array<{ id: StageId; label: string }> = [
   { id: "write", label: "To write" },
   { id: "review", label: "In review" },
-  { id: "approved", label: "Approved" },
-  { id: "published", label: "Published" },
+  { id: "approved", label: "Approved · in the Chat space" },
+  { id: "pretix", label: "pretix page" },
+  { id: "advertise", label: "Advertised" },
   { id: "happened", label: "Event happened" },
   { id: "report", label: "Report" },
-  { id: "esn", label: "ESN Activities uploaded" },
 ];
 
-export type FilterId = "needs" | "write" | "review" | "publish" | "waiting" | "report" | "esn" | "done" | "all";
+export type FilterId = "needs" | "write" | "review" | "pretix" | "advertise" | "waiting" | "report" | "done" | "all";
 
 export const FILTERS: Array<{ id: Exclude<FilterId, "all" | "needs">; label: string }> = [
   { id: "write", label: "To write" },
   { id: "review", label: "In review" },
-  { id: "publish", label: "Ready to publish" },
+  { id: "pretix", label: "pretix to set up" },
+  { id: "advertise", label: "To advertise" },
   { id: "waiting", label: "Waiting for the event" },
   { id: "report", label: "Report missing" },
-  { id: "esn", label: "ESN to upload" },
   { id: "done", label: "Done" },
 ];
 
@@ -38,58 +40,63 @@ export interface StageInput {
   late: boolean;
   missed: boolean;
   reportIn: boolean;
-  esn: EsnStatus["state"];
+  /** The pretix page is up (ticked), or pretix is switched off. */
+  pretix: boolean;
+  /** Posted (or skipped on purpose) on every required advertising channel. */
+  advertised: boolean;
 }
 
 export interface StageView {
   steps: StepView[];
-  /** null: everything done (uploaded). */
+  /** null: everything done (the report is in). */
   current: StageId | null;
   /** 1-based position of the current stage ("3 of 7"); 7 when done. */
   position: number;
   filter: Exclude<FilterId, "all" | "needs">;
-  /** Comms has something to do: review, publish, upload, or chase a late description. */
+  /** Comms has something to do: review, pretix, advertise, or chase a late description. */
   needsComms: boolean;
   marks: Array<"late" | "missed">;
 }
 
 const IN = ["submitted", "approved", "published"];
+const APPROVED = ["approved", "published"];
 
 export function eventStage(i: StageInput): StageView {
   const started = Date.parse(i.startsAt) <= i.now;
-  const published = i.description === "published";
+  const approved = APPROVED.includes(i.description);
   let current: StageId | null;
-  if (!started && !published) current = i.description === "submitted" ? "review" : i.description === "approved" ? "approved" : "write";
-  else if (!started) current = "published";
+  if (!started && !approved) current = i.description === "submitted" ? "review" : "write";
+  // pretix comes first: the posts link to it.
+  else if (!started && !i.pretix) current = "pretix";
+  else if (!started && !i.advertised) current = "advertise";
+  else if (!started) current = "happened";
   else if (!i.reportIn) current = "report";
-  else if (i.esn !== "uploaded") current = "esn";
   else current = null;
 
   // Stages behind the current one are done – except a description never
   // published (missed): those stay open, the row is marked.
   const reached: Record<StageId, boolean> = {
     write: IN.includes(i.description),
-    review: ["approved", "published"].includes(i.description),
-    approved: ["approved", "published"].includes(i.description),
-    published,
+    review: approved,
+    approved,
+    pretix: i.pretix,
+    advertise: i.advertised,
     happened: started,
     report: i.reportIn,
-    esn: i.esn === "uploaded",
   };
   const steps: StepView[] = STAGES.map((s) => ({ label: s.label, state: s.id === current ? "current" : reached[s.id] ? "done" : "todo" }));
   const position = current ? STAGES.findIndex((s) => s.id === current) + 1 : STAGES.length;
 
   const filter: StageView["filter"] =
-    current === "write" ? "write" : current === "review" ? "review" : current === "approved" ? "publish" : current === "published" ? "waiting" : current === "report" ? "report" : current === "esn" ? "esn" : "done";
+    current === "write" ? "write" : current === "review" ? "review" : current === "pretix" ? "pretix" : current === "advertise" ? "advertise" : current === "happened" ? "waiting" : current === "report" ? "report" : "done";
   const marks: StageView["marks"] = [];
   if (i.late && current === "write") marks.push("late");
   if (i.missed) marks.push("missed");
-  // ESN Activities is the executive board's (round 2026-10-30), not Comms' work.
-  const needsComms = current === "review" || current === "approved" || (current === "write" && i.late);
+  const needsComms = current === "review" || current === "pretix" || current === "advertise" || (current === "write" && i.late);
   return { steps, current, position, filter, needsComms, marks };
 }
 
-/** "In review 2 · Ready to publish 1 · …": counts per filter, plus "Needs Comms". */
+/** "In review 2 · To advertise 1 · …": counts per filter, plus "Needs Comms". */
 export function stageCounts(views: StageView[]): Record<FilterId, number> {
   const counts = Object.fromEntries([...FILTERS.map((f) => [f.id, 0]), ["needs", 0], ["all", views.length]]) as Record<FilterId, number>;
   for (const v of views) {

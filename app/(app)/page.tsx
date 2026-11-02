@@ -397,11 +397,11 @@ async function EventsQueue() {
 async function CommsQueue() {
   const supabase = await createSessionClient();
   const now = nowMs();
-  const [{ data }, { data: posts }, toPlan] = await Promise.all([
+  const [{ data }, { data: posts }, work] = await Promise.all([
     supabase.rpc("description_overview"),
-    // The publishing schedule (brief 2026-10-29, E3): planned posts until a week ahead.
+    // The advertisement schedule (brief 2026-10-29, E3): planned posts until a week ahead.
     supabase.from("publication_posts").select("scheduled_for").eq("status", "planned").lte("scheduled_for", new Date(now + 7 * 86_400_000).toISOString()),
-    // Upcoming events of any month not on every channel yet (round 2026-11-02).
+    // Upcoming events not on every channel yet, or without their pretix page (round 2026-11-02, -03).
     loadStillToPlan(supabase, now),
   ]);
   const overdue = (posts ?? []).filter((p) => Date.parse(p.scheduled_for) < now).length;
@@ -411,14 +411,14 @@ async function CommsQueue() {
   // Each figure leads to the month of its first event, filtered to that stage (brief 2026-10-29, C).
   const link = (list: typeof rows, show: string) => (list.length ? `/team/comms?month=${monthParam(monthOf(list[0].starts_at))}&show=${show}` : undefined);
   const review = rows.filter((r) => r.status === "submitted");
-  const ready = rows.filter((r) => r.status === "approved");
   const late = rows.filter((r) => r.late);
   return (
-    <QueueCard title="Comms" href={link([...review, ...ready, ...late].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), "needs") ?? "/team/comms"} testId="queue-comms">
+    <QueueCard title="Comms" href={link([...review, ...late].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), "needs") ?? "/team/comms"} testId="queue-comms">
       <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
-      <Figure label="Approved – ready to publish" value={ready.length} href={link(ready, "publish")} />
       <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
-      <Figure label="Upcoming events still to plan" value={toPlan.length} tone="amber" href="/team/comms/schedule" />
+      {/* Approved descriptions go to the Chat space by themselves; then pretix, then the advertising (round 2026-11-03). */}
+      <Figure label="pretix pages to set up" value={work.pretix.length} tone="amber" href="/team/comms/schedule" />
+      <Figure label="Upcoming events still to advertise" value={work.toPlan.length} tone="amber" href="/team/comms/schedule" />
       <Figure label="Posts planned this week" value={thisWeek} href="/team/comms/schedule" />
       <Figure label="Overdue posts" value={overdue} tone="red" href="/team/comms/schedule" />
     </QueueCard>

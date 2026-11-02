@@ -1,5 +1,20 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-11-03: Telegram preview, pictures, publish vs. advertise, Comms stages, hand-in list
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-03 –
+Telegram preview first …"). Migrations `20261103000100_approval_publishes`,
+`20261103000200_advertising_pictures`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Telegram dialog | Opens on the preview (one bubble per message, the picture on the first); picture upload, replace, remove and the heading in the same panel; confirm / publish from it | E2E: schedule.spec (two events, picture, published) |
+| Messages | One message per event (as a single-event post), the heading first when set, the picture with the first; sign-up link per event; edits in place per message; old single-message state still edited | Unit: postMessages, postLayouts; DB: publishing (bundle, re-publish, old state) |
+| Hand-in status | Vertical to-do list (✓ / To do / Later) with links to the open items | E2E: esn.spec |
+| Publish vs. advertise | "Advertisement schedule", "posted" on the channels; approving publishes to the Chat space (now or when the space exists) | DB: advertising.test; E2E: monthly-cycle |
+| Comms stages | pretix page and Advertised instead of Published and ESN Activities; new filters and row actions; Home: pretix and advertising figures | Unit: stages (month.test); E2E: team-months |
+| Pictures | One per event's message; defaults per format / type on the Pictures tab (kept bucket); clearer button; event colour dots linking posts to events | Unit: messagePictures; DB: advertising.test; E2E: schedule.spec |
+
 ## Round 2026-11-02 (3): Posts for events weeks ahead
 
 Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-02 – Posts

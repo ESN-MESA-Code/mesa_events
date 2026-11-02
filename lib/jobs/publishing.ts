@@ -2,25 +2,43 @@
 // itself at its time (telegram.publish_post, run_after = the post's time,
 // one job per post version); re-publishing edits the same messages (the
 // bot's uploadTelegram_). Refused – no retry, the reason on the card – while
-// a description is not approved or a price is TBA, or the text is too long.
+// a description is not approved or a price is TBA, or a text is too long.
+// A post of several events goes out as one message per event (round
+// 2026-11-03), each with its picture: its own, else its format's or type's
+// default (the Pictures tab).
 // The first publication of an event on a channel is told in its Chat space.
 import type { Job, JobDeps, JobHandler } from "@/lib/jobs/runner";
 import { coerceFields } from "@/lib/description/template";
 import { telegramRefusal, type PostEventFacts } from "@/lib/publishing";
-import { bundleMessage, bundlePrice, eventMessage, lengthProblem, telegramLayout, type TelegramLayout } from "@/lib/telegram/messages";
+import { lengthProblem, messagePictures, postLayouts, postMessages, type TelegramLayout } from "@/lib/telegram/messages";
 import { PictureError, resolvePicture, uploadPath, type UploadReader } from "@/lib/telegram/picture";
+import { loadDefaultPictures } from "@/lib/publishingLoad";
 import { telegramSetup } from "@/lib/telegram";
 import { TelegramError, telegramLink, type TelegramMessage, type TelegramPhoto } from "@/lib/telegram/types";
 import { channelPublishedMessage } from "@/lib/chatMessages";
 import type { Json } from "@/types/database";
 
-interface TelegramState {
-  chatId: string;
+/** One sent message of a post: a photo, a text, or a photo followed by a text. */
+interface SentMessage {
   layout: TelegramLayout;
-  picture: string | null;
+  /** The picture it was sent with. */
+  picture?: string | null;
   photoMessageId?: number;
   textMessageId?: number;
+}
+
+interface TelegramState {
+  chatId: string;
+  picture: string | null;
+  messages: SentMessage[];
+  /** The first message (the post's link). */
   messageId?: number;
+}
+
+/** The sent messages of a post, also as written before one message per event (a single layout at the top). */
+function sentMessages(prev: Partial<TelegramState> & Partial<SentMessage>): SentMessage[] {
+  if (prev.messages) return prev.messages;
+  return prev.layout ? [{ layout: prev.layout, picture: prev.picture ?? null, photoMessageId: prev.photoMessageId, textMessageId: prev.textMessageId }] : [];
 }
 
 async function refuse(deps: JobDeps, postId: string, reason: string) {
@@ -39,9 +57,10 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   // Nothing goes to Telegram that Comms did not confirm (round 2026-10-30).
   if (!post.confirmed_at) return { skipped: "not confirmed" };
 
-  const { data: rows, error: e2 } = await deps.admin.from("publication_post_events").select("position, events(id, title, starts_at)").eq("post_id", post.id).order("position");
+  const { data: rows, error: e2 } = await deps.admin.from("publication_post_events").select("position, picture, events(id, title, starts_at, format_id, type)").eq("post_id", post.id).order("position");
   if (e2) throw new Error(e2.message);
-  const events = (rows ?? []).map((r) => r.events as { id: string; title: string; starts_at: string });
+  const events = (rows ?? []).map((r) => r.events as { id: string; title: string; starts_at: string; format_id: string | null; type: string });
+  const ownPicture = new Map((rows ?? []).map((r) => [(r.events as { id: string }).id, r.picture]));
   const { data: descriptions } = await deps.admin.from("descriptions").select("event_id, status, fields, approved_fields").in("event_id", events.map((e) => e.id));
   const byEvent = new Map((descriptions ?? []).map((d) => [d.event_id, d]));
   // What Comms approved is what goes out.
@@ -54,7 +73,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   const refusal = telegramRefusal(facts);
   if (refusal) return refuse(deps, post.id, refusal);
 
-  // A bundle links each event's pretix page when one is published.
+  // Each event links its pretix page when one is ticked with a link.
   const { data: pretix } = await deps.admin
     .from("publication_post_events")
     .select("event_id, publication_posts!inner(channel, status, link)")
@@ -62,39 +81,43 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
     .eq("publication_posts.channel", "pretix")
     .eq("publication_posts.status", "published");
   const signUp = new Map((pretix ?? []).map((r) => [r.event_id, (r.publication_posts as { link: string | null }).link]));
-  const text =
-    items.length === 1
-      ? eventMessage({ ...items[0].fields, title: items[0].fields.title || items[0].ev.title })
-      : bundleMessage(post.note, items.map((i) => ({ title: i.fields.title || i.ev.title, startsAt: i.ev.starts_at, price: bundlePrice(i.fields), link: signUp.get(i.ev.id) ?? null })));
-  const tooLong = lengthProblem(text);
-  if (tooLong) return refuse(deps, post.id, tooLong);
+  const texts = postMessages(post.note, items.map((i) => ({ fields: { ...i.fields, title: i.fields.title || i.ev.title }, link: signUp.get(i.ev.id) ?? null })));
+  for (const [n, text] of texts.entries()) {
+    const tooLong = lengthProblem(text);
+    // Name the event when the post has several messages.
+    const item = items[n - (texts.length - items.length)];
+    if (tooLong) return refuse(deps, post.id, texts.length > 1 && item ? `“${item.ev.title}”: ${tooLong}` : tooLong);
+  }
 
   const tg = deps.telegram ?? telegramSetup(deps.admin, deps.env);
-  const layout = telegramLayout(text, !!post.picture);
-  const prev = (post.telegram ?? {}) as Partial<TelegramState>;
-  // The picture is read only when it is sent: an uploaded one is removed once the post is out.
-  const editsInPlace = prev.chatId === tg.chatId && prev.layout === layout;
-  let photo: TelegramPhoto | null = null;
-  if (post.picture && (!editsInPlace || post.picture !== prev.picture)) {
-    const readUpload: UploadReader = async (path) => {
-      const { data, error: e } = await deps.admin.storage.from("post-pictures").download(path);
-      if (e || !data) return null;
-      return { bytes: new Uint8Array(await data.arrayBuffer()), mimeType: data.type };
-    };
+  const defaults = await loadDefaultPictures(deps.admin, events);
+  const pictures = messagePictures(post.note, post.picture, events.map((e) => ({ own: ownPicture.get(e.id) ?? null, fallback: defaults.get(e.id) ?? null })));
+  const layouts = postLayouts(texts, pictures);
+  const prev = (post.telegram ?? {}) as Partial<TelegramState> & Partial<SentMessage>;
+  const before = sentMessages(prev);
+  const editsInPlace = prev.chatId === tg.chatId && before.length === layouts.length && before.every((m, i) => m.layout === layouts[i]);
+  // A picture is read only when it is sent (new, or changed on an edit): an uploaded one is removed once the post is out.
+  const readUpload: UploadReader = async (path, bucket) => {
+    const { data, error: e } = await deps.admin.storage.from(bucket).download(path);
+    if (e || !data) return null;
+    return { bytes: new Uint8Array(await data.arrayBuffer()), mimeType: data.type };
+  };
+  const photos: Array<TelegramPhoto | null> = [];
+  for (const [i, picture] of pictures.entries()) {
+    const needed = !!picture && (!editsInPlace || picture !== (before[i]?.picture ?? null));
     try {
-      photo = await resolvePicture(post.picture, deps.google.drive, readUpload);
+      photos.push(needed ? await resolvePicture(picture!, deps.google.drive, readUpload) : null);
     } catch (err) {
       if (err instanceof PictureError) return refuse(deps, post.id, err.message);
       throw err;
     }
   }
   const dropUpload = async () => {
-    const path = uploadPath(post.picture);
-    if (path) await deps.admin.storage.from("post-pictures").remove([path]);
+    const paths = [post.picture, ...ownPicture.values()].map((p) => uploadPath(p)).filter((p): p is string => !!p);
+    if (paths.length) await deps.admin.storage.from("post-pictures").remove(paths);
   };
 
-  const caption = layout === "photo" ? text.html : text.titleHtml;
-  const state: TelegramState = { chatId: tg.chatId, layout, picture: post.picture };
+  const captionOf = (i: number) => (layouts[i] === "photo" ? texts[i].html : texts[i].titleHtml);
   const unchangedOk = async (fn: () => Promise<void>) => {
     try {
       await fn();
@@ -103,15 +126,17 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
     }
   };
 
-  // Same chat and layout: edit the messages in place.
+  // Same chat and the same messages: edit them in place.
   if (editsInPlace) {
     try {
-      if (layout !== "text") {
-        if (post.picture !== prev.picture) await tg.client.editMessageMedia({ chat_id: tg.chatId, message_id: prev.photoMessageId!, photo: photo!, caption });
-        else await unchangedOk(() => tg.client.editMessageCaption({ chat_id: tg.chatId, message_id: prev.photoMessageId!, caption }));
+      for (const [i, m] of before.entries()) {
+        if (m.layout !== "text") {
+          if (photos[i]) await tg.client.editMessageMedia({ chat_id: tg.chatId, message_id: m.photoMessageId!, photo: photos[i]!, caption: captionOf(i) });
+          else await unchangedOk(() => tg.client.editMessageCaption({ chat_id: tg.chatId, message_id: m.photoMessageId!, caption: captionOf(i) }));
+        }
+        if (m.layout !== "photo") await unchangedOk(() => tg.client.editMessageText({ chat_id: tg.chatId, message_id: m.textMessageId!, text: texts[i].html }));
       }
-      if (layout !== "photo") await unchangedOk(() => tg.client.editMessageText({ chat_id: tg.chatId, message_id: prev.textMessageId!, text: text.html }));
-      const done = { ...prev, ...state };
+      const done: TelegramState = { chatId: tg.chatId, picture: post.picture, messages: before.map((m, i) => ({ ...m, picture: pictures[i] })), messageId: prev.messageId };
       await deps.admin.rpc("post_published", { post: post.id, version: post.version, telegram: done as unknown as Json, link: post.link ?? "", by_whom: p.by ?? "schedule" });
       await dropUpload();
       return { edited: true };
@@ -121,21 +146,27 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
     }
   }
 
-  // A new post (the layout changed: the old messages go).
+  // A new post (the messages changed: the old ones go).
   if (prev.chatId === tg.chatId) {
-    for (const id of [prev.photoMessageId, prev.textMessageId].filter((x): x is number => !!x)) {
+    for (const id of before.flatMap((m) => [m.photoMessageId, m.textMessageId]).filter((x): x is number => !!x)) {
       await tg.client.deleteMessage({ chat_id: tg.chatId, message_id: id }).catch(() => undefined);
     }
   }
+  const state: TelegramState = { chatId: tg.chatId, picture: post.picture, messages: [] };
   let first: TelegramMessage | null = null;
-  if (layout !== "text") {
-    first = await tg.client.sendPhoto({ chat_id: tg.chatId, photo: photo!, caption, message_thread_id: tg.topicId });
-    state.photoMessageId = first.message_id;
-  }
-  if (layout !== "photo") {
-    const msg = await tg.client.sendMessage({ chat_id: tg.chatId, text: text.html, message_thread_id: tg.topicId });
-    state.textMessageId = msg.message_id;
-    first = first ?? msg;
+  for (const [i, text] of texts.entries()) {
+    const sent: SentMessage = { layout: layouts[i], picture: pictures[i] };
+    if (layouts[i] !== "text") {
+      const msg = await tg.client.sendPhoto({ chat_id: tg.chatId, photo: photos[i]!, caption: captionOf(i), message_thread_id: tg.topicId });
+      sent.photoMessageId = msg.message_id;
+      first = first ?? msg;
+    }
+    if (layouts[i] !== "photo") {
+      const msg = await tg.client.sendMessage({ chat_id: tg.chatId, text: text.html, message_thread_id: tg.topicId });
+      sent.textMessageId = msg.message_id;
+      first = first ?? msg;
+    }
+    state.messages.push(sent);
   }
   state.messageId = first!.message_id;
   const { error: e3 } = await deps.admin.rpc("post_published", {
@@ -147,7 +178,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   });
   if (e3) throw new Error(e3.message);
   await dropUpload();
-  return { posted: layout, messageId: state.messageId };
+  return { posted: layouts, messageId: state.messageId };
 };
 
 /** "📢 Comms has published *Event* on Telegram" – once per event and channel. */

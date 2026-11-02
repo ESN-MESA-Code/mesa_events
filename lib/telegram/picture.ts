@@ -20,19 +20,33 @@ export function driveFileId(ref: string): string | null {
   return (r.match(/\/d\/([\w-]{20,})/) ?? r.match(/[?&]id=([\w-]{20,})/) ?? r.match(/^([\w-]{25,})$/) ?? [])[1] ?? null;
 }
 
-/** "upload:<path>" – a picture uploaded for the post. */
+/** "upload:<path>" – a picture uploaded for the post (or one event of it). */
 export const UPLOAD_PREFIX = "upload:";
 export const uploadPath = (ref: string | null | undefined): string | null => (ref?.startsWith(UPLOAD_PREFIX) ? ref.slice(UPLOAD_PREFIX.length) : null);
 
-/** Reads an uploaded picture (the post-pictures bucket). */
-export type UploadReader = (path: string) => Promise<{ bytes: Uint8Array; mimeType: string } | null>;
+/** "library:<path>" – a default picture of a format or event type (round 2026-11-03), kept in advertising-pictures. */
+export const LIBRARY_PREFIX = "library:";
+export const libraryPath = (ref: string | null | undefined): string | null => (ref?.startsWith(LIBRARY_PREFIX) ? ref.slice(LIBRARY_PREFIX.length) : null);
+
+/** Where a stored picture is: its bucket and path, null for a link. */
+export function storedPicture(ref: string | null | undefined): { bucket: "post-pictures" | "advertising-pictures"; path: string } | null {
+  const up = uploadPath(ref);
+  if (up) return { bucket: "post-pictures", path: up };
+  const lib = libraryPath(ref);
+  return lib ? { bucket: "advertising-pictures", path: lib } : null;
+}
+
+/** Reads a stored picture (post-pictures or advertising-pictures). */
+export type UploadReader = (path: string, bucket: "post-pictures" | "advertising-pictures") => Promise<{ bytes: Uint8Array; mimeType: string } | null>;
 
 export async function resolvePicture(ref: string, drive: DriveClient, readUpload?: UploadReader): Promise<TelegramPhoto> {
   const r = ref.trim();
-  const path = uploadPath(r);
-  if (path) {
-    const file = readUpload ? await readUpload(path).catch(() => null) : null;
-    if (!file) throw new PictureError("The uploaded picture is gone (it is removed once the post is published) – upload it again.");
+  const stored = storedPicture(r);
+  if (stored) {
+    const path = stored.path;
+    const file = readUpload ? await readUpload(path, stored.bucket).catch(() => null) : null;
+    if (!file)
+      throw new PictureError(stored.bucket === "post-pictures" ? "The uploaded picture is gone (it is removed once the post is published) – upload it again." : "The default picture is gone – choose it again on the Pictures tab.");
     if (!TYPES.includes(file.mimeType)) throw new PictureError("The Telegram picture is not a JPG, PNG or WebP image.");
     if (file.bytes.byteLength > PICTURE_MAX_BYTES) throw new PictureError("The Telegram picture is larger than 10 MB – use a smaller copy.");
     return { bytes: file.bytes, mimeType: file.mimeType, name: path.split("/").pop() || "picture.jpg" };

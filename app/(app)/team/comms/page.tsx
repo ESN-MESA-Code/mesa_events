@@ -8,15 +8,14 @@ import { ActionButton } from "@/components/ActionButton";
 import { StageTrack } from "@/components/status";
 import { MonthSelector } from "@/components/MonthSelector";
 import { CommsTabs } from "@/components/CommsTabs";
-import { EsnUpload } from "@/components/EsnUpload";
-import { noteCancellation, publishDescription } from "@/app/actions/descriptions";
+import { noteCancellation } from "@/app/actions/descriptions";
 import { hasRole } from "@/lib/roles";
 import { loadEsn } from "@/lib/esn/load";
-import { FILTERS, eventStage, parseFilter, stageCounts, type FilterId } from "@/lib/commsStages";
+import { FILTERS, STAGES, eventStage, parseFilter, stageCounts, type FilterId } from "@/lib/commsStages";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { cn } from "@/lib/utils";
 import { RemindButton } from "@/components/RemindButton";
-import { STATE_LABEL, STATE_MARK, boardMonthFor, type ChannelState } from "@/lib/publishing";
+import { STATE_MARK, boardMonthFor, stateLabel, type ChannelState } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -36,8 +35,9 @@ type Row = {
 
 // The Comms team's page, one month at a time (brief 2026-10-29, C): each
 // event of the month with its stage – description to write, in review,
-// approved, published, the event, the report, ESN Activities – and the
-// action of that stage right there. Filters by stage ("Needs Comms" first);
+// approved (published to the Chat space by itself), pretix page, advertised
+// on Telegram and Instagram, the event, the report (round 2026-11-03) – and
+// the action of that stage right there. Filters by stage ("Needs Comms" first);
 // late and missed are marks on the row. Months: those with events from half
 // a year back on; the page opens on the first one with work for Comms.
 export default async function CommsPage({ searchParams }: { searchParams: Promise<{ month?: string; show?: string; missing?: string }> }) {
@@ -61,16 +61,40 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   ]);
   const from = addMonths(thisMonth, -6);
   const rows = ((data ?? []) as Row[]).filter((r) => monthOf(r.starts_at) >= from).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  const [esn, { data: requested }] = await Promise.all([
-    loadEsn(supabase, rows.map((r) => r.event_id)),
-    // Published by a job: until it ran, the row says so instead of offering "Publish" again.
-    supabase.from("descriptions").select("event_id").eq("status", "approved").not("publish_requested_at", "is", null).in("event_id", rows.map((r) => r.event_id)),
+  const ids = rows.map((r) => r.event_id);
+  // Per channel: published, planned, skipped or not planned (brief 2026-10-29, E1) – for the
+  // stages too: the pretix tick and the posts on the advertising channels (round 2026-11-03).
+  const [esn, { data: requested }, { data: statusRows }, { data: channelRows }] = await Promise.all([
+    loadEsn(supabase, ids),
+    // Approved descriptions go to the Chat space by a job: until it ran, the row says so.
+    supabase.from("descriptions").select("event_id").eq("status", "approved").not("publish_requested_at", "is", null).in("event_id", ids),
+    supabase.rpc("publication_status", { events: ids }),
+    supabase.from("publication_channels").select("key, name, required, schedulable").eq("enabled", true).order("position"),
   ]);
   const publishing = new Set((requested ?? []).map((d) => d.event_id));
+  // ESN Activities is the executive board's and has its own page (round 2026-11-03).
+  const channels = (channelRows ?? []).filter((c) => c.key !== "esn");
+  const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
+  const advertising = channels.filter((c) => c.required && c.schedulable);
+  const pretixOn = channels.some((c) => c.key === "pretix");
   const views = new Map(
     rows.map((r) => {
       const e = esn.get(r.event_id);
-      return [r.event_id, eventStage({ description: r.status, startsAt: r.starts_at, now, late: r.late, missed: r.missed, reportIn: !!e?.report, esn: e?.status.state ?? "not_ready" })];
+      const state = (channel: string) => statusOf.get(`${r.event_id}|${channel}`)?.state;
+      return [
+        r.event_id,
+        eventStage({
+          description: r.status,
+          startsAt: r.starts_at,
+          now,
+          late: r.late,
+          missed: r.missed,
+          reportIn: !!e?.report,
+          pretix: !pretixOn || state("pretix") === "published",
+          // Posted, or skipped on purpose, on every advertising channel.
+          advertised: advertising.every((c) => ["published", "skipped"].includes(state(c.key) ?? "")),
+        }),
+      ];
     })
   );
   const months = [...new Set(rows.map((r) => monthOf(r.starts_at)))].sort();
@@ -85,13 +109,6 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const monthViews = inMonth.map((r) => views.get(r.event_id)!);
   const counts = stageCounts(monthViews);
   const filter = parseFilter(sp.show);
-  // Per channel: published, planned, skipped or not planned (brief 2026-10-29, E1).
-  const [{ data: statusRows }, { data: channelRows }] = await Promise.all([
-    supabase.rpc("publication_status", { events: inMonth.map((r) => r.event_id) }),
-    supabase.from("publication_channels").select("key, name, required, schedulable").eq("enabled", true).order("position"),
-  ]);
-  const channels = channelRows ?? [];
-  const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
   const missing = channels.find((c) => c.key === sp.missing)?.key ?? null;
   const shown = inMonth.filter((r) => {
     if (missing) return statusOf.get(`${r.event_id}|${missing}`)?.state !== "published";
@@ -99,15 +116,15 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
     return filter === "all" || (filter === "needs" ? v.needsComms : v.filter === filter);
   });
   const descriptionsIn = inMonth.filter((r) => ["submitted", "approved", "published"].includes(r.status)).length;
-  const happened = inMonth.filter((r) => Date.parse(r.starts_at) <= now);
-  const uploaded = happened.filter((r) => esn.get(r.event_id)?.status.state === "uploaded").length;
+  const ahead = inMonth.filter((r) => Date.parse(r.starts_at) > now);
+  const advertisedCount = ahead.filter((r) => views.get(r.event_id)!.steps[STAGES.findIndex((st) => st.id === "advertise")].state === "done").length;
   const deadline = inMonth.find((r) => r.deadline)?.deadline ?? null;
   const showHref = (show: FilterId) => `/team/comms?month=${monthParam(month!)}${show === "needs" ? "" : `&show=${show}`}`;
   const missingHref = (channel: string) => `/team/comms?month=${monthParam(month!)}&show=all&missing=${channel}`;
 
   return (
     <>
-      <PageHeader title="Comms" description="Each event of the month from its description to ESN Activities – what is next, and the action right there.">
+      <PageHeader title="Comms" description="Each event of the month from its description to its report – approved descriptions go to the Chat space by themselves; then the pretix page and the advertising. What is next, and the action right there.">
         <div className="flex flex-wrap items-center gap-3">
           <MonthSelector
             options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
@@ -157,7 +174,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="comms-month">
               <h2 className="text-base font-semibold text-gray-900">{cycleLabel(month)}</h2>
               <p className="text-sm text-gray-600" data-testid="comms-progress">
-                {descriptionsIn} of {inMonth.length} descriptions in · {uploaded} of {happened.length} on ESN Activities
+                {descriptionsIn} of {inMonth.length} descriptions in · {advertisedCount} of {ahead.length} upcoming advertised
               </p>
               <p className="text-xs text-gray-500">{deadline ? `Description ${formatDue(deadline, now)}` : "No description deadline set"}</p>
             </div>
@@ -214,7 +231,13 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
               <ul className="divide-y divide-gray-100" data-testid="comms-rows">
                 {shown.map((r) => {
                   const v = views.get(r.event_id)!;
-                  const e = esn.get(r.event_id);
+                  // The board of the month its first post goes out in – for an event ahead with none yet, the first board that lists it (round 2026-11-02).
+                  const firstPost = channels
+                    .filter((c) => c.schedulable)
+                    .map((c) => statusOf.get(`${r.event_id}|${c.key}`))
+                    .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
+                    .sort()[0];
+                  const boardHref = `/team/comms/schedule?month=${monthParam(firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth))}&event=${r.event_id}`;
                   return (
                     <li key={r.event_id} className="space-y-2 py-3" data-testid={`comms-row-${r.event_id}`}>
                       <div className="flex flex-wrap items-center gap-2">
@@ -224,6 +247,12 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                         <span className="text-xs text-gray-500">{formatShortDate(r.starts_at)}</span>
                         {v.marks.includes("late") && <Badge tone="red">late</Badge>}
                         {v.marks.includes("missed") && <Badge tone="gray">missed</Badge>}
+                        {/* Approved = published by itself (round 2026-11-03); until the job ran, the row says so. */}
+                        {r.status === "approved" && (
+                          <span className="text-xs text-gray-500" data-testid="chat-publishing">
+                            {publishing.has(r.event_id) ? "Going to the Chat space…" : "Goes to the Chat space once it exists"}
+                          </span>
+                        )}
                         <span className="ml-auto flex flex-wrap items-center gap-2" data-testid="row-action">
                           {v.current === "write" && (isComms ? <RemindButton eventId={r.event_id} about="description" /> : <span className="text-xs text-gray-500">The OC writes it</span>)}
                           {v.current === "review" && (
@@ -231,23 +260,18 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                               Review
                             </Link>
                           )}
-                          {v.current === "approved" &&
-                            (publishing.has(r.event_id) ? (
-                              <span className="text-xs text-gray-500">Publishing to the Chat space…</span>
-                            ) : isComms ? (
-                              <ActionButton action={publishDescription} input={{ event_id: r.event_id }} confirm={`Publish “${r.title}” to the event's Chat space?`}>
-                                Publish
-                              </ActionButton>
-                            ) : (
-                              <span className="text-xs text-gray-500">Ready to publish</span>
-                            ))}
-                          {v.current === "published" && <span className="text-xs text-gray-500">Published – the event is on {formatShortDate(r.starts_at)}</span>}
-                          {v.current === "report" && (isComms ? <RemindButton eventId={r.event_id} about="report" /> : <span className="text-xs text-gray-500">The OC writes the report</span>)}
-                          {v.current === null && e?.status.state === "uploaded" && (
-                            <a href={e.status.url} target="_blank" rel="noopener noreferrer" className="text-xs text-esn hover:underline">
-                              View on ESN Activities
-                            </a>
+                          {v.current === "pretix" && (
+                            <Link href={boardHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                              Tick pretix
+                            </Link>
                           )}
+                          {v.current === "advertise" && (
+                            <Link href={boardHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                              Advertise
+                            </Link>
+                          )}
+                          {v.current === "happened" && <span className="text-xs text-gray-500">Advertised – the event is on {formatShortDate(r.starts_at)}</span>}
+                          {v.current === "report" && (isComms ? <RemindButton eventId={r.event_id} about="report" /> : <span className="text-xs text-gray-500">The OC writes the report</span>)}
                         </span>
                       </div>
                       <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
@@ -255,15 +279,8 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                         {(() => {
                           const req = channels.filter((c) => c.required);
                           const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
-                          // The board of the month its first post goes out in – for an event ahead with none yet, the first board that lists it (round 2026-11-02).
-                          const firstPost = channels
-                            .filter((c) => c.schedulable)
-                            .map((c) => statusOf.get(`${r.event_id}|${c.key}`))
-                            .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
-                            .sort()[0];
-                          const boardMonth = firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth);
                           return req.length > 0 ? (
-                            <Link href={`/team/comms/schedule?month=${monthParam(boardMonth)}&event=${r.event_id}`} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
+                            <Link href={boardHref} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
                               {on}/{req.length} channels planned
                             </Link>
                           ) : null;
@@ -272,14 +289,13 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                           const st = statusOf.get(`${r.event_id}|${c.key}`);
                           const state = (st?.state ?? "not_planned") as ChannelState;
                           return (
-                            <span key={c.key} title={`${c.name}: ${STATE_LABEL[state]}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`} className={cn(state === "published" && "text-emerald-700", state === "planned" && "text-esn")}>
+                            <span key={c.key} title={`${c.name}: ${stateLabel(c.key, state)}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`} className={cn(state === "published" && "text-emerald-700", state === "planned" && "text-esn")}>
                               {c.name} {STATE_MARK[state]}
                               {state === "planned" && st?.at ? ` ${formatShortDate(st.at)}` : ""}
                             </span>
                           );
                         })}
                       </p>
-                      {v.current === "esn" && e && <EsnUpload eventId={r.event_id} status={e.status} canSet={isExecutive} compact />}
                     </li>
                   );
                 })}

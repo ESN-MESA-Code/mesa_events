@@ -40,40 +40,47 @@ describe("Comms stages", () => {
   const now = Date.parse("2026-11-10T12:00:00Z");
   const ahead = "2026-11-20T18:00:00Z";
   const past = "2026-11-05T18:00:00Z";
-  const base: StageInput = { description: "missing", startsAt: ahead, now, late: false, missed: false, reportIn: false, esn: "not_ready" };
+  const base: StageInput = { description: "missing", startsAt: ahead, now, late: false, missed: false, reportIn: false, pretix: false, advertised: false };
   const stage = (i: Partial<StageInput>) => eventStage({ ...base, ...i });
 
-  it("follows the description, the event, the report and ESN Activities", () => {
+  it("follows the description, pretix, the advertising, the event and the report (round 2026-11-03)", () => {
     expect(stage({}).current).toBe("write");
     expect(stage({ description: "changes_requested" }).current).toBe("write");
     expect(stage({ description: "submitted" })).toMatchObject({ current: "review", filter: "review", needsComms: true, position: 2 });
-    expect(stage({ description: "approved" })).toMatchObject({ current: "approved", filter: "publish", needsComms: true });
-    expect(stage({ description: "published" })).toMatchObject({ current: "published", filter: "waiting", needsComms: false });
-    expect(stage({ description: "published", startsAt: past })).toMatchObject({ current: "report", filter: "report", needsComms: false, position: 6 });
-    // ESN Activities is the executive board's since round 2026-10-30: never Comms work.
-    expect(stage({ description: "published", startsAt: past, reportIn: true, esn: "ready" })).toMatchObject({ current: "esn", filter: "esn", needsComms: false });
-    expect(stage({ description: "published", startsAt: past, reportIn: true, esn: "not_ready" })).toMatchObject({ current: "esn", needsComms: false });
-    const done = stage({ description: "published", startsAt: past, reportIn: true, esn: "uploaded" });
+    // Approved goes to the Chat space by itself: next is the pretix page, then the posts.
+    expect(stage({ description: "approved" })).toMatchObject({ current: "pretix", filter: "pretix", needsComms: true, position: 4 });
+    expect(stage({ description: "published" })).toMatchObject({ current: "pretix", filter: "pretix", needsComms: true });
+    expect(stage({ description: "published", pretix: true })).toMatchObject({ current: "advertise", filter: "advertise", needsComms: true, position: 5 });
+    // pretix comes first even when the posts are out.
+    expect(stage({ description: "published", advertised: true })).toMatchObject({ current: "pretix" });
+    expect(stage({ description: "published", pretix: true, advertised: true })).toMatchObject({ current: "happened", filter: "waiting", needsComms: false });
+    expect(stage({ description: "published", startsAt: past })).toMatchObject({ current: "report", filter: "report", needsComms: false, position: 7 });
+    const done = stage({ description: "published", startsAt: past, reportIn: true, pretix: true, advertised: true });
     expect(done).toMatchObject({ current: null, filter: "done", position: 7 });
     expect(done.steps.every((s) => s.state === "done")).toBe(true);
+    expect(done.steps.map((s) => s.label)).toEqual(["To write", "In review", "Approved · in the Chat space", "pretix page", "Advertised", "Event happened", "Report"]);
   });
 
   it("highlights the current stage, ticks what is behind it", () => {
-    expect(stage({ description: "approved" }).steps.map((s) => s.state)).toEqual(["done", "done", "current", "todo", "todo", "todo", "todo"]);
+    expect(stage({ description: "approved" }).steps.map((s) => s.state)).toEqual(["done", "done", "done", "current", "todo", "todo", "todo"]);
+    expect(stage({ description: "approved", pretix: true }).steps.map((s) => s.state)).toEqual(["done", "done", "done", "done", "current", "todo", "todo"]);
   });
 
   it("late and missed are marks; late descriptions need Comms (chasing), missed ones move on", () => {
     expect(stage({ late: true })).toMatchObject({ marks: ["late"], needsComms: true });
     const missed = stage({ description: "draft", startsAt: past, missed: true });
     expect(missed).toMatchObject({ current: "report", marks: ["missed"] });
-    expect(missed.steps.map((s) => s.state)).toEqual(["todo", "todo", "todo", "todo", "done", "current", "todo"]);
+    expect(missed.steps.map((s) => s.state)).toEqual(["todo", "todo", "todo", "todo", "todo", "done", "current"]);
   });
 
   it("counts per filter and 'Needs Comms'; unknown filters fall back to it", () => {
-    const counts = stageCounts([stage({ description: "submitted" }), stage({ description: "submitted" }), stage({ description: "approved" }), stage({})]);
-    expect(counts).toMatchObject({ review: 2, publish: 1, write: 1, needs: 3, all: 4, esn: 0 });
-    expect(parseFilter("esn")).toBe("esn");
+    const counts = stageCounts([stage({ description: "submitted" }), stage({ description: "submitted" }), stage({ description: "approved" }), stage({ description: "approved", pretix: true }), stage({})]);
+    expect(counts).toMatchObject({ review: 2, pretix: 1, advertise: 1, write: 1, needs: 4, all: 5 });
+    expect(parseFilter("advertise")).toBe("advertise");
     expect(parseFilter("all")).toBe("all");
+    // Gone since round 2026-11-03: publishing is automatic, ESN Activities has its own tab.
+    expect(parseFilter("publish")).toBe("needs");
+    expect(parseFilter("esn")).toBe("needs");
     expect(parseFilter("nonsense")).toBe("needs");
     expect(parseFilter(undefined)).toBe("needs");
   });

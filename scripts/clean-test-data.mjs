@@ -149,7 +149,8 @@ async function removeOrphans(db) {
   const kept = new Set(
     posts
       .filter((p) => p.publication_post_events.length && p.telegram)
-      .flatMap((p) => [p.telegram.photoMessageId, p.telegram.textMessageId].filter(Boolean).map((id) => `${p.telegram.chatId}|${id}`))
+      // One message per event since round 2026-11-03 (`messages`); older posts kept the ids at the top.
+      .flatMap((p) => [p.telegram, ...(p.telegram.messages ?? [])].flatMap((m) => [m.photoMessageId, m.textMessageId]).filter(Boolean).map((id) => `${p.telegram.chatId}|${id}`))
   );
   const messages = check(await db.from("fake_telegram_messages").select("id, chat_id, message_id"), "fake Telegram messages");
   const orphanMessages = messages.filter((m) => !kept.has(`${m.chat_id}|${m.message_id}`)).map((m) => m.id);

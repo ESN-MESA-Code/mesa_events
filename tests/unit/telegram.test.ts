@@ -3,7 +3,7 @@
 // the picture rules and the Bot API client against a mocked fetch.
 import { describe, expect, it, vi } from "vitest";
 import { emptyFields, type DescriptionFields } from "@/lib/description/template";
-import { CAPTION_MAX, TELEGRAM_MAX, bundleMessage, bundlePrice, eventMessage, lengthProblem, telegramLayout } from "@/lib/telegram/messages";
+import { CAPTION_MAX, TELEGRAM_MAX, eventMessage, lengthProblem, messagePictures, postLayouts, postMessages, telegramLayout } from "@/lib/telegram/messages";
 import { postWarnings, telegramRefusal, type PostEventFacts } from "@/lib/publishing";
 import { BotApiTelegramClient } from "@/lib/telegram/client";
 import { MemoryTelegramClient } from "@/lib/telegram/fakes";
@@ -33,19 +33,32 @@ describe("Telegram messages", () => {
     expect(m.length).toBe(m.html.replace(/<[^>]+>/g, "").replace("&amp;", "&").length);
   });
 
-  it("a bundle: a heading and a short block per event, in order", () => {
-    const m = bundleMessage("This week at ESN MESA", [
-      { title: "Pub Quiz", startsAt: "2026-11-05T18:00:00Z", price: bundlePrice(quiz), link: "https://pretix.eu/esnmesa/quiz/" },
-      { title: "Hike <3", startsAt: "2026-11-07T07:00:00Z", price: "FREE" },
-    ]);
-    expect(m.html).toBe(
-      [
-        "<b>📅 This week at ESN MESA</b>",
-        "<b>Pub Quiz</b>\n🗓️ Thu, 5 Nov 2026, 19:00\n💸 € 5.00\n🔗 https://pretix.eu/esnmesa/quiz/",
-        "<b>Hike &lt;3</b>\n🗓️ Sat, 7 Nov 2026, 08:00\n💸 FREE",
-      ].join("\n\n")
-    );
-    expect(bundleMessage("", []).titleHtml).toBe("<b>📅 Coming up at ESN MESA</b>");
+  it("several events: one message per event, in order, after the heading when there is one (round 2026-11-03)", () => {
+    const hike = { ...quiz, title: "Hike <3", price: "free" };
+    const ms = postMessages("This week at ESN MESA", [{ fields: quiz, link: "https://pretix.eu/esnmesa/quiz/" }, { fields: hike }]);
+    expect(ms.map((m) => m.titleHtml)).toEqual(["<b>📅 This week at ESN MESA</b>", "<b>Pub Quiz &amp; Friends</b>", "<b>Hike &lt;3</b>"]);
+    expect(ms[0].html).toBe("<b>📅 This week at ESN MESA</b>");
+    // Each event's message is its single-event post, with where to sign up when known.
+    expect(ms[1].html).toBe(`${eventMessage(quiz).html}\n\n🔗 Sign up: https://pretix.eu/esnmesa/quiz/`);
+    expect(ms[2].html).toBe(eventMessage(hike).html);
+    // No heading: the events only; one event: no heading message at all.
+    expect(postMessages("", [{ fields: quiz }, { fields: hike }])).toHaveLength(2);
+    expect(postMessages("This week", [{ fields: quiz }])).toEqual([eventMessage(quiz)]);
+    // Each message has the layout of its own picture.
+    expect(postLayouts(ms, ["upload:a.png", null, "library:b.png"])).toEqual(["photo", "text", "photo"]);
+    expect(postLayouts(ms, [null, null, null])).toEqual(["text", "text", "text"]);
+  });
+
+  it("a picture per message: the heading the post's, each event its own, else its default", () => {
+    const evs = [
+      { own: "upload:p/quiz.png", fallback: "library:format/quiz.png" },
+      { own: null, fallback: "library:type/trip.png" },
+      { own: null, fallback: null },
+    ];
+    expect(messagePictures("This week", "upload:p/head.png", evs)).toEqual(["upload:p/head.png", "upload:p/quiz.png", "library:type/trip.png", null]);
+    // No heading: a post picture set before pictures per event stays on the first event.
+    expect(messagePictures("", "upload:p/old.png", [{ own: null, fallback: "library:x.png" }, ...evs.slice(1)])).toEqual(["upload:p/old.png", "library:type/trip.png", null]);
+    expect(messagePictures("Heading", null, [{ own: null, fallback: "library:x.png" }])).toEqual(["library:x.png"]);
   });
 
   it("the bot's layout: text only; one photo post when it fits a caption; else photo then text", () => {
