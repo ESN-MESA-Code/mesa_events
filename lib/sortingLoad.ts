@@ -7,7 +7,7 @@ import type { Category, Format } from "@/lib/formats";
 export async function loadSorting(supabase: Db): Promise<{ categories: Category[]; formats: Format[] }> {
   const [{ data: categories }, { data: formats }] = await Promise.all([
     supabase.from("event_categories").select("id, name, emoji, esn_type, keywords, active, sort").order("sort"),
-    supabase.from("event_formats").select("id, name, category_id, type, helpers_needed, location, active").order("name"),
+    supabase.from("event_formats").select("id, name, category_id, type, helpers_needed, location, meeting_point, active").order("name"),
   ]);
   return { categories: categories ?? [], formats: formats ?? [] };
 }

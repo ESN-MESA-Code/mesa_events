@@ -8,6 +8,7 @@ import { hasRole } from "@/lib/roles";
 import { Badge } from "@/components/ui";
 import { EventStatusBadge } from "@/components/status";
 import { EventBreadcrumb, EventTabs, NextStepBanner } from "./EventTabs";
+import { eventMeeting, meetingShort } from "@/lib/meeting";
 
 export default async function EventLayout({ params, children }: { params: Promise<{ id: string }>; children: React.ReactNode }) {
   const { id } = await params;
@@ -38,6 +39,7 @@ export default async function EventLayout({ params, children }: { params: Promis
           {formatDateTime(event.starts_at)}
           {event.ends_at && ` – ${formatDateTime(event.ends_at)}`}
           {event.location && ` · ${event.location}`}
+          {eventMeeting(event) && ` · ${meetingShort(eventMeeting(event))}`}
         </p>
       </div>
       {step && step.kind !== "done" && (

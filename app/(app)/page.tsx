@@ -19,6 +19,8 @@ import { OrientationCard } from "@/components/Orientation";
 import { byUrgency, happeningNow } from "@/lib/myEvents";
 import { cycleTimeline, upcomingCycleMonth } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
+import { eventMeeting, meetingShort } from "@/lib/meeting";
+import { loadStillToPlan } from "@/lib/publishingLoad";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -47,7 +49,7 @@ export default async function HomePage() {
     volunteerForms(viewer.id),
     supabase
       .from("assignments")
-      .select("id, role, events(id, title, status, starts_at, ends_at, location, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
+      .select("id, role, events(id, title, status, starts_at, ends_at, location, meeting_point, meeting_street, meeting_postal_code, meeting_city, meeting_time, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
       .eq("profile_id", viewer.id)
       .eq("status", "active"),
     supabase.rpc("open_slots"),
@@ -69,6 +71,11 @@ export default async function HomePage() {
     starts_at: string;
     ends_at: string | null;
     location: string | null;
+    meeting_point: string | null;
+    meeting_street: string | null;
+    meeting_postal_code: string | null;
+    meeting_city: string | null;
+    meeting_time: string | null;
     helpers_needed: number;
     chat_space_name: string | null;
     chat_space_url: string | null;
@@ -235,6 +242,8 @@ export default async function HomePage() {
                             Starts {berlinTime(event.starts_at)}
                             {event.location && ` · ${event.location}`}
                           </span>
+                          {/* Where to be first, when it is not the location (round 2026-11-02). */}
+                          {eventMeeting(event) && <span data-testid="helper-meeting">{meetingShort(eventMeeting(event))}</span>}
                           {event.chat_space_url ? (
                             <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="font-medium text-esn hover:underline">
                               Open the Chat space ↗
@@ -388,10 +397,12 @@ async function EventsQueue() {
 async function CommsQueue() {
   const supabase = await createSessionClient();
   const now = nowMs();
-  const [{ data }, { data: posts }] = await Promise.all([
+  const [{ data }, { data: posts }, toPlan] = await Promise.all([
     supabase.rpc("description_overview"),
     // The publishing schedule (brief 2026-10-29, E3): planned posts until a week ahead.
     supabase.from("publication_posts").select("scheduled_for").eq("status", "planned").lte("scheduled_for", new Date(now + 7 * 86_400_000).toISOString()),
+    // Upcoming events of any month not on every channel yet (round 2026-11-02).
+    loadStillToPlan(supabase, now),
   ]);
   const overdue = (posts ?? []).filter((p) => Date.parse(p.scheduled_for) < now).length;
   const thisWeek = (posts ?? []).length - overdue;
@@ -407,6 +418,7 @@ async function CommsQueue() {
       <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
       <Figure label="Approved – ready to publish" value={ready.length} href={link(ready, "publish")} />
       <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
+      <Figure label="Upcoming events still to plan" value={toPlan.length} tone="amber" href="/team/comms/schedule" />
       <Figure label="Posts planned this week" value={thisWeek} href="/team/comms/schedule" />
       <Figure label="Overdue posts" value={overdue} tone="red" href="/team/comms/schedule" />
     </QueueCard>

@@ -22,6 +22,9 @@ const EVENT_FIELDS: Record<string, string> = {
   starts_at: "date",
   ends_at: "end",
   location: "location",
+  meeting_point: "meeting point",
+  meeting_street: "meeting point",
+  meeting_time: "meeting time",
   price_cents: "price",
   capacity: "capacity",
   title: "title",
@@ -41,7 +44,7 @@ export function describeActivity(e: LogEntry, nameOf: (profileId: string) => str
     if (typeof d.status === "string") return `Status: ${EVENT_STATUS_LABELS[d.status as EventStatus] ?? d.status}`;
     if ("understaffed_decision" in d && d.understaffed_decision === null) return "The OC left – the run-with-fewer-helpers decision was reset";
     if (d.chat_space_url || d.chat_space_name) return "Chat space created";
-    const fields = Object.keys(d).filter((k) => k in EVENT_FIELDS).map((k) => EVENT_FIELDS[k]);
+    const fields = [...new Set(Object.keys(d).filter((k) => k in EVENT_FIELDS).map((k) => EVENT_FIELDS[k]))];
     return fields.length ? `Changed the ${fields.join(", ")}` : null;
   }
   if (e.entity === "assignments") {

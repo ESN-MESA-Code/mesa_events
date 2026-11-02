@@ -85,6 +85,9 @@ export const FAKE_PLACES: AddressSuggestion[] = [
   ["Pinakothek der Moderne", "Barer Straße 40", "80333", "München"],
   ["Bavaria Filmstadt", "Bavariafilmplatz 7", "82031", "Grünwald"],
   ["Schloss Neuschwanstein", "Neuschwansteinstraße 20", "87645", "Schwangau"],
+  // Meeting points and the trips' places (round 2026-11-02).
+  ["München Hauptbahnhof", "Bayerstraße 10a", "80335", "München"],
+  ["Bahnhof Tegernsee", "Bahnhofplatz 1", "83684", "Tegernsee"],
   ["", "Marienplatz 8", "80331", "München"],
 ].map(([name, street, postalCode, city]) => ({ name, street, postalCode, city, country: "DE", label: [name, street, `${postalCode} ${city}`].filter(Boolean).join(", ") }));
 

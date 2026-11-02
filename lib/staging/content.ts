@@ -10,6 +10,8 @@ export interface EventPlan {
   type: EventType;
   /** Venue with address, as the OC types it (the ESN form parses the address). */
   venue: string;
+  /** Where people meet first when it is not the venue (round 2026-11-02): the place's name and "HH:mm". */
+  meeting?: { place: string; time: string };
   priceCents: number | null;
   capacity: number | null;
   helpers: number;
@@ -192,6 +194,7 @@ export const EVENTS = {
     title: "Hike to the Kampenwand",
     type: "day_trip",
     venue: "Bahnhof Aschau im Chiemgau, Bahnhofstraße 10, 83229 Aschau im Chiemgau",
+    meeting: { place: "München Ostbahnhof, Gleis 5", time: "06:45" },
     priceCents: 2200,
     capacity: 30,
     helpers: 2,
@@ -288,6 +291,7 @@ export const EVENTS = {
     title: "Day Trip to Lake Tegernsee",
     type: "day_trip",
     venue: "Bahnhof Tegernsee, Bahnhofplatz 1, 83684 Tegernsee",
+    meeting: { place: "München Hauptbahnhof, Starnberger Flügelbahnhof", time: "07:15" },
     priceCents: 2500,
     capacity: 40,
     helpers: 2,

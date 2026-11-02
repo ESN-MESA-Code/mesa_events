@@ -968,3 +968,104 @@ Home without the leaderboard. Where the user did not choose, the recommended opt
 - **My events** with a date leaf per event; open slots with their date; team queues unchanged
   (the Events queue warns about a missing cycle and shows a late cycle in red).
 
+## 2026-11-02 – The meeting point
+
+Where people meet is not always where the event happens: a hike meets at München Hauptbahnhof
+and takes place at the Tegernsee. Until now an event had one place (`events.location` + the
+address), so OCs put the meeting point into the venue and the description's venue check
+complained that the post's venue was not the event's location.
+
+- **Two places, the location stays the event's.** `location` and `address_*` remain where the
+  event happens – that is what ESN Activities asks for (its export is unchanged) and what the
+  calendar entry's LOCATION says. The meeting point is optional and separate: `meeting_point`
+  (name), `meeting_country/street/postal_code/city` (an optional address with the same shapes and
+  checks as the event's, verified with the same lookup) and `meeting_time`. No meeting point =
+  people meet at the location; nothing changes for those events.
+- **The meeting time is a time of day** (`time`, Berlin, on the event's day), not an instant: it
+  follows the event when the Events team moves the date, and needs no check against `starts_at`
+  in the database (which would break on every date move). A meeting time after the start is only
+  a warning in the description. The database requires a place (name or street) for a time or an
+  address (`events_meeting_needs_place_check`), whole minutes only.
+- **Who changes it:** the OC changes the place, so the meeting point too – `guard_event_update()`
+  lists only the Events team's columns, so no guard change was needed; RLS is unchanged (the OC
+  and the Events team update the event). The activity log names "meeting point" / "meeting
+  time".
+- **Where it is entered:** the event's "Edit details" (checkbox "People meet somewhere else
+  first", then the same place search as the location plus a time); the description's Basics (the
+  same fields, saved on the event like the venue); the schedule's add and edit forms (the name
+  only – address and time on the event page; clearing the name there clears the whole meeting
+  point, as "they meet at the location"). A format has a **usual meeting point**
+  (`event_formats.meeting_point`); a new event of the format starts with it (schedule form and
+  `accept_idea()`).
+- **The post has its own line** under the venue: `🤝 Meeting point: München Hauptbahnhof
+  (Bayerstraße 10a, 80335 München) at 08:15`, only when there is a meeting point – the house
+  template is otherwise unchanged. Description fields `meeting` and `meetingTime` (older drafts
+  load with them empty); a new description starts with the event's meeting point.
+- **The mismatch check compares like with like** (`placeMismatch`, lib/meeting.ts): the venue
+  line with the location, the meeting line with the meeting point. A post whose venue line names
+  the meeting point (written before there was a meeting line) is not flagged: it is not wrong,
+  only less precise. The meeting line has its own warning and "Use the fields in the post".
+- **Shown where helpers and participants need it:** the event page (Details and the header:
+  "Meet 08:15 at München Hauptbahnhof"), the helper's info on Home next to "Starts 18:00 ·
+  <location>", the Chat post, and the calendar feed (first line of the entry's description:
+  "Meeting point: … at 08:15"). The month calendar and its lists keep showing the location.
+- The fake address lookup (tests, staging) knows München Hauptbahnhof and Bahnhof Tegernsee; the
+  demo seed gives the Tegernsee and Kampenwand trips a meeting point in Munich.
+
+## 2026-11-02 – Posts for events weeks ahead
+
+Comms advertises big events (parties, day and weekend trips) a month or more before they happen.
+The publishing schedule worked one month at a time, which got in the way. What blocked it:
+
+- **The list held one month.** The board's list showed the selected month's events (plus events
+  already on that month's posts), so a December trip could not be dragged onto a November day.
+- **Events in their volunteer form were missing.** The list came from `description_overview()`,
+  which has only confirmed, understaffed and completed events, while `private.check_post_event`
+  already accepts `scheduled` ones – so next month's events (form open from the 10th to the 15th)
+  and anything later never showed, not even in their own month.
+- **"Plan…" was held to the month** (the date field's min/max were the month's first and last
+  day) and the calendar only takes drops on its own days. Moving a post to another month already
+  worked ("Change day" had no limit).
+- **The default month** counted work only in the month an event takes place.
+- **Database:** nothing about `scheduled_for` – no "before the event", no "not in the past"; only
+  the board warns "planned after the event". **Descriptions:** a post can be planned with no
+  approved description (a warning); only the Telegram job refuses to send one (unapproved or TBA),
+  at its time, and then does not retry.
+
+Decisions:
+
+- **The board's month is the month the posts go out.** Below the month's own events the list
+  holds the upcoming events of the next three months (`AHEAD_MONTHS`), grouped by month ("Coming
+  up: December 2026 (9, 3 big)"), the next month open, the others folded. Three months covers the
+  big parties and trips; more would make the list long without helping (an event further out
+  shows up on the board three months before its month). Within a later month the **big events
+  come first** (type special, day trip, weekend trip, with a "big" badge), then by date. Their
+  chips go onto this month's days like any other. Later months are shown only while the board's
+  month is not over (an old month's board stays as it was). "Only the ones still to do" and the
+  "N upcoming still to plan" line cover all of them.
+- **The list takes the events Comms may post about** – the same statuses as
+  `check_post_event` (`scheduled`, `confirmed`, `understaffed`, `completed`, from the platform),
+  read from `events` directly. **Drafts stay out** (the cycle is not fixed yet; kept rule).
+- **A post may sit on any day up to its event.** "Plan…" offers today … the event's day and
+  suggests three days before the event, on this month's board when possible (a January trip on
+  the November board: 30 November); a day in another month says "That day is on the December
+  2026 board". The calendar still shows one month; a post planned elsewhere shows in the
+  event's chips (⏰ date) and on that month's board.
+- **No new database guard**, so no migration: the rules stay where they were. "After the event"
+  remains a warning (not a refusal), planning without a description remains allowed – for an
+  event weeks ahead the description is written by the 20th of the month before.
+- **Telegram tells it straight away:** a planned Telegram post whose description is not
+  approved yet (or whose price is TBA) shows the job's own reason in its preview and **no
+  Confirm button** – it can stay planned and is confirmed once the description is approved. The
+  job keeps refusing as before (approval can be taken back later). The warning "description not
+  approved yet" names when it is due ("due Sun 20 Dec") when the event's cycle has a deadline.
+- **"To plan" counts ahead:** the current month is marked "to plan" when an upcoming event of the
+  next three months is on no channel yet (its posts can go out now); the board still opens on the
+  first month with work.
+- **Comms page, "Events by stage":** the "N/M channels planned" link opens the board of the
+  month the event's first post goes out in (for an event ahead with none yet, the first board
+  from now on that lists it – `boardMonthFor()`) and highlights the event (`?event=`). The tab itself still lists events by the month they
+  happen in.
+- **Home, the Comms queue:** a new figure "Upcoming events still to plan" – upcoming events of
+  this month and the three ahead (what the board lists) missing a required schedule channel (Telegram, Instagram; skipped posts do not
+  count) – leading to the board (`lib/publishingLoad.ts`, `stillToPlan()`).

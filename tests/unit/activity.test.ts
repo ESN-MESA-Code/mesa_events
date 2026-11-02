@@ -13,6 +13,7 @@ describe("activity in plain language", () => {
     expect(say({ details: { status: "cancelled", cancelled_at: "x" } })).toBe("Event cancelled");
     expect(say({ details: { status: "understaffed", cancelled_at: null } })).toBe("Event reopened (Under-staffed)");
     expect(say({ details: { location: "Pub", price_cents: 500 } })).toBe("Changed the location, price");
+    expect(say({ details: { meeting_point: "Hbf", meeting_street: "Bayerstraße 10a", meeting_time: "08:15:00" } })).toBe("Changed the meeting point, meeting time");
     expect(say({ details: { chat_space_name: "spaces/x", chat_space_url: "https://chat" } })).toBe("Chat space created");
     expect(say({ details: { updated_by: "x" } })).toBeNull();
   });

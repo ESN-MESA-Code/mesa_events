@@ -5,6 +5,7 @@
 // after its preview and see it publish itself through the job runner.
 import { TEST_TAG, USERS, admin, createEvent } from "../helpers/local";
 import { drag, expect, freshMonth, runJobs, test } from "./fixtures";
+import { addMonths, monthLabel } from "@/lib/dates";
 
 const fields = (title: string) => ({ title, dateIso: "2045-01-10", time: "19:00", venue: "Shamrock", price: "5", hook: "a test", intro: "A test event.", program: "Testing", bring: "Nothing", closing: "see you" });
 
@@ -55,6 +56,7 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
   await expect(igPost).toContainText(hike.title);
 
   // Bundle: the quiz's Instagram chip dropped onto the hike's post.
+  await page.getByTestId(`chip-instagram-${quiz.id}`).evaluate((el) => el.scrollIntoView({ block: "center" }));
   await drag(page, page.getByTestId(`chip-instagram-${quiz.id}`), igPost);
   await expect(igPost).toContainText("2:");
   await expect(igPost).toContainText(quiz.title);
@@ -110,4 +112,57 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
 
   await admin.from("fake_telegram_messages").delete().eq("chat_id", tg.chatId).eq("message_id", tg.textMessageId);
   await admin.from("fake_chat_messages").delete().like("text", `%${tag}%`);
+});
+
+// Round 2026-11-02: big events are advertised weeks ahead – the list of a
+// month holds the later months' events (big ones first), their posts sit
+// on this month's days, and Telegram says why it cannot be confirmed yet.
+test("plan posts for a big event two months ahead", async ({ page, as }) => {
+  const month = freshMonth();
+  const later = addMonths(`${month}-01`, 2).slice(0, 7);
+  const tag = Math.random().toString(36).slice(2, 7);
+  const trip = await createEvent({ title: `Weekend trip ${tag}`, type: "weekend_trip", status: "scheduled", starts_at: `${later}-14T07:00:00Z`, oc: USERS.oc, helpers_needed: 1 });
+  const stammtisch = await createEvent({ title: `Stammtisch ${tag}`, status: "scheduled", starts_at: `${later}-03T18:00:00Z`, oc: USERS.oc, helpers_needed: 1 });
+  // The board's month has its own event (a month without events or posts is not offered).
+  const quiz = await createEvent({ title: `Quiz ${tag}`, starts_at: `${month}-25T18:00:00Z`, oc: USERS.oc, helpers_needed: 1 });
+
+  await as(USERS.comms);
+  await page.goto(`/team/comms/schedule?month=${month}`);
+  const list = page.getByTestId("tray");
+  await expect(list.getByTestId(`tray-${quiz.id}`)).toBeVisible();
+  const group = list.getByTestId(`tray-later-${later}`);
+  await expect(group).toContainText(`Coming up: ${monthLabel(`${later}-01`)}`);
+  // The trip is big: it leads its month.
+  await expect(group.getByTestId(`tray-${trip.id}`)).toContainText("big");
+  const order = await group.locator('li[data-testid^="tray-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
+  expect(order.indexOf(`tray-${trip.id}`)).toBeLessThan(order.indexOf(`tray-${stammtisch.id}`));
+
+  // Its Telegram chip onto a day of this month, weeks before the trip.
+  // (Centred first: from the bottom of the list the window would scroll while dragging.)
+  await page.getByTestId(`chip-telegram-${trip.id}`).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await drag(page, page.getByTestId(`chip-telegram-${trip.id}`), page.getByTestId(`day-${month}-15`));
+  const tgChip = page.getByTestId(`day-${month}-15`).locator('[data-testid^="post-"]');
+  await expect(tgChip).toContainText(trip.title);
+  await expect(page.getByTestId(`coverage-${trip.id}`)).toContainText("TG ⏰");
+  // No description yet: planned, but nothing to confirm.
+  await tgChip.locator("button").click();
+  const dialog = page.getByTestId("post-dialog");
+  await expect(dialog.getByTestId("telegram-refusal")).toContainText(`The description of “${trip.title}” is not approved yet.`);
+  await expect(dialog.getByRole("button", { name: /^Confirm for / })).toBeHidden();
+  await expect(dialog).toContainText("d before");
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  // The keyboard way, on a day of the month after this one: it lands there.
+  const next = addMonths(`${month}-01`, 1).slice(0, 7);
+  await group.getByTestId(`tray-${trip.id}`).locator("summary", { hasText: "Plan…" }).click();
+  await page.getByLabel(`Channel for ${trip.title}`).selectOption({ label: "Instagram" });
+  await page.getByLabel(`Day for ${trip.title}`).fill(`${next}-20`);
+  await expect(group.getByTestId(`tray-${trip.id}`)).toContainText(`That day is on the ${monthLabel(`${next}-01`)} board.`);
+  await page.getByRole("button", { name: "Plan the post" }).click();
+  await expect(page.getByTestId(`coverage-${trip.id}`)).toContainText("IG ⏰");
+  await page.goto(`/team/comms/schedule?month=${next}`);
+  await expect(page.getByTestId(`day-${next}-20`).locator('[data-testid^="post-"]')).toContainText(trip.title);
+
+  await admin.from("publication_posts").delete().in("id", ((await admin.from("publication_post_events").select("post_id").eq("event_id", trip.id)).data ?? []).map((r) => r.post_id));
+  await admin.from("events").delete().in("id", [trip.id, stammtisch.id, quiz.id]);
 });

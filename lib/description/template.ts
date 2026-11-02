@@ -25,7 +25,7 @@ export const STEP_IDS = ["basics", "intro", "program", "extras", "esn"] as const
 export type StepId = (typeof STEP_IDS)[number];
 
 export const STEP_FIELDS: Record<StepId, Array<keyof DescriptionFields>> = {
-  basics: ["title", "dateIso", "time", "venue", "price", "priceNote"],
+  basics: ["title", "dateIso", "time", "venue", "meeting", "meetingTime", "price", "priceNote"],
   intro: ["hook", "intro"],
   program: ["program", "bring"],
   extras: ["importantHeading", "important", "weather", "closing"],
@@ -38,6 +38,10 @@ export interface DescriptionFields {
   dateIso: string;
   time: string;
   venue: string;
+  /** Where people meet when it is not the venue (round 2026-11-02): "München Hauptbahnhof (Bayerstraße 10a, 80335 München)"; empty = at the venue. */
+  meeting: string;
+  /** When to be at the meeting point (19:30 or TBA); empty = not said. */
+  meetingTime: string;
   price: string;
   priceNote: string;
   hook: string;
@@ -63,6 +67,8 @@ export const TEXT_FIELDS = [
   "dateIso",
   "time",
   "venue",
+  "meeting",
+  "meetingTime",
   "price",
   "priceNote",
   "hook",
@@ -91,6 +97,8 @@ export function emptyFields(title = ""): DescriptionFields {
     dateIso: "",
     time: "",
     venue: "",
+    meeting: "",
+    meetingTime: "",
     price: "",
     priceNote: "",
     hook: "",
@@ -408,6 +416,14 @@ export function validateStep(d: DescriptionFields, step: StepId, todayIso?: stri
       if (time.error) errors.push(time.error);
       else if (time.value === "TBA") warnings.push('The time is still "TBA" – update it once it is fixed.');
       required(d.venue, "The venue is missing.");
+      if (oneLine(d.meetingTime)) {
+        const meet = normalizeTime(d.meetingTime);
+        if (!oneLine(d.meeting)) errors.push("Add the meeting point for the meeting time – or clear the time.");
+        else if (meet.error || meet.value!.includes("–")) errors.push(`"${oneLine(d.meetingTime)}" is not a meeting time – one time on the 24-hour clock, e.g. 08:15.`);
+        else if (time.value && time.value !== "TBA" && meet.value !== "TBA" && meet.value! > time.value.slice(0, 5)) {
+          warnings.push(`The meeting time (${meet.value}) is after the start (${time.value.slice(0, 5)}).`);
+        }
+      }
       const price = formatPrice(d.price, d.priceNote);
       if (price.error) errors.push(price.error);
       else if (isTbaPrice(d.price)) warnings.push('The price is still "TBA" – add it with a later edit.');
@@ -508,6 +524,11 @@ export function renderDescription(d: DescriptionFields): Rendered {
   add(`🗓️ ${formatLongDate(d.dateIso) || "[DAY], [DATE] [MONTH] [YEAR]"}`);
   add(`⏰ ${normalizeTime(d.time).value || "[TIME]"}`);
   add(`📍 ${oneLine(d.venue) || "[VENUE]"}`);
+  const meeting = oneLine(d.meeting);
+  if (meeting) {
+    const at = normalizeTime(d.meetingTime).value;
+    add(`🤝 Meeting point: ${meeting}${at && at !== "TBA" ? ` at ${at}` : ""}`);
+  }
   add(`💸 ${formatPrice(d.price, d.priceNote).value || "[PRICE]"}`);
   gap();
   add("Dear Internationals,", true);

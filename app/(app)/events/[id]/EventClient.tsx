@@ -9,6 +9,8 @@ import { parseEuroToCents } from "@/lib/dates";
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { AddressFields } from "@/components/AddressFields";
 import { DEFAULT_ADDRESS, validateAddress, type EventAddress } from "@/lib/address";
+import { MeetingFields } from "@/components/MeetingFields";
+import { meetingDraft, meetingInput, type EventMeeting, type MeetingDraft } from "@/lib/meeting";
 
 export function DropOutButton({ assignmentId, role, title }: { assignmentId: string; role: "oc" | "helper"; title: string }) {
   const { run, pending, error } = useAction();
@@ -83,7 +85,7 @@ export function EventDetailsForm({
   event,
   eventsTeam,
 }: {
-  event: { id: string; startsAt: string; endsAt: string; location: string; price: string; capacity: string; address: EventAddress | null };
+  event: { id: string; startsAt: string; endsAt: string; location: string; price: string; capacity: string; address: EventAddress | null; meeting: EventMeeting | null };
   eventsTeam: boolean;
 }) {
   const { run, pending, error, setError } = useAction();
@@ -92,6 +94,10 @@ export function EventDetailsForm({
   const [address, setAddress] = useState<EventAddress>(event.address ?? DEFAULT_ADDRESS);
   const [checked, setChecked] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Meeting somewhere else than the location (round 2026-11-02).
+  const [meets, setMeets] = useState(!!event.meeting);
+  const [meeting, setMeeting] = useState<MeetingDraft>(meetingDraft(event.meeting));
+  const [meetChecked, setMeetChecked] = useState(false);
   if (!open) {
     return (
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
@@ -117,6 +123,12 @@ export function EventDetailsForm({
           setError("Please check the address.");
           return;
         }
+        setMeetChecked(meets);
+        const meet = meets ? meetingInput(meeting) : { value: null };
+        if (meet.error !== undefined) {
+          setError(meet.error);
+          return;
+        }
         run(
           updateEvent,
           {
@@ -124,6 +136,7 @@ export function EventDetailsForm({
             ...(eventsTeam ? { starts_at: v.startsAt, ends_at: v.endsAt || null } : {}),
             location: v.location || null,
             address: withAddress ? { country: address.country, street: address.street.trim(), postal_code: address.postalCode.trim(), city: address.city.trim() } : null,
+            meeting: meet.value,
             price_cents: price,
             capacity: v.capacity ? Number(v.capacity) : null,
           },
@@ -145,6 +158,11 @@ export function EventDetailsForm({
         </>
       )}
       <AddressFields value={address} onChange={setAddress} showErrors={checked} idPrefix="d-addr" venue={{ value: v.location, onChange: (location) => setV((x) => ({ ...x, location })) }} />
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" checked={meets} onChange={(e) => setMeets(e.target.checked)} />
+        People meet somewhere else first (e.g. at the station for a hike)
+      </label>
+      {meets && <MeetingFields value={meeting} onChange={(patch) => setMeeting((m) => ({ ...m, ...patch }))} showErrors={meetChecked} idPrefix="d-meet" />}
       <Field label="Price in € (empty = TBA)" htmlFor="d-price">
         <Input id="d-price" inputMode="decimal" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} />
       </Field>

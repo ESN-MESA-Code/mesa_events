@@ -297,3 +297,32 @@ describe("changes since the review (usability review #17)", () => {
     expect(changedSteps(before, { ...before, esnGoal: `${before.esnGoal} More.` })).toEqual(["esn"]);
   });
 });
+
+describe("the meeting point (round 2026-11-02)", () => {
+  const hike = (over: Partial<DescriptionFields> = {}) =>
+    filled({ title: "Hike at the Tegernsee", time: "9:00", venue: "Tegernsee", meeting: "München Hauptbahnhof (Bayerstraße 10a, 80335 München)", meetingTime: "8.15", ...over });
+
+  it("has its own line under the venue, only when there is one", () => {
+    const lines = renderDescription(hike()).plain.split("\n");
+    expect(lines.slice(0, 4)).toEqual(["🗓️ Monday, 29 September 2025", "⏰ 09:00", "📍 Tegernsee", "🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München) at 08:15"]);
+    expect(renderDescription(hike({ meetingTime: "" })).plain).toContain("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München)\n");
+    expect(renderDescription(hike({ meetingTime: "tba" })).plain).toContain("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München)\n");
+    // Without a meeting point the template is unchanged.
+    expect(renderDescription(filled()).plain).not.toContain("Meeting point");
+    expect(renderDescription(filled()).plain.split("\n")[3]).toBe("💸 € 9.50 (ESNcard holders € 7.50)");
+  });
+
+  it("checks the meeting time; a meeting time after the start is only a warning", () => {
+    expect(validateStep(hike(), "basics")).toEqual({ errors: [], warnings: [] });
+    expect(validateStep(hike({ meeting: "" }), "basics").errors).toEqual(["Add the meeting point for the meeting time – or clear the time."]);
+    expect(validateStep(hike({ meetingTime: "early" }), "basics").errors).toEqual(['"early" is not a meeting time – one time on the 24-hour clock, e.g. 08:15.']);
+    expect(validateStep(hike({ meetingTime: "8–9" }), "basics").errors).toHaveLength(1);
+    expect(validateStep(hike({ meetingTime: "9:30" }), "basics").warnings).toEqual(["The meeting time (09:30) is after the start (09:00)."]);
+    expect(validateStep(hike({ meetingTime: "" }), "basics")).toEqual({ errors: [], warnings: [] });
+  });
+
+  it("older drafts without the fields still load; the fields belong to the basics step", () => {
+    expect(coerceFields({ venue: "Shamrock" })).toMatchObject({ meeting: "", meetingTime: "" });
+    expect(changedSteps(hike(), hike({ meeting: "Ostbahnhof" }))).toEqual(["basics"]);
+  });
+});

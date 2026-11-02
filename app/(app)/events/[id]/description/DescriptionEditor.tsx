@@ -29,6 +29,7 @@ import { describeError, useAction } from "@/components/ActionButton";
 import { publishDescription, reviewDescription, saveDescription, submitDescription } from "@/app/actions/descriptions";
 import { cn } from "@/lib/utils";
 import type { EventAddress } from "@/lib/address";
+import type { EventMeeting } from "@/lib/meeting";
 import { VenueFields } from "./VenueFields";
 import { SortingBar, type Sorting } from "./SortingBar";
 import type { Category } from "@/lib/formats";
@@ -69,7 +70,7 @@ interface Props {
   sorting?: Sorting;
   reviews: Array<{ id: string; reviewer: string; decision: string; comment: string; when: string }>;
   /** The event's venue name and address (the venue fields start from them). */
-  place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
+  place: { location: string; address: EventAddress | null; meeting: EventMeeting | null; canSaveEvent: boolean };
   /** The price in the event's details (cents; null = TBA), compared with the post's (usability review #4). */
   eventPriceCents: number | null;
   /** The last review when it asked for changes, with the version it saw (null: not kept). */
@@ -390,7 +391,18 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     </Field>
                     {text("time", "Time", { hint: "19:30, 7pm, 19:30–22:00 or TBA" })}
                   </div>
-                  <VenueFields eventId={eventId} initial={place} canSaveEvent={place.canSaveEvent} postVenue={fields.venue} onVenue={(v) => change("venue", v)} />
+                  <VenueFields
+                    eventId={eventId}
+                    initial={place}
+                    canSaveEvent={place.canSaveEvent}
+                    postVenue={fields.venue}
+                    onVenue={(v) => change("venue", v)}
+                    post={{ meeting: fields.meeting, meetingTime: fields.meetingTime }}
+                    onMeeting={(m, t) => {
+                      change("meeting", m);
+                      change("meetingTime", t);
+                    }}
+                  />
                   <div className="grid gap-3 sm:grid-cols-2">
                     {text("price", "Price shown in the post", { hint: `9.50, free or TBA · event details: ${eventPrice.label}` })}
                     {text("priceNote", "Price note", { placeholder: "ESNcard holders € 7.50" })}

@@ -8,6 +8,7 @@ import { hasRole } from "@/lib/roles";
 import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { eventAddress, hasAddress } from "@/lib/address";
+import { eventMeeting } from "@/lib/meeting";
 import { loadSorting } from "@/lib/sortingLoad";
 
 export const metadata: Metadata = { title: "Description" };
@@ -124,7 +125,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         lastRun={lastRun ? { eventId: lastRun.eventId, format: format?.name ?? lastRun.published.title, date: lastRun.published.dateIso } : null}
         sorting={{ categoryId: event.category_id, formatId: event.format_id, runs: runs ?? 0, canEdit: isEvents, categories, formats }}
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
-        place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
+        place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, meeting: eventMeeting(event), canSaveEvent: isOc || isEvents }}
         eventPriceCents={event.price_cents}
         lastRequest={
           lastReview?.decision === "changes_requested"

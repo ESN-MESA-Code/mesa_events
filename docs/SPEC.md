@@ -90,6 +90,15 @@ Added in the round of 2026-10-30 (decisions in docs/DECISIONS.md, "Internal even
     are due on the 20th (23:59 each; the days are an admin setting). Ideas for later months are
     always welcome. The form opens by itself, the description deadline defaults to the 20th, OCs
     are reminded the day before; Home, Ideas, the calendar and the Events pages show the dates.
+22. **Meeting point** (round 2026-11-02): an event may have a meeting point separate from its
+    location (a hike meets at the station, happens at the lake): name, optional address and the
+    time to be there. The OC or Events sets it (a format has a usual one); the Chat post has its
+    own line for it, the event page, the helpers' Home and the calendar feed show it. The location
+    stays the place of the event (ESN Activities).
+23. **Posts weeks ahead** (round 2026-11-02): the publishing schedule's month is the month the
+    posts go out; its list also holds the upcoming events of the next three months (big ones –
+    specials and trips – first), so their posts are planned on any day before the event. Telegram posts of an
+    event without an approved description can be planned, not confirmed.
 
 ## Reimbursement rules (store as versioned data in `reimbursement_policies`, not code)
 
@@ -111,7 +120,7 @@ min(amount × rate, cap) (per day where applicable); Finance confirms or overrid
 
 ## Data model (first sketch – refine as needed)
 
-`planning_cycles` (month = the month its events take place in), `event_ideas`, `events` (type, start/end, location, price, capacity, helpers_needed, status, visibility, chat space, cycle_id, series_id), `event_series`, `volunteer_responses` (+ submitted_at), `assignments` (role OC/helper, source auto/manual/replacement, status active/dropped_out), `descriptions` + `description_versions`, `reviews`, `attendance_lists`, `participants` (from MESAttendance), `receipts`, `reimbursements`, `reimbursement_policies`, `payout_batches`, `activity_log`, `jobs`, `profiles`, `role_members`. RLS on every table.
+`planning_cycles` (month = the month its events take place in), `event_ideas`, `events` (type, start/end, location, meeting point, price, capacity, helpers_needed, status, visibility, chat space, cycle_id, series_id), `event_series`, `volunteer_responses` (+ submitted_at), `assignments` (role OC/helper, source auto/manual/replacement, status active/dropped_out), `descriptions` + `description_versions`, `reviews`, `attendance_lists`, `participants` (from MESAttendance), `receipts`, `reimbursements`, `reimbursement_policies`, `payout_batches`, `activity_log`, `jobs`, `profiles`, `role_members`. RLS on every table.
 
 ## Architecture constraints
 

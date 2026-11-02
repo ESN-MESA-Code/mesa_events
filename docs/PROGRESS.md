@@ -1,5 +1,29 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-11-02 (3): Posts for events weeks ahead
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-02 – Posts
+for events weeks ahead"). No migration.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Schedule list | The month's events, then upcoming events of the next three months by month, big ones first; events in their volunteer form included | Unit: trayGroups, listedAhead, isBigEvent; E2E: schedule.spec (big event two months ahead) |
+| Planning | "Plan…" from today to the event's day, default three days before; any day before the event in any month | Unit: defaultPostDay; DB: a post weeks ahead, drafts refused; E2E |
+| Telegram | No Confirm while the job would refuse (unapproved, TBA); the warning names the description's due date | Unit: postWarnings; DB: refusal; E2E |
+| Comms and Home | "channels planned" opens the board of the posting month with the event highlighted; Home's Comms queue counts upcoming events (this month and three ahead) still to plan | Unit: boardMonthFor, stillToPlan; DB: loadStillToPlan |
+
+## Round 2026-11-02 (2): Meeting point
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-02 – The
+meeting point"). New migration `20261102000200`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Data | `events.meeting_point` + optional address + `meeting_time`; `event_formats.meeting_point`; `accept_idea()` takes the format's; calendar feed says where and when to meet | DB: OC saves / helper refused, action checks, shapes, schedule clears, feed; formats: accept carries it |
+| Description | Fields `meeting` / `meetingTime`, own line in the post, prefilled from the event; meeting fields in Basics saved on the event; venue check compares the venue with the location only | Unit: render, validation, mismatch, prefill; E2E: meeting.spec |
+| Forms | Event details (checkbox + place search + time), schedule add/edit (name), formats (usual meeting point) | E2E: meeting.spec |
+| Display | Event page Details and header, helper info on Home, activity log | Unit: lines, activity; E2E: meeting.spec |
+
 ## Round 2026-11-02: Cycle timeline, new Home
 
 Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-02 – The

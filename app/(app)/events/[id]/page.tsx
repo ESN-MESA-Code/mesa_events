@@ -12,6 +12,7 @@ import { EventChecklist } from "./EventChecklist";
 import { isAre, plural } from "@/lib/plural";
 import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
 import { eventAddress, formatVenue, hasAddress } from "@/lib/address";
+import { eventMeeting, meetingLine } from "@/lib/meeting";
 
 export const metadata: Metadata = { title: "Event" };
 
@@ -39,6 +40,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   // What a confirm dialog names (usability review #8).
   const when = formatDateTime(event.starts_at);
   const venue = formatVenue(event.location, eventAddress(event));
+  const meeting = eventMeeting(event);
   const name = (a: (typeof active)[number]) => (a.profiles as { full_name: string } | null)?.full_name ?? "?";
   const names = new Map((roster ?? []).map((a) => [a.profile_id, name(a)]));
   // Plain language for everyone; the raw log for Events, executives and admins.
@@ -115,6 +117,12 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               <dd>{event.ends_at ? formatDateTime(event.ends_at) : "–"}</dd>
               <dt className="text-gray-500">Location</dt>
               <dd data-testid="event-location">{formatVenue(event.location, eventAddress(event)) || "–"}</dd>
+              {meeting && (
+                <>
+                  <dt className="text-gray-500">Meeting point</dt>
+                  <dd data-testid="event-meeting">{meetingLine(meeting)}</dd>
+                </>
+              )}
               <dt className="text-gray-500">Price</dt>
               <dd>{event.price_cents === null ? "TBA" : event.price_cents === 0 ? "Free" : formatCents(event.price_cents)}</dd>
               <dt className="text-gray-500">Capacity</dt>
@@ -131,6 +139,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                   endsAt: event.ends_at ? isoToBerlinInput(event.ends_at) : "",
                   location: event.location ?? "",
                   address: hasAddress(eventAddress(event)) ? eventAddress(event) : null,
+                  meeting,
                   price: event.price_cents === null ? "" : (event.price_cents / 100).toFixed(2),
                   capacity: event.capacity ? String(event.capacity) : "",
                 }}

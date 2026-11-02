@@ -120,6 +120,8 @@ const eventFields = {
   starts_at: localDateTime,
   ends_at: localDateTime.nullable().optional(),
   location: z.string().trim().max(300).nullable().optional(),
+  // Where people meet, when not at the location (round 2026-11-02): the name only here; address and time on the event page.
+  meeting_point: z.string().trim().max(300).nullable().optional(),
   helpers_needed: helpers,
   price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
   capacity: z.number().int().min(1).max(100_000).nullable().optional(),
@@ -150,7 +152,20 @@ const address = z
     for (const [field, message] of Object.entries(errors)) ctx.addIssue({ code: "custom", path: [field === "postalCode" ? "postal_code" : field], message });
   });
 
-/** Event details: Events changes everything, the OC the place (venue and address), price and capacity. */
+/**
+ * Where people meet when it is not the location (round 2026-11-02): a place's
+ * name, optionally its address (checked like the event's) and the time to be
+ * there. null clears it (they meet at the location).
+ */
+const meeting = z
+  .object({
+    point: z.string().trim().max(300),
+    address: address.nullable(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM, e.g. 08:15").nullable(),
+  })
+  .refine((m) => m.point || m.address, { message: "Name the meeting point or give its address.", path: ["point"] });
+
+/** Event details: Events changes everything, the OC the place (venue, address and meeting point), price and capacity. */
 export const updateEvent = defineAction(
   z.object({
     id: uuid,
@@ -163,12 +178,17 @@ export const updateEvent = defineAction(
     price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
     capacity: z.number().int().min(1).max(100_000).nullable().optional(),
     address: address.nullable().optional(),
+    /** The meeting point's name alone (the schedule form); empty: they meet at the location (address and time go too). */
+    meeting_point: z.string().trim().max(300).nullable().optional(),
+    meeting: meeting.nullable().optional(),
     ...sorting,
   }),
-  async (ctx, { id, address: a, ...rest }) => {
+  async (ctx, { id, address: a, meeting: m, meeting_point: point, ...rest }) => {
     // Checked against the address lookup like a delivery address (round 2026-10-30); a lookup that cannot answer does not block.
-    if (a && (await verifyAddress({ country: a.country, street: a.street, postalCode: a.postal_code, city: a.city })) === "not_found") {
-      throw new ActionError("failed", "This address was not found – pick it from the suggestions, or check street, house number, postal code and city.");
+    for (const [which, x] of [["This address", a], ["The meeting point's address", m?.address]] as const) {
+      if (x && (await verifyAddress({ country: x.country, street: x.street, postalCode: x.postal_code, city: x.city })) === "not_found") {
+        throw new ActionError("failed", `${which} was not found – pick it from the suggestions, or check street, house number, postal code and city.`);
+      }
     }
     const patch = {
       ...rest,
@@ -177,6 +197,20 @@ export const updateEvent = defineAction(
         : a === null
           ? { address_street: null, address_postal_code: null, address_city: null }
           : { address_country: a.country, address_street: a.street, address_postal_code: a.postal_code, address_city: a.city }),
+      ...(m === undefined
+        ? point === undefined
+          ? {}
+          : point
+            ? { meeting_point: point }
+            : { meeting_point: null, meeting_street: null, meeting_postal_code: null, meeting_city: null, meeting_time: null }
+        : {
+            meeting_point: m?.point || null,
+            meeting_country: m?.address?.country ?? "DE",
+            meeting_street: m?.address?.street ?? null,
+            meeting_postal_code: m?.address?.postal_code ?? null,
+            meeting_city: m?.address?.city ?? null,
+            meeting_time: m?.time ?? null,
+          }),
     };
     if (!hasRole(ctx.viewer.roles, "events")) {
       await requireEventOc(ctx, id);

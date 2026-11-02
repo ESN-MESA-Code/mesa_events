@@ -18,6 +18,7 @@ interface RowEvent {
   startsLabel: string;
   endsAt: string;
   location: string;
+  meetingPoint: string;
   helpersNeeded: number;
   status: EventStatus;
   proposer: string | null;
@@ -48,6 +49,8 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
                 starts_at: v.startsAt,
                 ends_at: v.endsAt || null,
                 location: v.location || null,
+                // Only when changed: clearing it clears the whole meeting point (address and time too).
+                ...(v.meetingPoint.trim() !== event.meetingPoint ? { meeting_point: v.meetingPoint.trim() || null } : {}),
                 helpers_needed: Number(v.helpersNeeded),
                 category_id: v.categoryId || null,
                 format_id: v.formatId || null,
@@ -76,6 +79,9 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
           </Field>
           <Field label="Location name" htmlFor={`l-${event.id}`} hint="The full address is entered on the event page">
             <Input id={`l-${event.id}`} value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
+          </Field>
+          <Field label="Meeting point (if not there)" htmlFor={`m-${event.id}`} hint="Address and time on the event page; empty: they meet at the location">
+            <Input id={`m-${event.id}`} value={v.meetingPoint} onChange={(e) => setV({ ...v, meetingPoint: e.target.value })} placeholder="e.g. München Hauptbahnhof" />
           </Field>
           <Field label="Helpers needed" htmlFor={`h-${event.id}`}>
             <Input id={`h-${event.id}`} type="number" min={0} max={50} value={v.helpersNeeded} onChange={(e) => setV({ ...v, helpersNeeded: Number(e.target.value) })} />
@@ -155,7 +161,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
 /** A format fills title, type, helpers, place and category; the category is suggested from the title until picked. */
 export function AddEventForm({ cycleId, defaultStart, categories, formats }: { cycleId: string; defaultStart: string; categories: Category[]; formats: Format[] }) {
   const { run, pending, error } = useAction();
-  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", helpers_needed: 2, category_id: "", format_id: "" };
+  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", meeting_point: "", helpers_needed: 2, category_id: "", format_id: "" };
   const [v, setV] = useState(blank);
   const [pickedCategory, setPickedCategory] = useState(false);
   const [open, setOpen] = useState(false);
@@ -172,7 +178,7 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
       className="grid gap-3 sm:grid-cols-2 rounded-lg border border-dashed border-gray-300 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, helpers_needed: Number(v.helpers_needed), category_id: categoryId || null, format_id: v.format_id || null }, () => {
+        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, meeting_point: v.meeting_point || null, helpers_needed: Number(v.helpers_needed), category_id: categoryId || null, format_id: v.format_id || null }, () => {
           setV(blank);
           setPickedCategory(false);
           setOpen(false);
@@ -180,7 +186,7 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
       }}
     >
       {formats.length > 0 && (
-        <Field label="A run of" htmlFor="new-format" hint="Fills in name, type, helpers, place and category">
+        <Field label="A run of" htmlFor="new-format" hint="Fills in name, type, helpers, place, meeting point and category">
           <FormatSelect
             id="new-format"
             formats={formats}
@@ -189,7 +195,7 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
             empty="Nothing – a new event"
             onChange={(id) => {
               const f = formats.find((x) => x.id === id);
-              setV(f ? { ...v, format_id: id, title: v.title || f.name, type: f.type, helpers_needed: f.helpers_needed, location: v.location || f.location || "", category_id: f.category_id ?? v.category_id } : { ...v, format_id: "" });
+              setV(f ? { ...v, format_id: id, title: v.title || f.name, type: f.type, helpers_needed: f.helpers_needed, location: v.location || f.location || "", meeting_point: v.meeting_point || f.meeting_point || "", category_id: f.category_id ?? v.category_id } : { ...v, format_id: "" });
             }}
           />
         </Field>
@@ -225,6 +231,9 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
       </Field>
       <Field label="Location name" htmlFor="new-location" hint="The full address is entered on the event page">
         <Input id="new-location" value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} />
+      </Field>
+      <Field label="Meeting point (if not there)" htmlFor="new-meeting" hint="Address and time on the event page">
+        <Input id="new-meeting" value={v.meeting_point} onChange={(e) => setV({ ...v, meeting_point: e.target.value })} placeholder="e.g. München Hauptbahnhof" />
       </Field>
       <div className="flex items-end gap-2">
         <Button disabled={pending}>Add event</Button>

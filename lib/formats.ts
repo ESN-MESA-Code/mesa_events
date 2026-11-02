@@ -34,6 +34,8 @@ export interface Format {
   type: EventType;
   helpers_needed: number;
   location: string | null;
+  /** The usual meeting point when it is not the location (round 2026-11-02). */
+  meeting_point: string | null;
   active: boolean;
 }
 

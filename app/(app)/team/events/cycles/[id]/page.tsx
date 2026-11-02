@@ -32,7 +32,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const [{ data: events }, { data: ideaRows }, { data: signups }, { categories, formats }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, type, starts_at, ends_at, location, helpers_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name)")
+      .select("id, title, type, starts_at, ends_at, location, meeting_point, helpers_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name)")
       .eq("cycle_id", id)
       .order("starts_at"),
     supabase
@@ -109,6 +109,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                       startsLabel: formatDateTime(e.starts_at),
                       endsAt: e.ends_at ? isoToBerlinInput(e.ends_at) : "",
                       location: e.location ?? "",
+                      meetingPoint: e.meeting_point ?? "",
                       helpersNeeded: e.helpers_needed,
                       status: e.status,
                       proposer: (e.profiles as { full_name: string } | null)?.full_name ?? null,

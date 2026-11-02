@@ -22,6 +22,8 @@ export function AddressFields({
   showErrors,
   idPrefix = "addr",
   venue,
+  label = "Location",
+  placeholderHint = "e.g. Shamrock München",
 }: {
   value: EventAddress;
   onChange: (a: EventAddress) => void;
@@ -29,8 +31,13 @@ export function AddressFields({
   idPrefix?: string;
   /** The venue's name (events.location), filled in by a suggestion too. */
   venue?: { value: string; onChange: (v: string) => void };
+  /** The search box's label ("Meeting point" for the meeting point, round 2026-11-02). */
+  label?: string;
+  placeholderHint?: string;
 }) {
   const errors: AddressErrors = showErrors ? validateAddress(value) : {};
+  const meeting = label !== "Location";
+  const searchLabel = meeting ? `Search the ${label.toLowerCase()}` : "Search a place or address";
   const known = cityForPostalCode(value.country, value.postalCode);
   const key = `${value.country}|${value.street}|${value.postalCode}|${value.city}`;
   const complete = !Object.keys(validateAddress(value)).length;
@@ -96,16 +103,16 @@ export function AddressFields({
   }
 
   return (
-    <fieldset className="grid gap-3 sm:col-span-2 sm:grid-cols-2" data-testid="address-fields">
-      <legend className="sr-only">Location and address</legend>
+    <fieldset className="grid gap-3 sm:col-span-2 sm:grid-cols-2" data-testid={meeting ? "meeting-address-fields" : "address-fields"}>
+      <legend className="sr-only">{label} and address</legend>
       <div className="relative sm:col-span-2">
-        <Field label="Location" htmlFor={`${idPrefix}-search`} hint={query === null && summary ? undefined : "e.g. Shamrock München"}>
+        <Field label={label} htmlFor={`${idPrefix}-search`} hint={query === null && summary ? undefined : placeholderHint}>
           <div className="relative">
             <Input
               ref={input}
               id={`${idPrefix}-search`}
               role="combobox"
-              aria-label="Search a place or address"
+              aria-label={searchLabel}
               aria-expanded={open && suggestions.length > 0}
               aria-controls={`${idPrefix}-suggestions`}
               aria-autocomplete="list"
@@ -141,7 +148,7 @@ export function AddressFields({
                     ✓ verified
                   </span>
                 )}
-                <button type="button" aria-label="Clear the location" className="rounded px-1.5 text-gray-400 hover:text-gray-700" onClick={clear}>
+                <button type="button" aria-label={`Clear the ${label.toLowerCase()}`} className="rounded px-1.5 text-gray-400 hover:text-gray-700" onClick={clear}>
                   ✕
                 </button>
               </span>
@@ -174,7 +181,7 @@ export function AddressFields({
       {showDetails && (
         <>
           {venue && (
-            <Field label="Location name" htmlFor={`${idPrefix}-venue`}>
+            <Field label={`${label} name`} htmlFor={`${idPrefix}-venue`}>
               <Input id={`${idPrefix}-venue`} value={venue.value} onChange={(e) => venue.onChange(e.target.value)} autoComplete="organization" />
             </Field>
           )}

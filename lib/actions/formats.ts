@@ -59,18 +59,19 @@ const formatFields = {
   type: eventType,
   helpers_needed: z.number().int().min(0).max(50),
   location: z.string().trim().max(300).nullable().default(null),
+  meeting_point: z.string().trim().max(300).nullable().default(null),
 };
 
 export const createFormat = defineAction(z.object(formatFields), async (ctx, i) => {
   requireRole(ctx, "events");
-  const { data, error } = await ctx.supabase.from("event_formats").insert({ ...i, location: i.location || null }).select("id").single();
+  const { data, error } = await ctx.supabase.from("event_formats").insert({ ...i, location: i.location || null, meeting_point: i.meeting_point || null }).select("id").single();
   duplicate(error, "format");
   return { id: data!.id };
 }, { revalidate: SORTED });
 
 export const updateFormat = defineAction(z.object({ id: uuid, ...formatFields }), async (ctx, { id, ...patch }) => {
   requireRole(ctx, "events");
-  const { error, count } = await ctx.supabase.from("event_formats").update({ ...patch, location: patch.location || null }, { count: "exact" }).eq("id", id);
+  const { error, count } = await ctx.supabase.from("event_formats").update({ ...patch, location: patch.location || null, meeting_point: patch.meeting_point || null }, { count: "exact" }).eq("id", id);
   duplicate(error, "format");
   if (!count) throw notFound();
 }, { revalidate: SORTED });

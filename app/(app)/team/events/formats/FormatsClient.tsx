@@ -182,14 +182,15 @@ function FormatForm({ initial, categories, onDone }: { initial?: FormatRow; cate
     type: initial?.type ?? ("standard" as EventType),
     helpers_needed: initial?.helpers_needed ?? 2,
     location: initial?.location ?? "",
+    meeting_point: initial?.meeting_point ?? "",
   });
   const id = initial?.id ?? "new";
   return (
     <form
-      className="grid gap-3 rounded-lg border border-dashed border-gray-300 p-3 sm:grid-cols-2 lg:grid-cols-5"
+      className="grid gap-3 rounded-lg border border-dashed border-gray-300 p-3 sm:grid-cols-2 lg:grid-cols-3"
       onSubmit={(e) => {
         e.preventDefault();
-        const input = { ...v, category_id: v.category_id || null, location: v.location || null, helpers_needed: Number(v.helpers_needed) };
+        const input = { ...v, category_id: v.category_id || null, location: v.location || null, meeting_point: v.meeting_point || null, helpers_needed: Number(v.helpers_needed) };
         if (initial) run(updateFormat, { id: initial.id, ...input }, onDone, "Format saved.");
         else run(createFormat, input, onDone, "Format added.");
       }}
@@ -215,7 +216,10 @@ function FormatForm({ initial, categories, onDone }: { initial?: FormatRow; cate
       <Field label="Usual place" htmlFor={`fm-loc-${id}`}>
         <Input id={`fm-loc-${id}`} value={v.location} onChange={(e) => setV({ ...v, location: e.target.value })} maxLength={300} />
       </Field>
-      <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-5">
+      <Field label="Usual meeting point" htmlFor={`fm-meet-${id}`} hint="Only when people meet elsewhere">
+        <Input id={`fm-meet-${id}`} value={v.meeting_point} onChange={(e) => setV({ ...v, meeting_point: e.target.value })} maxLength={300} placeholder="e.g. München Hauptbahnhof" />
+      </Field>
+      <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-3">
         <Button size="sm" disabled={pending}>
           {initial ? "Save" : "Add format"}
         </Button>

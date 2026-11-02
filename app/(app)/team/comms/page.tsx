@@ -16,7 +16,7 @@ import { FILTERS, eventStage, parseFilter, stageCounts, type FilterId } from "@/
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { cn } from "@/lib/utils";
 import { RemindButton } from "@/components/RemindButton";
-import { STATE_LABEL, STATE_MARK, type ChannelState } from "@/lib/publishing";
+import { STATE_LABEL, STATE_MARK, boardMonthFor, type ChannelState } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Comms" };
 
@@ -88,7 +88,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   // Per channel: published, planned, skipped or not planned (brief 2026-10-29, E1).
   const [{ data: statusRows }, { data: channelRows }] = await Promise.all([
     supabase.rpc("publication_status", { events: inMonth.map((r) => r.event_id) }),
-    supabase.from("publication_channels").select("key, name, required").eq("enabled", true).order("position"),
+    supabase.from("publication_channels").select("key, name, required, schedulable").eq("enabled", true).order("position"),
   ]);
   const channels = channelRows ?? [];
   const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
@@ -255,8 +255,15 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                         {(() => {
                           const req = channels.filter((c) => c.required);
                           const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
+                          // The board of the month its first post goes out in – for an event ahead with none yet, the first board that lists it (round 2026-11-02).
+                          const firstPost = channels
+                            .filter((c) => c.schedulable)
+                            .map((c) => statusOf.get(`${r.event_id}|${c.key}`))
+                            .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
+                            .sort()[0];
+                          const boardMonth = firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth);
                           return req.length > 0 ? (
-                            <Link href={`/team/comms/schedule?month=${monthParam(month!)}`} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
+                            <Link href={`/team/comms/schedule?month=${monthParam(boardMonth)}&event=${r.event_id}`} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
                               {on}/{req.length} channels planned
                             </Link>
                           ) : null;

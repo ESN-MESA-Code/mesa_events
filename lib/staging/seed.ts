@@ -594,6 +594,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
         const c = cycleOf(b);
         return {
           id: b.id, title: b.title, type: b.type, status: b.status, starts_at: b.startsAt, ends_at: b.endsAt, location: plan.venue,
+          ...("meeting" in plan ? { meeting_point: plan.meeting.place, meeting_time: plan.meeting.time } : {}),
           price_cents: plan.priceCents, capacity: plan.capacity, helpers_needed: plan.helpers, cycle_id: c.id, created_by: TAG,
           created_at: iso(c.opened - 3 * DAY), proposed_by: b.spec.idea ? pid(b.spec.idea.proposer) : null,
           understaffed_decision: b.spec.decision ? "run" : null,
@@ -775,6 +776,8 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
       dateIso: berlinDate(b.startsAt),
       time: b.spec.time ?? plan.time,
       venue: plan.venue,
+      meeting: "meeting" in plan ? plan.meeting.place : "",
+      meetingTime: "meeting" in plan ? plan.meeting.time : "",
       price: plan.priceCents ? (plan.priceCents / 100).toFixed(2) : "free",
       priceNote: plan.type === "weekend_trip" ? "travel and hostel included" : "",
       hook: plan.hook,

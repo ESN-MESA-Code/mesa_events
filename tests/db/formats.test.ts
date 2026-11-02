@@ -21,7 +21,7 @@ beforeAll(async () => {
   const { data: cats } = await admin.from("event_categories").select("id, name").in("name", ["Hiking & Outdoors", "Party & Nightlife"]);
   hiking = cats!.find((c) => c.name === "Hiking & Outdoors")!.id;
   party = cats!.find((c) => c.name === "Party & Nightlife")!.id;
-  format = (await admin.from("event_formats").insert({ name: name("Partnachklamm hike"), category_id: hiking, type: "day_trip", helpers_needed: 3, location: "Garmisch" }).select("id").single()).data!.id;
+  format = (await admin.from("event_formats").insert({ name: name("Partnachklamm hike"), category_id: hiking, type: "day_trip", helpers_needed: 3, location: "Garmisch", meeting_point: "München Hauptbahnhof" }).select("id").single()).data!.id;
 });
 afterAll(async () => {
   await admin.from("event_ideas").delete().like("title", `%${tag}%`);
@@ -85,7 +85,7 @@ describe("only the Events team sorts events", () => {
 });
 
 describe("accepting an idea", () => {
-  it("keeps the idea's category and format, and the format's place", async () => {
+  it("keeps the idea's category and format, and the format's place and meeting point", async () => {
     const cycle = await createCycle({ status: "planning" });
     cycles.push(cycle.id);
     const r = await P.proposeIdea(await actionContext(USERS.member), { title: name("accept me"), proposed_date: `${cycle.month.slice(0, 7)}-10`, format_id: format });
@@ -93,8 +93,8 @@ describe("accepting an idea", () => {
     const a = await P.acceptIdea(await actionContext(USERS.events), { idea_id: r.data.id, cycle_id: cycle.id, type: "day_trip", starts_at: `${cycle.month.slice(0, 7)}-10T09:00` });
     if (!a.ok) throw new Error(a.message);
     events.push(a.data.event_id);
-    const { data } = await admin.from("events").select("category_id, format_id, location").eq("id", a.data.event_id).single();
-    expect(data).toEqual({ category_id: hiking, format_id: format, location: "Garmisch" });
+    const { data } = await admin.from("events").select("category_id, format_id, location, meeting_point").eq("id", a.data.event_id).single();
+    expect(data).toEqual({ category_id: hiking, format_id: format, location: "Garmisch", meeting_point: "München Hauptbahnhof" });
   });
 
   it("the Events team may pick another category on accepting", async () => {

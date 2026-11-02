@@ -34,8 +34,9 @@ import {
   skipPost,
 } from "@/app/actions/publishing";
 import { DESCRIPTION_STATUS } from "@/components/status";
-import { berlinDate, berlinTime, formatDateTime, formatShortDate } from "@/lib/dates";
+import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
 import { calendarWeeks, dayDiff } from "@/lib/month";
+import { defaultPostDay, isBigEvent, trayGroups } from "@/lib/publishing";
 import { uploadPath } from "@/lib/telegram/picture";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,8 @@ export interface BoardEvent {
   startsAt: string;
   /** Description status ("missing" when none). */
   description: string;
+  /** standard, special, day_trip, weekend_trip – the big ones lead a later month in the list. */
+  type: string | null;
 }
 
 /** An event's best post per channel, from every month (published wins over planned). */
@@ -81,6 +84,8 @@ export interface BoardPost {
   /** Event ids in the post's order. */
   events: string[];
   warnings: string[];
+  /** Telegram, planned: why the job would not post it (description not approved, TBA price) – nothing to confirm yet. */
+  refusal: string | null;
   /** Telegram: the text as it will be posted (plain). */
   preview: string | null;
 }
@@ -130,6 +135,10 @@ function Draggable({ id, disabled, className, children, testId }: { id: string; 
  * post to another day to move it. Click a post for its details (preview,
  * confirm, publish, skip …), an event to highlight its date and posts.
  * pretix is not scheduled: a tick per event once its page is up.
+ * Round 2026-11-02: below the month's events the list holds the upcoming
+ * events of later months, by month and big ones first; their chips are
+ * dropped on this month's days like any other (a post may sit on any day
+ * before its event).
  */
 export function ScheduleBoard({
   month,
@@ -141,6 +150,7 @@ export function ScheduleBoard({
   today,
   coverage,
   pretix,
+  initialFocus = null,
 }: {
   month: string;
   channels: BoardChannel[];
@@ -152,11 +162,13 @@ export function ScheduleBoard({
   today: string;
   coverage: Coverage;
   pretix: PretixChecklist;
+  /** An event to highlight (?event=… from the Comms page). */
+  initialFocus?: string | null;
 }) {
   const router = useRouter();
   const { run, pending, error, setError } = useAction();
   const [dragging, setDragging] = useState<string | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
+  const [focus, setFocus] = useState<string | null>(initialFocus);
   const [open, setOpen] = useState<string | null>(null);
   const [others, setOthers] = useState<string[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
@@ -249,7 +261,7 @@ export function ScheduleBoard({
         {others.length > 0 && <p className="text-xs text-gray-500">Also on the board: {others.join(", ")}</p>}
         {error && <Alert tone="error">{error}</Alert>}
         <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-          <EventList events={events} today={today} channels={channels} coverage={coverage} pretix={pretix} days={days} posts={posts} editable={editable} byId={byId} focus={focus} setFocus={setFocus} />
+          <EventList month={month} events={events} today={today} channels={channels} coverage={coverage} pretix={pretix} days={days} posts={posts} editable={editable} byId={byId} focus={focus} setFocus={setFocus} />
 
           <Card className="p-3">
             <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600" data-testid="board-legend">
@@ -374,6 +386,7 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
 
 /** The month's events (as the roster lists its volunteers): a chip per channel to drag onto the calendar, and the pretix tick. */
 function EventList({
+  month,
   events,
   today,
   channels,
@@ -386,6 +399,7 @@ function EventList({
   focus,
   setFocus,
 }: {
+  month: string;
   events: BoardEvent[];
   today: string;
   channels: BoardChannel[];
@@ -403,7 +417,48 @@ function EventList({
   const stateOn = (channel: string, eventId: string) => coverage[eventId]?.[channel] ?? null;
   const isDone = (ev: BoardEvent) => required.every((c) => stateOn(c.key, ev.id)) && (!pretix.enabled || !!pretix.done[ev.id]);
   const open = events.filter((ev) => berlinDate(ev.startsAt) >= today && !isDone(ev));
-  const shown = [...(todo ? open : events)].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const [own, ...later] = trayGroups(events, month).map((g) => ({ ...g, events: todo ? g.events.filter((ev) => open.includes(ev)) : g.events }));
+  const item = (e: BoardEvent) => {
+    const past = berlinDate(e.startsAt) < today;
+    return (
+      <li key={e.id} data-testid={`tray-${e.id}`} className={cn("rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}>
+        <button type="button" className="block text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
+          {e.title}
+          {isBigEvent(e.type) && (
+            <Badge tone="amber" className="ml-1 align-middle">
+              big
+            </Badge>
+          )}
+        </button>
+        <span className="block text-amber-800">
+          📅 {formatShortDate(e.startsAt)}, {berlinTime(e.startsAt)}
+        </span>
+        <span className="block text-gray-500">{DESCRIPTION_STATUS[e.description]?.label ?? e.description}</span>
+        <span className="mt-1 flex flex-wrap gap-1" data-testid={`coverage-${e.id}`}>
+          {channels.map((c) => {
+            const p = stateOn(c.key, e.id);
+            const mark = !p ? "–" : p.status === "published" ? "✓" : `⏰ ${formatShortDate(p.at)}`;
+            return (
+              <Draggable
+                key={c.key}
+                id={`chan|${c.key}|${e.id}`}
+                disabled={!editable}
+                testId={`chip-${c.key}-${e.id}`}
+                className={cn("rounded border px-1.5 py-0.5", chipOf(c.key), !p && c.required && "border-red-300 bg-red-50 text-red-800", p?.status === "published" && "border-emerald-400")}
+              >
+                <span title={`${c.name}: ${!p ? "not planned" : p.status}`}>
+                  {SHORT[c.key] ?? c.name} {mark}
+                </span>
+              </Draggable>
+            );
+          })}
+        </span>
+        {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
+        {editable && <PlanMenu event={e} channels={channels} days={days} today={today} posts={posts} byId={byId} />}
+      </li>
+    );
+  };
+  const big = (list: BoardEvent[]) => list.filter((e) => isBigEvent(e.type)).length;
   return (
     <Card className="h-fit p-3 lg:sticky lg:top-4" data-testid="tray">
       <h2 className="mb-1 text-sm font-semibold">Events ({events.length})</h2>
@@ -411,47 +466,21 @@ function EventList({
       <label className="mb-2 flex items-center gap-1 text-xs text-gray-600">
         <input type="checkbox" checked={todo} onChange={(e) => setTodo(e.target.checked)} /> only the ones still to do
       </label>
-      {!shown.length ? (
-        <p className="text-xs text-gray-500">Nothing to do this month.</p>
-      ) : (
-        <ul className="space-y-2 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-1">
-          {shown.map((e) => {
-            const past = berlinDate(e.startsAt) < today;
-            return (
-              <li key={e.id} data-testid={`tray-${e.id}`} className={cn("rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}>
-                <button type="button" className="block text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
-                  {e.title}
-                </button>
-                <span className="block text-amber-800">
-                  📅 {formatShortDate(e.startsAt)}, {berlinTime(e.startsAt)}
-                </span>
-                <span className="block text-gray-500">{DESCRIPTION_STATUS[e.description]?.label ?? e.description}</span>
-                <span className="mt-1 flex flex-wrap gap-1" data-testid={`coverage-${e.id}`}>
-                  {channels.map((c) => {
-                    const p = stateOn(c.key, e.id);
-                    const mark = !p ? "–" : p.status === "published" ? "✓" : `⏰ ${formatShortDate(p.at)}`;
-                    return (
-                      <Draggable
-                        key={c.key}
-                        id={`chan|${c.key}|${e.id}`}
-                        disabled={!editable}
-                        testId={`chip-${c.key}-${e.id}`}
-                        className={cn("rounded border px-1.5 py-0.5", chipOf(c.key), !p && c.required && "border-red-300 bg-red-50 text-red-800", p?.status === "published" && "border-emerald-400")}
-                      >
-                        <span title={`${c.name}: ${!p ? "not planned" : p.status}`}>
-                          {SHORT[c.key] ?? c.name} {mark}
-                        </span>
-                      </Draggable>
-                    );
-                  })}
-                </span>
-                {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
-                {editable && <PlanMenu event={e} channels={channels} days={days} posts={posts} byId={byId} />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="space-y-3 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-1">
+        {!own.events.length ? <p className="text-xs text-gray-500">Nothing to do this month.</p> : <ul className="space-y-2">{own.events.map(item)}</ul>}
+        {/* Later months (round 2026-11-02): big ones first, the next month open. */}
+        {later.map((g, i) =>
+          g.events.length ? (
+            <details key={g.month} open={i === 0 || g.events.some((e) => e.id === focus)} data-testid={`tray-later-${g.month.slice(0, 7)}`}>
+              <summary className="cursor-pointer text-xs font-semibold text-gray-700">
+                Coming up: {monthLabel(g.month)} ({g.events.length}
+                {big(g.events) ? `, ${big(g.events)} big` : ""})
+              </summary>
+              <ul className="mt-2 space-y-2">{g.events.map(item)}</ul>
+            </details>
+          ) : null
+        )}
+      </div>
     </Card>
   );
 }
@@ -495,11 +524,12 @@ function PretixTick({ event, state, editable }: { event: BoardEvent; state: { li
 }
 
 /** The keyboard way to plan: a channel, day and time – or into an existing post (bundle). */
-function PlanMenu({ event, channels, days, posts, byId }: { event: BoardEvent; channels: BoardChannel[]; days: string[]; posts: BoardPost[]; byId: Map<string, BoardEvent> }) {
+function PlanMenu({ event, channels, days, today, posts, byId }: { event: BoardEvent; channels: BoardChannel[]; days: string[]; today: string; posts: BoardPost[]; byId: Map<string, BoardEvent> }) {
   const { run, pending, error } = useAction();
   const [ch, setCh] = useState(channels[0]?.key ?? "");
   const eventDay = berlinDate(event.startsAt);
-  const [day, setDay] = useState([...days].reverse().find((d) => d <= eventDay && dayDiff(d, eventDay) >= 3) ?? days[0]);
+  // Any day up to the event (round 2026-11-02), in this month or a later one.
+  const [day, setDay] = useState(defaultPostDay(days, today, eventDay));
   const [time, setTime] = useState("10:00");
   const [into, setInto] = useState("");
   const candidates = posts.filter((p) => p.channel === ch && p.status !== "skipped" && !p.events.includes(event.id));
@@ -524,10 +554,11 @@ function PlanMenu({ event, channels, days, posts, byId }: { event: BoardEvent; c
         </Select>
         {!into && (
           <div className="flex gap-1">
-            <Input aria-label={`Day for ${event.title}`} type="date" min={days[0]} max={days.at(-1)} value={day} onChange={(e) => setDay(e.target.value)} />
+            <Input aria-label={`Day for ${event.title}`} type="date" min={eventDay < today ? undefined : today} max={eventDay} value={day} onChange={(e) => setDay(e.target.value)} />
             <Input aria-label={`Time for ${event.title}`} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
           </div>
         )}
+        {!into && day && !days.includes(day) && <span className="text-gray-500">That day is on the {monthLabel(monthOf(`${day}T12:00:00Z`))} board.</span>}
         <Button type="button" size="sm" disabled={pending} onClick={() => (into ? run(addToPost, { post_id: into, event_id: event.id }) : run(createPost, { channel: ch, day, time, event_ids: [event.id] }))}>
           {into ? "Add to the post" : "Plan the post"}
         </Button>
@@ -723,7 +754,12 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
           <p className="font-medium text-esn-dark">This goes to the Telegram channel:</p>
           <UploadedPicture picture={post.picture} />
           <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-1.5 font-sans text-xs text-gray-800">{post.preview ?? "–"}</pre>
-          <div className="flex flex-wrap gap-2">
+          {post.refusal && (
+            <p className="text-amber-800" data-testid="telegram-refusal">
+              {post.refusal} It can stay planned; confirm it once that is sorted – until then it does not go out.
+            </p>
+          )}
+          <div className={cn("flex flex-wrap gap-2", post.refusal && "hidden")}>
             {post.status === "planned" && !post.confirmed && (
               <Button size="sm" disabled={pending} onClick={() => run(confirmPost, { post_id: post.id })}>
                 Confirm for {formatDateTime(post.scheduledFor)}

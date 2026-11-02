@@ -1,7 +1,8 @@
 // Publishing (brief 2026-10-29, E): only Comms plans and publishes; a
 // Telegram post's job runs at its time, once per version; publishing
 // against the fake Telegram, re-publishing edits the same message, refusals
-// (unapproved, TBA); manual channels; the status per event and channel.
+// (unapproved, TBA); manual channels; the status per event and channel;
+// posts weeks before an event of a later month (round 2026-11-02).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { USERS, admin, as, createEvent, hoursFromNow } from "../helpers/local";
 import { actionContext } from "./actionContext";
@@ -10,6 +11,7 @@ import { runDueJobs, type JobDeps } from "@/lib/jobs/runner";
 import { HANDLERS } from "@/lib/jobs/handlers";
 import { googleClients } from "@/lib/google";
 import { berlinDate } from "@/lib/dates";
+import { loadStillToPlan } from "@/lib/publishingLoad";
 
 const deps: JobDeps = { admin, google: googleClients(admin, { GOOGLE_MODE: "fake" }), env: {}, baseUrl: "http://mesa.test" };
 // Until the queue is empty (other suites may have left due jobs ahead of ours).
@@ -260,5 +262,30 @@ describe("manual channels and the status", () => {
     } finally {
       await P.setChannelEnabled(await actionContext(USERS.admin), { channel: "pretix", enabled: true });
     }
+  });
+});
+
+describe("events weeks ahead (round 2026-11-02)", () => {
+  it("a post may go out weeks before its event, in an earlier month; the event may still be in its volunteer form; drafts may not", async () => {
+    const trip = await createEvent({ title: "Pub weekend trip", type: "weekend_trip", status: "scheduled", starts_at: hoursFromNow(24 * 60), oc: USERS.oc });
+    const draft = await createEvent({ title: "Pub draft", status: "draft", starts_at: hoursFromNow(24 * 60) });
+    created.push(trip.id, draft.id);
+    // No description yet: it can be planned all the same (the warning says so on the board).
+    const id = await post("instagram", [trip.id], 48);
+    expect(berlinDate((await row(id)).scheduled_for)).toBe(day(48));
+    // Moved further ahead, still weeks before the trip.
+    expect((await P.movePost(await actionContext(USERS.comms), { post_id: id, day: day(24 * 30), time: "12:00" })).ok).toBe(true);
+    expect(await P.createPost(await actionContext(USERS.comms), { channel: "instagram", day: day(48), event_ids: [draft.id] })).toMatchObject({ ok: false, message: "This event cannot be published" });
+
+    // Home's figure: the trip is still missing Telegram, whichever month it is in.
+    const ids = async () => (await loadStillToPlan(await as(USERS.comms), Date.now())).map((e) => e.id);
+    expect(await ids()).toContain(trip.id);
+    expect(await ids()).not.toContain(draft.id);
+    const tg = await post("telegram", [trip.id], 72);
+    expect(await ids()).not.toContain(trip.id);
+    // Telegram refuses it until the description is approved (the board shows why, without a confirm button).
+    await P.publishPostNow(await actionContext(USERS.comms), { post_id: tg });
+    await runJobs();
+    expect(await row(tg)).toMatchObject({ status: "planned", last_error: "The description of “Pub weekend trip” is not approved yet." });
   });
 });
