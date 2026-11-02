@@ -11,6 +11,7 @@ import {
   ESN_TYPES,
   applyEsnDefaults,
   coerceFields,
+  esnType,
   esnObjectiveIds,
   formatCount,
   formatPrice,
@@ -29,6 +30,8 @@ import { publishDescription, reviewDescription, saveDescription, submitDescripti
 import { cn } from "@/lib/utils";
 import type { EventAddress } from "@/lib/address";
 import { VenueFields } from "./VenueFields";
+import { SortingBar, type Sorting } from "./SortingBar";
+import type { Category } from "@/lib/formats";
 
 type Status = "draft" | "submitted" | "changes_requested" | "approved" | "published" | string;
 
@@ -62,6 +65,8 @@ interface Props {
   templates: Record<string, DescriptionFields>;
   /** The last published run of this event's format, offered first. */
   lastRun?: { eventId: string; format: string; date: string } | null;
+  /** The event's category and format, shown above the description. */
+  sorting?: Sorting;
   reviews: Array<{ id: string; reviewer: string; decision: string; comment: string; when: string }>;
   /** The event's venue name and address (the venue fields start from them). */
   place: { location: string; address: EventAddress | null; canSaveEvent: boolean };
@@ -71,7 +76,7 @@ interface Props {
   lastRequest: { reviewer: string; comment: string; when: string; fields: DescriptionFields | null } | null;
 }
 
-export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, lastRun, reviews, place, eventPriceCents, lastRequest }: Props) {
+export function DescriptionEditor({ eventId, viewer, initial, can, pool, templates, lastRun, sorting, reviews, place, eventPriceCents, lastRequest }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initial.fields);
   const [status, setStatus] = useState<Status>(initial.status);
@@ -143,6 +148,20 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
     setSaveState("dirty");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(flush, AUTOSAVE_MS);
+  }
+
+  /**
+   * The category changed above: an ESN activity type nobody touched (empty,
+   * or still the old category's) follows the new one, with its objectives.
+   * A description not saved yet only changes on the page.
+   */
+  function followCategory(from: Category | undefined, to: Category | undefined) {
+    const next = to?.esn_type;
+    if (!next || !esnType(next)) return;
+    const current = fieldsRef.current.esnType;
+    if (current === next || (current && current !== from?.esn_type)) return;
+    if (prefillPending.current) setFields((f) => applyEsnDefaults({ ...f, esnType: next }, f.esnType));
+    else change("esnType", next);
   }
 
   // Save before leaving the page.
@@ -288,6 +307,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
         </Alert>
       )}
       <div className="space-y-4">
+        {sorting && <SortingBar eventId={eventId} sorting={sorting} onCategory={followCategory} />}
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={st.tone} data-testid="description-status">
             {st.label}

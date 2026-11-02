@@ -8,6 +8,7 @@ import { hasRole } from "@/lib/roles";
 import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { eventAddress, hasAddress } from "@/lib/address";
+import { loadSorting } from "@/lib/sortingLoad";
 
 export const metadata: Metadata = { title: "Description" };
 
@@ -46,7 +47,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
     );
   }
 
-  const [{ data: reviews }, { data: published }, { data: category }, { data: format }] = await Promise.all([
+  const [{ data: reviews }, { data: published }, { categories, formats }, { count: runs }] = await Promise.all([
     supabase.from("reviews").select("id, reviewer, decision, comment, created_at").eq("event_id", id).order("created_at", { ascending: false }),
     supabase
       .from("descriptions")
@@ -54,9 +55,20 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
       .not("published_at", "is", null)
       .neq("event_id", id)
       .limit(500),
-    event.category_id ? supabase.from("event_categories").select("esn_type").eq("id", event.category_id).maybeSingle() : Promise.resolve({ data: null }),
-    event.format_id ? supabase.from("event_formats").select("name").eq("id", event.format_id).maybeSingle() : Promise.resolve({ data: null }),
+    loadSorting(supabase),
+    // Earlier runs of the format that took place (round 2026-11-01).
+    event.format_id
+      ? supabase
+          .from("events")
+          .select("id", { count: "exact", head: true })
+          .eq("format_id", event.format_id)
+          .neq("id", id)
+          .lte("starts_at", new Date(nowMs()).toISOString())
+          .not("status", "in", "(dropped,cancelled)")
+      : Promise.resolve({ count: 0 }),
   ]);
+  const category = categories.find((c) => c.id === event.category_id);
+  const format = formats.find((f) => f.id === event.format_id);
   const pool: SearchEntry[] = (published ?? []).map((p) => {
     const f = coerceFields(p.approved_fields);
     const ev = p.events as { title: string; format_id: string | null } | null;
@@ -110,6 +122,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
         pool={pool}
         templates={templates}
         lastRun={lastRun ? { eventId: lastRun.eventId, format: format?.name ?? lastRun.published.title, date: lastRun.published.dateIso } : null}
+        sorting={{ categoryId: event.category_id, formatId: event.format_id, runs: runs ?? 0, canEdit: isEvents, categories, formats }}
         reviews={(reviews ?? []).map((r) => ({ ...r, when: formatDateTime(r.created_at) }))}
         place={{ location: event.location ?? "", address: hasAddress(eventAddress(event)) ? eventAddress(event) : null, canSaveEvent: isOc || isEvents }}
         eventPriceCents={event.price_cents}
