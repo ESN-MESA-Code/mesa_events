@@ -904,6 +904,10 @@ pm run seed:staging). The small
   its published descriptions are taken as they are (no parsing of the rendered text), drafts,
   removed rows and the Training sheet skipped, the same Event IDs as the semester tabs. Titles
   with "weekend" become weekend trips. The import does not sort – that is the formats page.
-- **Staging:** the demo's planned events are sorted by the seed (a format for each repeat), the
-  imported history is left unsorted to show the formats page; "Reset demo data" wipes formats
-  and keeps categories.
+- **Existing events are sorted up front** (user request: Get inspired showed none with a
+  category): `npm run sort:events` (lib/formatsApply.ts) does what "Save all" does with the rows
+  as suggested – a category where none is set, a format for each name that ran more than once,
+  ideas after their event or title; a dry run unless `--apply`, `--remote` only behind the staging
+  gates. The demo seed runs the same for the planned events and the history. Staging was sorted
+  with it on 2026-11-02; the page stays for checking and for what no keyword matches.
+- **Staging reset:** "Reset demo data" wipes formats and keeps categories.

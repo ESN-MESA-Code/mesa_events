@@ -40,7 +40,7 @@ import { NOTICE_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { DEMO_PEOPLE, demoEmail, person, type DemoPerson } from "@/lib/staging/people";
 import { demoPassword } from "@/lib/staging/password";
 import { importArchive } from "@/scripts/bot-archive.mjs";
-import { suggestCategory, unsortedGroups } from "@/lib/formats";
+import { applySuggestedSorting } from "@/lib/formatsApply";
 import { eventMessage } from "@/lib/telegram/messages";
 import { EVENTS, FIRST_NAMES, LAST_NAMES, NATIONALITIES, PROGRAMS, UNIVERSITIES, type EventKey, type EventType } from "@/lib/staging/content";
 import { removeInternalStaging, seedInternalStaging, type InternalSummary } from "@/lib/staging/internal";
@@ -605,9 +605,6 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
     "events"
   );
   check(await db.from("event_ideas").insert(ideaRows), "ideas");
-  // 5b. Categories and formats (round 2026-11-01), as the Events team sorts on
-  // /team/events/formats; the history (step 14) stays unsorted for that page.
-  await sortDemoEvents(db, TAG);
 
   // 6. Volunteer answers and the rosters.
   const responses: Database["public"]["Tables"]["volunteer_responses"]["Insert"][] = [];
@@ -1117,6 +1114,10 @@ We can’t wait to ${plan.closing}! ✨`;
   });
   const imported = await importArchive(db, history, { createdBy: TAG });
 
+  // 14b. Categories and formats (round 2026-11-01) for the planned events and
+  // the history, as "Save all" on /team/events/formats would; ideas follow.
+  await applySuggestedSorting(db, { createdBy: TAG, proposers: DEMO_PEOPLE.map((p) => p.id) });
+
   // 15. Internal events, office hours, cash boxes, the ledger, personal settings.
   const internal = await seedInternalStaging(db, {
     rng, now, months, email, pid, ibans: IBANS,
@@ -1167,36 +1168,6 @@ interface ActivityInput {
   eventIds: string[];
   cycleIds: string[];
   now: number;
-}
-
-/**
- * The demo's planned events into categories (suggested from the names) and
- * a format for each event that runs more than once (an existing one of the
- * same name is reused on a re-run); the ideas follow their event, open ones
- * get the suggestion.
- */
-async function sortDemoEvents(db: Db, tag: string) {
-  const categories = check(await db.from("event_categories").select("id, name, emoji, esn_type, keywords, active, sort"), "categories");
-  const formats = check(await db.from("event_formats").select("id, name, category_id, type, helpers_needed, location, active"), "formats");
-  const rows = check(await db.from("events").select("id, title, starts_at, type, location, helpers_needed, category_id, format_id").eq("created_by", tag).eq("source", "platform"), "events to sort");
-  for (const g of unsortedGroups(rows.map((e) => ({ ...e, hook: "", intro: "" })), formats, categories)) {
-    let formatId = g.formatId;
-    if (!formatId && g.events.length > 1) {
-      const first = g.events[0];
-      formatId = check(
-        await db.from("event_formats").insert({ name: g.name, category_id: g.categoryId, type: first.type, helpers_needed: first.helpers_needed, location: first.location, created_by: tag }).select("id").single(),
-        "format"
-      ).id;
-    }
-    check(await db.from("events").update({ category_id: g.categoryId, format_id: formatId }).in("id", g.events.map((e) => e.id)), "sorted events");
-  }
-  const sorted = new Map(check(await db.from("events").select("id, category_id, format_id").eq("created_by", tag), "sorted").map((e) => [e.id, e]));
-  const ideas = check(await db.from("event_ideas").select("id, title, event_id").in("proposer_id", DEMO_PEOPLE.map((p) => p.id)), "ideas to sort");
-  for (const i of ideas) {
-    const ev = i.event_id ? sorted.get(i.event_id) : undefined;
-    const patch = ev ? { category_id: ev.category_id, format_id: ev.format_id } : { category_id: suggestCategory({ title: i.title }, categories)?.id ?? null };
-    check(await db.from("event_ideas").update(patch).eq("id", i.id), "sorted idea");
-  }
 }
 
 async function writeActivity(db: Db, a: ActivityInput) {

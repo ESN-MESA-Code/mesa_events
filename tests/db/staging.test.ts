@@ -176,13 +176,13 @@ describe("seed:staging", () => {
     expect(history.filter((h) => h.title === "Pub Quiz Night").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("has categories and formats on the planned events; the history is left to sort (round 2026-11-01)", async () => {
+  it("has categories and formats on the planned events and the history (round 2026-11-01)", async () => {
     const events = await rows(admin.from("events").select("category_id, format_id").in("id", eventIds));
     expect(events.filter((e) => e.category_id).length / events.length).toBeGreaterThan(0.8);
-    // The Language Café runs twice in the demo plan.
-    expect(events.filter((e) => e.format_id).length).toBeGreaterThanOrEqual(2);
-    const history = await rows(admin.from("events").select("format_id").eq("created_by", TAG).eq("source", "bot_archive"));
-    expect(history.every((h) => h.format_id === null)).toBe(true);
+    const history = await rows(admin.from("events").select("category_id, format_id").eq("created_by", TAG).eq("source", "bot_archive"));
+    expect(history.every((h) => h.category_id)).toBe(true);
+    // Pub Quiz Night ran in several years, and runs of the planned events join the history's.
+    expect(history.filter((h) => h.format_id).length).toBeGreaterThanOrEqual(3);
     const ideas = await rows(admin.from("event_ideas").select("category_id").in("proposer_id", DEMO_PEOPLE.map((p) => p.id)));
     expect(ideas.some((i) => i.category_id)).toBe(true);
   });
