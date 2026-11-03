@@ -5,11 +5,13 @@ const labels = (items: { label: string }[]) => items.map((i) => i.label);
 
 describe("navigation", () => {
   it("members: personal pages only, Volunteer only while a form is open", () => {
-    expect(labels(navItems([]).personal)).toEqual(["Home", "Calendar", "My events", "Ideas", "Office hours", "Leaderboard"]);
+    expect(labels(navItems([]).personal)).toEqual(["Home", "My events", "Reimbursements", "Ideas", "Calendar", "Leaderboard"]);
     expect(navItems([]).team).toEqual([]);
-    const open = navItems([], { open: true, submitted: false }).personal.at(-1);
-    expect(open).toEqual({ href: "/volunteer", label: "Volunteer", badge: "1" });
-    expect(navItems([], { open: true, submitted: true }).personal.at(-1)).toEqual({ href: "/volunteer", label: "Volunteer", badge: undefined });
+    // While a form is open Volunteer follows Reimbursements (round 2026-11-03 (2)).
+    const open = navItems([], { open: true, submitted: false }).personal;
+    expect(labels(open)).toEqual(["Home", "My events", "Reimbursements", "Volunteer", "Ideas", "Calendar", "Leaderboard"]);
+    expect(open[3]).toEqual({ href: "/volunteer", label: "Volunteer", badge: "1" });
+    expect(navItems([], { open: true, submitted: true }).personal[3]).toEqual({ href: "/volunteer", label: "Volunteer", badge: undefined });
   });
 
   it("team pages are their own group; executives see all of them (incl. Finance), not Admin", () => {
@@ -27,5 +29,9 @@ describe("navigation", () => {
     expect(isActive("/calendar", "/")).toBe(false);
     expect(isActive("/team/events/cycles/x", "/team/events")).toBe(true);
     expect(isActive("/team/eventsx", "/team/events")).toBe(false);
+    // Reimbursements live under /me but are their own item.
+    expect(isActive("/me/reimbursements", "/me")).toBe(false);
+    expect(isActive("/me/reimbursements", "/me/reimbursements")).toBe(true);
+    expect(isActive("/me", "/me")).toBe(true);
   });
 });

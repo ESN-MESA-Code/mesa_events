@@ -81,6 +81,10 @@ export default async function InternalPlanningPage({ searchParams }: { searchPar
       <PageHeader title="Internal planning" description="Internal events, Stammtisch, Tuesday Talks, executive board meetings and office hours – plan the semester. Not ESN activities: no description or volunteer form.">
         <div className="flex flex-wrap items-center gap-3">
           {!canEdit && <Badge data-testid="read-only">Read-only (executive)</Badge>}
+          {/* Who did what this semester (round 2026-11-03 (2)). */}
+          <Link href="/team/internal/activity" className={buttonVariants({ size: "sm", variant: "outline" })} data-testid="activity-link">
+            Activity
+          </Link>
           <nav aria-label="View" className="flex rounded-md border border-gray-300 text-sm">
             {(["semester", "month"] as const).map((v) => (
               <Link key={v} href={viewLink(v)} aria-current={view === v ? "page" : undefined} className={cn("px-3 py-1.5 first:rounded-l-md last:rounded-r-md", view === v ? "bg-esn text-white" : "bg-white text-gray-700 hover:text-esn")}>

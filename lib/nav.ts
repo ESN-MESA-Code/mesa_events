@@ -21,17 +21,20 @@ export type VolunteerNav = { open: boolean; submitted: boolean };
  * The main navigation for a member with `roles` (pages check access again).
  * Volunteer appears only while a form is open, marked until they answered.
  * Executives see every team page (read-only where they cannot act).
+ * Order (round 2026-11-03 (2)): the member's own things first – their events,
+ * reimbursements, the open form – then the pages to browse.
  */
 export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { open: false, submitted: false }): Navigation {
   const personal: NavItem[] = [
     { href: "/", label: "Home" },
-    { href: "/calendar", label: "Calendar" },
     { href: "/me", label: "My events" },
+    // Claims follow the money, not the events.
+    { href: "/me/reimbursements", label: "Reimbursements" },
+    ...(volunteer.open ? [{ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" }] : []),
     { href: "/ideas", label: "Ideas" },
-    { href: "/office-hours", label: "Office hours" },
+    { href: "/calendar", label: "Calendar" },
     { href: "/leaderboard", label: "Leaderboard" },
   ];
-  if (volunteer.open) personal.push({ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" });
   const exec = roles.includes("executive");
   const team: NavItem[] = [];
   if (hasRole(roles, "events") || exec) team.push({ href: "/team/events", label: "Events" });
@@ -45,7 +48,7 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
   return { personal, team };
 }
 
-/** Whether `href` is the current section ("/" only on the Home page itself). */
+/** Whether `href` is the current section ("/" and My events only on the page itself – Reimbursements sits under /me). */
 export function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  return href === "/" || href === "/me" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }

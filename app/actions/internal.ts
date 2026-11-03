@@ -43,3 +43,19 @@ export async function signUpInternal(input: unknown) {
 export async function withdrawInternal(input: unknown) {
   return run(A.withdrawInternal, input);
 }
+
+export async function checkinCode(input: unknown) {
+  return run(A.checkinCode, input);
+}
+
+export async function checkInInternal(input: unknown) {
+  return run(A.checkInInternal, input);
+}
+
+export async function markInternalAttendance(input: unknown) {
+  return run(A.markInternalAttendance, input);
+}
+
+export async function closeInternalAttendance(input: unknown) {
+  return run(A.closeInternalAttendance, input);
+}

@@ -3,7 +3,7 @@
 // the OC slot) and repeats a Tuesday Talk; the OC of an office hour counts
 // the cash box and the ESNcards and signs it off; a member signs up to an
 // internal event, sees the leaderboard and subscribes to the calendar.
-import { TEST_TAG, USERS, admin } from "../helpers/local";
+import { TEST_TAG, USERS, admin, as as asDb } from "../helpers/local";
 import { answerConfirm, drag, expect, freshMonth, test } from "./fixtures";
 
 const removeMonth = async (month: string) => {
@@ -36,6 +36,7 @@ test("HR plans a month by drag and drop and repeats a Tuesday Talk", async ({ pa
 
     // Repeat: the 1st Tuesday of the month.
     const repeat = page.getByTestId("repeat");
+    await repeat.getByText("Repeat over").click(); // folded until needed (round 2026-11-03 (2))
     await repeat.getByLabel("Kind").selectOption("tuesday_talk");
     await expect(repeat.getByTestId("repeat-dates").locator("label")).toHaveCount(1);
     await repeat.getByRole("button", { name: /^Add 1 date$/ }).click();
@@ -62,7 +63,13 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
       { internal_event_id: office!.id, profile_id: USERS.helper.id, role: "helper" },
     ]);
     await as(USERS.oc);
-    await page.goto(`/office-hours/${office!.id}`);
+    // The duty is in the OC's My events and Home; its step leads to the cash box (round 2026-11-03 (2)).
+    await page.goto("/");
+    await expect(page.getByTestId("home-duty").filter({ hasText: "E2E office hour" })).toContainText("Count the cash box before you open");
+    await page.goto("/me");
+    const duty = page.getByTestId("my-today").getByTestId("duty-card").filter({ hasText: "E2E office hour" });
+    await duty.getByTestId("next-step").click();
+    await expect(page).toHaveURL(new RegExp(`/office-hours/${office!.id}#cash-box$`));
     await expect(page.getByTestId("office-hour-text")).toContainText("office hour");
     await expect(page.getByLabel("Which cash box")).toHaveValue(box!.id);
     await page.getByRole("button", { name: "Start the cash box" }).click();
@@ -118,6 +125,7 @@ test("a member signs up, sees the leaderboard and subscribes to the calendar", a
     await expect(page.getByTestId("leaderboard-newbies")).toBeVisible();
 
     await page.goto("/calendar?show=internal");
+    await page.getByRole("button", { name: "📅 Subscribe" }).click(); // a button in the top row (round 2026-11-03 (2))
     await page.getByRole("button", { name: /calendar link/ }).click();
     const url = await page.getByTestId("feed-url").inputValue();
     expect(url).toMatch(/\/api\/calendar\/mesa_cal_[A-Za-z0-9_-]{43}\.ics$/);
@@ -128,5 +136,50 @@ test("a member signs up, sees the leaderboard and subscribes to the calendar", a
   } finally {
     await admin.from("calendar_feeds").delete().eq("profile_id", USERS.member.id);
     await admin.from("internal_events").delete().eq("id", bowling!.id);
+  }
+});
+
+// Attendance of a Tuesday Talk (round 2026-11-03 (2)): HR shows the rotating
+// code, a member scans it (its link), HR sees them, takes a check-in back,
+// and the Activity page counts the talk.
+test("HR shows the check-in code, a member scans it, HR reviews the activity", async ({ page, as }) => {
+  const { data: talk } = await admin
+    .from("internal_events")
+    .insert({ kind: "tuesday_talk", title: "E2E Tuesday Talk", starts_at: new Date(Date.now() - 10 * 60_000).toISOString(), ends_at: new Date(Date.now() + 80 * 60_000).toISOString(), created_by: TEST_TAG })
+    .select("id")
+    .single();
+  try {
+    await as(USERS.hr);
+    await page.goto(`/internal/${talk!.id}`);
+    await expect(page.getByTestId("attendance-hr").getByTestId("show-code")).toHaveAttribute("href", `/checkin-screen/${talk!.id}`);
+    await page.goto(`/checkin-screen/${talk!.id}`);
+    await expect(page.getByTestId("checkin-digits")).toHaveText(/^\d{4}$/);
+    // The QR code's link, as HR's screen makes it.
+    const { data: code } = await (await asDb(USERS.hr)).rpc("checkin_code", { internal_event: talk!.id });
+
+    await as(USERS.member);
+    await page.goto(`/checkin/${talk!.id}?t=${encodeURIComponent(code![0].token)}`);
+    await expect(page.getByTestId("checkin-result")).toHaveText("You are checked in ✓");
+    await page.goto(`/internal/${talk!.id}`);
+    await expect(page.getByTestId("checked-in")).toBeVisible();
+    // A member sees only themself, not the list.
+    await expect(page.getByTestId("attendance-list")).toHaveCount(0);
+
+    await as(USERS.hr);
+    await page.goto(`/internal/${talk!.id}`);
+    const list = page.getByTestId("attendance-list");
+    await expect(list).toContainText(USERS.member.name);
+    await expect(list).toContainText("scanned");
+    await page.goto("/team/internal/activity");
+    await expect(page.getByTestId(`activity-${USERS.member.email}`)).toBeVisible();
+
+    // HR takes it back; it is kept as such.
+    await page.goto(`/internal/${talk!.id}`);
+    await list.getByRole("button", { name: "Remove" }).click();
+    await answerConfirm(page);
+    await expect(page.getByTestId("attendance").getByText("Taken back (1)")).toBeVisible();
+    await expect(page.getByTestId("attendance-list")).toHaveCount(0);
+  } finally {
+    await admin.from("internal_events").delete().eq("id", talk!.id);
   }
 });

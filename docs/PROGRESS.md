@@ -1,5 +1,26 @@
 # Progress – Phase 1 (local only)
 
+## Round 2026-11-03 (2): Home, My events, Reimbursements, office hours as duties, attendance, the planning timeline
+
+Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-03 (2) –
+Home, My events and Reimbursements apart"). Migration `20261103000300_internal_attendance`.
+
+| Item | What changed | Tests |
+|---|---|---|
+| Home | "Waiting for you" with everything that needs the member (event happening now, next steps overdue / due within a week / undated, open form, payout details, paper receipts, open slots), "Nothing waiting for you ✓" when empty; panels My events (next three not already waiting) and Coming up in MESA; team queues hide zero figures ("All clear ✓"); timeline, open-slots card and the "submitted" alert gone | Unit: needsYou; E2E: Home per role, OC's next step, volunteer form |
+| My events | Sections Today, To do, Coming up, To finish, Done (folded); each event with its next step, attendance when live, helper info, open receipts; nothing else (one column) | Unit: sectionEvents; E2E: review, meeting |
+| Reimbursements | Own page `/me/reimbursements` and its own item in the navigation, with the payout details (`/me/payout` redirects); open claims by event, paid and rejected folded | E2E: monthly-cycle |
+| Claim card | Amount that counts on the right, one status line with progress dots instead of four amount columns and four step chips (Reimbursements, hand-in) | Unit: claimState |
+| Navigation | Home, My events, Reimbursements, Volunteer (while a form is open), Ideas, Calendar, Leaderboard | Unit: nav |
+| Office hours | Duties (OC / helper at office hours and Stammtisch) in My events and on Home with a cash box step; the overview page and its nav item are gone (`/office-hours` redirects to the Calendar’s internal events); own duties left out of Coming up in MESA | Unit: myDuties; E2E: internal |
+| Calendar | Subscribing is a “📅 Subscribe” button in the top row opening a panel, not a card under the calendar | E2E: internal |
+| Profile menu | Only who is signed in and Sign out; no payout dot | – |
+| Folded forms | Ideas (propose form unfolded only without ideas, from #propose or “Propose this again”), Finance ledger booking, Treasurer’s rules editor, Internal planning’s repeat and defaults: folded until needed (`components/Fold.tsx`) | E2E: ideas, internal |
+| Hand-in tab | One column of folding steps (attendance, photos, report, receipts, ESN Activities) instead of a status card above two columns of open forms; done steps one line, the viewer’s first open step unfolded, links (#register-receipt …) unfold theirs; receipts list first, the form behind “Register a receipt”; a helper sees the OC’s steps as “OC” | E2E: esn, monthly-cycle, security, review |
+| Attendance | Tuesday Talks and internal events: HR shows a QR code and four digits that change every 20 s; members scan or type them; HR adds, takes back and closes; members read only their own | DB: internalAttendance, RLS matrix; Unit: internalAttendance; E2E: internal |
+| Activity | `/team/internal/activity`: per member and semester OC, helper, office hours, Tuesday Talks, other meetings; sort, search, CSV | DB: internalAttendance; E2E: internal |
+| Timeline | `milestones()` keeps steps in order and takes what the cycle did (form opened / closed early) over the dates (also on the Calendar) | Unit: timeline |
+
 ## Round 2026-11-03: Telegram preview, pictures, publish vs. advertise, Comms stages, hand-in list
 
 Status: **implemented and tested locally.** Decisions: `docs/DECISIONS.md` ("2026-11-03 –

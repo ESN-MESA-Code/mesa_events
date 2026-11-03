@@ -23,7 +23,7 @@ export default async function OfficeHourPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="space-y-5">
-      <InternalHeader event={event} back={{ href: "/office-hours", label: "Office hours" }} role={mine?.role ?? null} planner={isPlanner} />
+      <InternalHeader event={event} back={{ href: "/me", label: "My events" }} role={mine?.role ?? null} planner={isPlanner} />
       {event.status === "cancelled" && <Alert tone="warning">This office hour is cancelled.</Alert>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card>

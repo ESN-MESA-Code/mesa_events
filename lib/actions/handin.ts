@@ -47,7 +47,7 @@ export const registerReceipt = defineAction(
     dbError(error);
     return { claim_id: data as string };
   },
-  { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] }
+  { revalidate: [PAGES.event, PAGES.me, PAGES.reimbursements, PAGES.finance, PAGES.home] }
 );
 
 export const setPayoutDetails = defineAction(z.object({ claim_id: uuid }).and(payout), async (ctx, i) => {
@@ -59,7 +59,7 @@ export const setPayoutDetails = defineAction(z.object({ claim_id: uuid }).and(pa
     paypal_email: i.payout_method === "paypal" ? i.paypal_email : undefined,
   });
   dbError(error);
-}, { revalidate: [PAGES.me, PAGES.event, PAGES.finance, PAGES.home] });
+}, { revalidate: [PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.finance, PAGES.home] });
 
 /** The member's own IBAN or PayPal, on their profile (round 2026-10-30); copied onto their open claims. */
 export const setMyPayoutDetails = defineAction(payout, async (ctx, i) => {
@@ -71,18 +71,18 @@ export const setMyPayoutDetails = defineAction(payout, async (ctx, i) => {
   });
   dbError(error);
   return { claims: (data as number) ?? 0 };
-}, { revalidate: [PAGES.all, PAGES.me, PAGES.event, PAGES.finance] });
+}, { revalidate: [PAGES.all, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.finance] });
 
 /** Deletes them from the profile and from the claims Finance has not checked yet. */
 export const deleteMyPayoutDetails = defineAction(z.object({}), async (ctx) => {
   const { data, error } = await ctx.supabase.rpc("delete_my_payout_details");
   dbError(error);
   return { claims: (data as number) ?? 0 };
-}, { revalidate: [PAGES.all, PAGES.me, PAGES.event, PAGES.finance] });
+}, { revalidate: [PAGES.all, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.finance] });
 
 export const withdrawReceipt = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   dbError((await ctx.supabase.rpc("withdraw_receipt", { claim: i.claim_id })).error);
-}, { revalidate: [PAGES.event, PAGES.me, PAGES.finance, PAGES.home] });
+}, { revalidate: [PAGES.event, PAGES.me, PAGES.reimbursements, PAGES.finance, PAGES.home] });
 
 // Photos go straight into the event's Drive folder (brief 2026-10-29, A);
 // the platform counts them, or the OC ticks them when Drive cannot be read.
@@ -115,29 +115,29 @@ export const requestPreapproval = defineAction(
 export const markBelegReceived = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("mark_beleg_received", { claim: i.claim_id })).error);
-}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.home] });
 
 export const checkReimbursement = defineAction(z.object({ claim_id: uuid, approved_cents: cents, note: z.string().trim().max(1000).default("") }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("check_reimbursement", { claim: i.claim_id, approved: i.approved_cents, note: i.note })).error);
-}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.home] });
 
 export const rejectReimbursement = defineAction(z.object({ claim_id: uuid, reason: z.string().trim().min(1, "Give a reason").max(1000) }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("reject_reimbursement", { claim: i.claim_id, reason: i.reason })).error);
-}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.home] });
 
 export const payEarly = defineAction(z.object({ claim_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   dbError((await ctx.supabase.rpc("pay_early", { claim: i.claim_id })).error);
-}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.home] });
 
 export const payBatch = defineAction(z.object({ batch_id: uuid }), async (ctx, i) => {
   requireRole(ctx, "finance");
   const { data, error } = await ctx.supabase.rpc("pay_batch", { batch: i.batch_id });
   dbError(error);
   return { paid: data as number };
-}, { revalidate: [PAGES.finance, PAGES.me, PAGES.event, PAGES.home] });
+}, { revalidate: [PAGES.finance, PAGES.me, PAGES.reimbursements, PAGES.event, PAGES.home] });
 
 export const setTripBudget = defineAction(z.object({ event_id: uuid, amount_cents: cents, note: z.string().trim().max(500).default("") }), async (ctx, i) => {
   requireRole(ctx, "finance");

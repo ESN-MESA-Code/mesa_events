@@ -252,7 +252,7 @@ export function CashBox({
 }) {
   if (!report) {
     return (
-      <Card data-testid="cash-box">
+      <Card id="cash-box" className="scroll-mt-4" data-testid="cash-box">
         <CardHeader>
           <CardTitle>Cash box</CardTitle>
           <Badge tone="gray">Not started</Badge>
@@ -282,7 +282,7 @@ export function CashBox({
   const diff = officeHour ? difference(report) : null;
 
   return (
-    <Card data-testid="cash-box">
+    <Card id="cash-box" className="scroll-mt-4" data-testid="cash-box">
       <CardHeader>
         <CardTitle>
           Cash box

@@ -2,21 +2,25 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { loadInternalForPage } from "@/lib/internalEvents";
 import { hasPresentation, internalPath, isStaffed, takesSignUps } from "@/lib/internal";
-import { nowMs } from "@/lib/dates";
+import { formatDateTime, nowMs } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { InternalHeader } from "@/components/InternalHeader";
 import { signUpInternal, withdrawInternal } from "@/app/actions/internal";
+import { checkinWindow, takesAttendance } from "@/lib/internalAttendance";
+import { hasRole } from "@/lib/roles";
+import { AttendanceCard, type AttendanceEntry } from "./Attendance";
 
 export const metadata: Metadata = { title: "Internal event" };
 
 // An internal event, meeting or Stammtisch (round 2026-10-30): no formal
 // description – a note, the presentation of a meeting, who comes or who is
-// on duty, and signing up to internal events.
+// on duty, and signing up to internal events. Tuesday Talks and internal
+// events take attendance (round 2026-11-03 (2)).
 export default async function InternalEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { event, people, mine, isPlanner } = await loadInternalForPage(id);
+  const { event, people, mine, isPlanner, viewer, supabase } = await loadInternalForPage(id);
   if (event.kind === "office_hour") redirect(internalPath(event.kind, id));
   const upcoming = Date.parse(event.starts_at) > nowMs();
   const attendees = people.filter((p) => p.role === "attendee");
@@ -24,6 +28,21 @@ export default async function InternalEventPage({ params }: { params: Promise<{ 
   const helpers = people.filter((p) => p.role === "helper");
   const full = event.capacity !== null && attendees.length >= event.capacity;
   const open = takesSignUps(event.kind) && event.status === "scheduled" && upcoming;
+
+  // Attendance (round 2026-11-03 (2)): RLS gives a member only their own row.
+  const attendance = takesAttendance(event.kind);
+  const seesAll = isPlanner || hasRole(viewer.roles, "executive");
+  const [{ data: checked }, { data: members }] = attendance
+    ? await Promise.all([
+        supabase.from("internal_attendance").select("profile_id, via, added_by, created_at, removed_at, removed_by, profiles(full_name, email)").eq("internal_event_id", id).order("created_at"),
+        isPlanner ? supabase.from("profiles").select("id, full_name, email").order("full_name") : Promise.resolve({ data: [] }),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const entries: AttendanceEntry[] = (checked ?? []).map((r) => {
+    const prof = r.profiles as { full_name: string; email: string } | null;
+    return { profileId: r.profile_id, name: prof?.full_name || prof?.email || "?", via: r.via as AttendanceEntry["via"], addedBy: r.added_by, at: formatDateTime(r.created_at), removedAt: r.removed_at ? formatDateTime(r.removed_at) : null, removedBy: r.removed_by };
+  });
+  const checkin = checkinWindow(event, nowMs());
 
   return (
     <div className="space-y-5">
@@ -79,6 +98,21 @@ export default async function InternalEventPage({ params }: { params: Promise<{ 
               {!attendees.length ? <EmptyState>Nobody has signed up yet.</EmptyState> : <p className="text-gray-700">{attendees.map((a) => a.name).join(", ")}</p>}
             </CardContent>
           </Card>
+        )}
+
+        {attendance && (
+          <AttendanceCard
+            eventId={id}
+            state={checkin.state}
+            opensLabel={formatDateTime(checkin.opens)}
+            closesLabel={formatDateTime(checkin.closes)}
+            closedBy={event.attendance_closed_by}
+            planner={isPlanner}
+            seesAll={seesAll}
+            mine={entries.find((e) => e.profileId === viewer.id) ?? null}
+            entries={seesAll ? entries : []}
+            members={(members ?? []).map((m) => ({ id: m.id, name: m.full_name || m.email }))}
+          />
         )}
 
         {isStaffed(event.kind) && (

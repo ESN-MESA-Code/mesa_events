@@ -166,7 +166,7 @@ test.describe("IDOR: every [id] route checks the member, not the URL", () => {
       expect(await status(page, `/api/receipts/${claimId}/file`), user.email).toBe(404);
     }
     await signInAs(context, baseURL!, USERS.helper);
-    await page.goto(`/events/${eventA}/hand-in`);
+    await page.goto(`/events/${eventA}/hand-in#register-receipt`);
     await expect(page.getByTestId("receipt-form")).toBeVisible();
     await expect(page.getByTestId("receipt-form").locator('input[type="file"]')).toHaveCount(0);
     await expect(page.getByTestId("my-claims")).toContainText("IDOR");

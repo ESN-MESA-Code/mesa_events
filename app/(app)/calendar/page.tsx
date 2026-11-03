@@ -142,6 +142,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             storageKey="mesa:month:calendar"
             explicit={!!parseMonthParam(sp.month)}
           />
+          <CalendarSubscribe feed={feed ? { since: formatDate(feed.created_at), lastUsed: feed.last_used_at ? formatDateTime(feed.last_used_at) : null } : null} />
         </div>
       </PageHeader>
 
@@ -288,9 +289,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </Card>
       )}
 
-      <div className="mt-6">
-        <CalendarSubscribe feed={feed ? { since: formatDate(feed.created_at), lastUsed: feed.last_used_at ? formatDateTime(feed.last_used_at) : null } : null} />
-      </div>
     </>
   );
 }

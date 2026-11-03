@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 
 /**
  * The member's avatar opens their profile menu (round 2026-10-30): who is
- * signed in, payout details (IBAN or PayPal – marked while missing), their
- * events, sign out.
+ * signed in, sign out. Payout details are on the Reimbursements page, My
+ * events in the navigation (round 2026-11-03 (2)).
  */
-export function ProfileMenu({ name, email, roles, initials, hasPayout }: { name: string; email: string; roles: string; initials: string; hasPayout: boolean }) {
+export function ProfileMenu({ name, email, roles, initials }: { name: string; email: string; roles: string; initials: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   // Close on outside clicks and Escape (and when a link is followed).
@@ -31,15 +30,13 @@ export function ProfileMenu({ name, email, roles, initials, hasPayout }: { name:
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label={`Your profile: ${name}${hasPayout ? "" : " – payout details missing"}`}
-        title={hasPayout ? undefined : "Orange dot: no payout details yet – add your IBAN or PayPal in this menu"}
+        aria-label={`Your profile: ${name}`}
         className="relative flex items-center gap-2.5 rounded-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         data-testid="profile-button"
       >
         <span aria-hidden="true" className="h-9 w-9 rounded-full bg-white/15 ring-2 ring-white/40 flex items-center justify-center text-sm font-semibold shrink-0 hover:bg-white/25">
           {initials}
         </span>
-        {!hasPayout && <span aria-hidden="true" className="absolute left-6 top-0 h-3 w-3 rounded-full bg-esn-orange ring-2 ring-esn" />}
         <span className="hidden md:block leading-tight min-w-0">
           <span className="block text-sm font-medium truncate max-w-[14rem]" data-testid="viewer-name">
             {name}
@@ -55,13 +52,6 @@ export function ProfileMenu({ name, email, roles, initials, hasPayout }: { name:
             <p className="font-medium text-gray-900">{name}</p>
             <p className="truncate text-xs text-gray-500">{email}</p>
           </div>
-          <Link role="menuitem" href="/me/payout" onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50">
-            💳 Payout details (IBAN / PayPal)
-            {!hasPayout && <span className="ml-auto rounded-full bg-amber-100 px-2 text-[11px] font-medium text-amber-900">missing</span>}
-          </Link>
-          <Link role="menuitem" href="/me" onClick={() => setOpen(false)} className="block px-4 py-2.5 hover:bg-gray-50">
-            📅 My events and reimbursements
-          </Link>
           <form action="/auth/signout" method="post" className="border-t border-gray-100">
             <button role="menuitem" className="block w-full px-4 py-2.5 text-left hover:bg-gray-50">
               Sign out

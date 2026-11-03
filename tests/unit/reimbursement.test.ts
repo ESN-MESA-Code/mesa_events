@@ -10,7 +10,7 @@ import {
   kindsFor,
   maskEmail,
   maskIban,
-  payoutLine,
+  claimState,
   receiptsStatus,
   mayPayEarly,
   suggestAmount,
@@ -208,14 +208,15 @@ describe("claim progress (review C7)", () => {
   });
 });
 
-describe("payout line and receipt status (review 2026-10-29 B1, B2)", () => {
-  it("says where the money goes until paid, and that it was paid afterwards", () => {
+describe("claim state line and receipt status (round 2026-11-03 (2), review 2026-10-29 B2)", () => {
+  it("says in one line what happened last and what comes next", () => {
+    const day = (iso: string) => iso.slice(0, 10);
+    expect(claimState({ status: "not_submitted" }, day)).toEqual({ text: "Hand the paper receipt to Finance", tone: "todo" });
+    expect(claimState({ status: "beleg_received", belegReceivedAt: "2026-11-03T10:00:00Z" }, day).text).toBe("Paper receipt received 2026-11-03 – Finance checks it next");
+    expect(claimState({ status: "checked", checkedAt: null }, day).text).toBe("Checked – paid with the next payout");
+    expect(claimState({ status: "paid", paidAt: "2026-11-05T10:00:00Z" }, day)).toEqual({ text: "Paid 2026-11-05", tone: "done" });
+    expect(claimState({ status: "rejected", rejectedReason: "No receipt" }, day)).toEqual({ text: "Rejected: No receipt", tone: "failed" });
     expect(maskEmail("olga@example.com")).toBe("olga@…");
-    expect(payoutLine({ status: "beleg_received", payoutMethod: "paypal", iban: null, paypalEmail: "olga@example.com" })).toBe("Payout: PayPal (olga@…)");
-    expect(payoutLine({ status: "checked", payoutMethod: "bank", iban: "DE89 3704 0044 0532 0130 00", paypalEmail: null })).toBe("Payout: bank transfer (DE89 •••• 3000)");
-    expect(payoutLine({ status: "not_submitted", payoutMethod: null, iban: null, paypalEmail: null })).toBeNull();
-    expect(payoutLine({ status: "paid", payoutMethod: "paypal", iban: null, paypalEmail: null })).toBe("Paid to your PayPal account");
-    expect(payoutLine({ status: "paid", payoutMethod: "bank", iban: null, paypalEmail: null })).toBe("Paid to your bank account");
   });
 
   it("shows one's own receipts and the rest of the team's apart, as counts", () => {

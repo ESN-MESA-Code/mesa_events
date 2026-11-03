@@ -36,9 +36,10 @@ test("report → ready to upload → link pasted by an executive → uploaded", 
   await expect(esn.getByTestId("esn-status")).toContainText("Not ready");
   await expect(esn.getByTestId("esn-missing")).toContainText("event report");
 
-  // The OC writes the report (prefilled from the list and the roster).
+  // The OC writes the report (prefilled from the list and the roster); its step unfolds from its link.
   await signInAs(context, baseURL!, USERS.oc);
   await page.goto(`/events/${event.id}/hand-in`);
+  await page.evaluate(() => (location.hash = "event-report")); // a link into the folded step unfolds it
   await expect(page.getByTestId("report-status")).toContainText("Not written yet");
   const form = page.getByTestId("event-report-form");
   await expect(form.getByLabel("International participants")).toHaveValue("28");
@@ -53,6 +54,7 @@ test("report → ready to upload → link pasted by an executive → uploaded", 
   // The executive: ready; the ESN form link carries the event; the link is pasted by hand.
   await signInAs(context, baseURL!, USERS.executive);
   await page.goto(`/events/${event.id}/hand-in`);
+  await page.evaluate(() => (location.hash = "esn-activities"));
   await expect(esn.getByTestId("esn-status")).toContainText("Ready to upload");
   await expect(esn.getByTestId("open-esn-form")).toHaveAttribute("href", `https://activities.esn.org/add/physical-activity#mesa=${event.id}`);
   await esn.getByRole("button", { name: "Paste link" }).click();

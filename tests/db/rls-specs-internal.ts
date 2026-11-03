@@ -25,6 +25,12 @@ async function staffOf(): Promise<Match> {
   const ev = await internalOf("stammtisch");
   return insertRow("internal_event_people", { internal_event_id: ev.id, profile_id: USERS.volunteer1.id, role: "helper" });
 }
+// A member checked in to a Tuesday Talk (round 2026-11-03 (2)).
+async function checkInOf(): Promise<Match> {
+  const ev = await internalOf("tuesday_talk");
+  await admin.from("internal_attendance").insert({ internal_event_id: ev.id as string, profile_id: USERS.member.id, via: "hr", added_by: "hr@esnmesa.org" });
+  return { internal_event_id: ev.id as string, profile_id: USERS.member.id };
+}
 async function eventBox(w: World): Promise<Match> {
   const { data } = await admin.from("cash_reports").select("id").eq("event_id", w.eventA.id).maybeSingle();
   return data ? { id: data.id } : insertRow("cash_reports", { event_id: w.eventA.id });
@@ -103,6 +109,21 @@ export const SPECS_INTERNAL: Spec[] = [
     ],
     update: [{ name: "helper of a Stammtisch", make: () => staffOf(), patch: () => ({ role: "oc" }), allowed: PLANNERS }],
     delete: [{ name: "helper of a Stammtisch", make: () => staffOf(), allowed: PLANNERS }],
+  },
+  {
+    // Written only through the check-in functions; read by the member themself, the planners and the board.
+    table: "internal_attendance",
+    select: [{ name: "a member's own check-in", make: () => checkInOf(), allowed: ["member", "executive", ...PLANNERS] }],
+    insert: [
+      {
+        name: "checking oneself in straight to the table",
+        payload: async (_w, role) => ({ internal_event_id: (await internalOf("tuesday_talk")).id, profile_id: userOf(role).id, via: "qr", added_by: "x" }),
+        allowed: NOBODY,
+        match: (p) => ({ internal_event_id: p.internal_event_id as string, profile_id: p.profile_id as string }),
+      },
+    ],
+    update: [{ name: "a check-in", make: () => checkInOf(), patch: () => ({ removed_at: new Date().toISOString() }), allowed: NOBODY }],
+    delete: [{ name: "a check-in", make: () => checkInOf(), allowed: NOBODY }],
   },
   {
     table: "cash_reports",

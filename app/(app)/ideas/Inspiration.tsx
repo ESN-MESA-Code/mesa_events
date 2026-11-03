@@ -10,6 +10,7 @@ import { formatStats, type Category, type Format } from "@/lib/formats";
 import { CategoryBadge, CategorySelect } from "@/components/Sorting";
 import { IdeaForm } from "./IdeaForm";
 import type { TimelineDays } from "@/lib/timeline";
+import { RevealOnHash } from "@/components/Fold";
 
 /** Events per "page" of the infinite scroll. */
 const PAGE = 12;
@@ -28,6 +29,7 @@ export function IdeasWorkspace({
   days,
   categories,
   formats,
+  proposeOpen,
   children,
 }: {
   pool: PastEvent[];
@@ -36,9 +38,12 @@ export function IdeasWorkspace({
   days: TimelineDays;
   categories: Category[];
   formats: Format[];
+  /** The propose form starts unfolded (no ideas yet); it is folded otherwise (round 2026-11-03 (2)). */
+  proposeOpen: boolean;
   children: React.ReactNode;
 }) {
   const [prefill, setPrefill] = useState<(IdeaPrefill & { nonce: number }) | null>(null);
+  const [proposing, setProposing] = useState(proposeOpen);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<EventType | "">("");
   const [category, setCategory] = useState("");
@@ -69,18 +74,23 @@ export function IdeasWorkspace({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card id="propose" className="scroll-mt-4">
-          <CardHeader>
-            <CardTitle>Propose an idea</CardTitle>
-          </CardHeader>
+      <RevealOnHash />
+      <Card>
+        <details id="propose" open={proposing} onToggle={(e) => setProposing(e.currentTarget.open)} className="group scroll-mt-4">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span className="text-base font-semibold text-gray-900">
+              <span className="text-esn group-open:hidden">＋ </span>Propose an idea
+            </span>
+            <span className="ml-auto text-sm text-esn group-open:hidden">Open the form</span>
+            <span className="ml-auto hidden text-sm text-gray-500 group-open:inline">Fold ▴</span>
+          </summary>
           <CardContent>
             {prefill && <p className="mb-3 text-xs text-esn-dark">Filled in from “{prefill.title}” – change anything you like.</p>}
             <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} earliest={earliest} days={days} />
           </CardContent>
-        </Card>
-        {children}
-      </div>
+        </details>
+      </Card>
+      {children}
 
       <Card>
         <CardHeader>
@@ -168,6 +178,7 @@ export function IdeasWorkspace({
                       className="ml-auto"
                       onClick={() => {
                         setPrefill({ ...ideaFromEvent(e, earlier, earliest, format?.name), nonce: Date.now() });
+                        setProposing(true);
                         document.getElementById("propose")?.scrollIntoView({ behavior: "smooth" });
                       }}
                     >

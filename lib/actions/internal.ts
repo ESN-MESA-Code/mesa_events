@@ -3,7 +3,7 @@
 // to internal events. RLS (public.is_internal_planner()) checks again.
 import crypto from "node:crypto";
 import { z } from "zod";
-import { dbError, defineAction, forbidden, notFound, PAGES, uuid, type ActionContext } from "@/lib/actions/core";
+import { ActionError, dbError, defineAction, forbidden, notFound, PAGES, uuid, type ActionContext } from "@/lib/actions/core";
 import { localDateTime } from "@/lib/actions/planning";
 import { berlinInputToIso } from "@/lib/dates";
 import { INTERNAL_KINDS, isStaffed, type InternalKind } from "@/lib/internal";
@@ -26,7 +26,7 @@ const details = {
   capacity: z.number().int().min(1).max(10_000).nullable().optional(),
   helpers_needed: z.number().int().min(0).max(20).optional(),
 };
-const PLANNING = [PAGES.internal, PAGES.home, PAGES.calendar, PAGES.officeHours, PAGES.internalEvent] as const;
+const PLANNING = [PAGES.internal, PAGES.home, PAGES.me, PAGES.calendar, PAGES.officeHours, PAGES.internalEvent] as const;
 
 function requirePlanner(ctx: ActionContext) {
   if (!isInternalPlanner(ctx.viewer!.roles)) throw forbidden("Only HR and the Vice President plan internal events.");
@@ -191,3 +191,54 @@ export const withdrawInternal = defineAction(
   { revalidate: [PAGES.internalEvent, PAGES.home, PAGES.calendar, PAGES.internal] }
 );
 
+
+// ── Attendance of Tuesday Talks and internal events (round 2026-11-03 (2)) ──
+// Members check in with the rotating code on HR's screen; HR adds and removes
+// anyone and closes the list. The database checks every rule again.
+const ATTENDANCE = [PAGES.internalEvent, PAGES.activity] as const;
+
+/** The code HR's screen shows now (changes every 20 seconds). */
+export const checkinCode = defineAction(
+  z.object({ internal_event_id: uuid }),
+  async (ctx, i) => {
+    const { data, error } = await ctx.supabase.rpc("checkin_code", { internal_event: i.internal_event_id });
+    dbError(error);
+    const row = (data ?? [])[0];
+    if (!row) throw notFound();
+    // How many have checked in, for the screen.
+    const { count } = await ctx.supabase.from("internal_attendance").select("profile_id", { count: "exact", head: true }).eq("internal_event_id", i.internal_event_id).is("removed_at", null);
+    return { token: row.token, code: row.code, secondsLeft: row.seconds_left, count: count ?? 0 };
+  },
+  { revalidate: [] }
+);
+
+/** A member checks in with the scanned token or the typed four digits. */
+export const checkInInternal = defineAction(
+  z.object({ internal_event_id: uuid, token: z.string().max(200).optional(), code: z.string().trim().regex(/^\d{4}$/, "Type the four digits on the screen").optional() }),
+  async (ctx, i) => {
+    const { data, error } = await ctx.supabase.rpc("check_in_internal", { internal_event: i.internal_event_id, token: i.token, code: i.code });
+    dbError(error);
+    // A wrong code is counted by the database (five tries), not raised.
+    if (data === "wrong") throw new ActionError("failed", "Wrong or expired code – type the one on the screen now");
+    return { result: data as "checked_in" | "already" };
+  },
+  { revalidate: ATTENDANCE }
+);
+
+/** HR adds someone (present) or takes a check-in back. */
+export const markInternalAttendance = defineAction(
+  z.object({ internal_event_id: uuid, profile_id: uuid, present: z.boolean() }),
+  async (ctx, i) => {
+    dbError((await ctx.supabase.rpc("mark_internal_attendance", { internal_event: i.internal_event_id, profile: i.profile_id, present: i.present })).error);
+  },
+  { revalidate: ATTENDANCE }
+);
+
+/** HR closes the list (no more check-ins) or opens it again. */
+export const closeInternalAttendance = defineAction(
+  z.object({ internal_event_id: uuid, closed: z.boolean() }),
+  async (ctx, i) => {
+    dbError((await ctx.supabase.rpc("close_internal_attendance", { internal_event: i.internal_event_id, closed: i.closed })).error);
+  },
+  { revalidate: ATTENDANCE }
+);

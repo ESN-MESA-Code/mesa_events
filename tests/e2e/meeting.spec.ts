@@ -45,11 +45,11 @@ test("the OC sets a meeting point; the event page, the post and the helper's Hom
     await expect.poll(async () => (await admin.from("events").select("meeting_time").eq("id", event.id).single()).data?.meeting_time).toBe("07:50:00");
   });
 
-  await test.step("the helper's Home says where to be first", async () => {
+  await test.step("the helper's My events says where to be first", async () => {
     const helper = await browser.newContext();
     await signInAs(helper, baseURL!, USERS.helper);
     const home = await helper.newPage();
-    await home.goto("/");
+    await home.goto("/me");
     await expect(home.getByTestId("helper-info").filter({ hasText: "Bahnhof Tegernsee" })).toContainText("Meet 07:50 at München Hauptbahnhof");
     await helper.close();
   });

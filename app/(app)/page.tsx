@@ -1,41 +1,42 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { addMonths, berlinTime, cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { addMonths, cycleLabel, formatCents, formatDateTime, formatShortDate, monthOf, nowMs } from "@/lib/dates";
 import { monthParam } from "@/lib/month";
-import { nextStep, type NextStep } from "@/lib/checklist";
-import { checklistInput, volunteerForms } from "@/lib/eventStatus";
+import { volunteerForms } from "@/lib/eventStatus";
 import { cyclesWithProgress } from "@/lib/cycleFacts";
 import { hasRole } from "@/lib/roles";
-import type { EventStatus } from "@/lib/labels";
-import type { ClaimStatus } from "@/lib/reimbursement";
-import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
-import { ClaimStatusBadge, DueLabel, EventStatusBadge } from "@/components/status";
+import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
+import { DueLabel } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
-import { ComingUpCard, CycleTimelineCard } from "@/components/HomeCards";
 import { StepIcon } from "@/components/StepIcon";
 import { OrientationCard } from "@/components/Orientation";
-import { byUrgency, happeningNow } from "@/lib/myEvents";
+import { MyDutyRow, MyEventRow, dutyHref, stepHref } from "@/components/MyEventCard";
+import { ComingUpCard } from "@/components/ComingUpCard";
+import { byUrgency, eventGroup, needsYou } from "@/lib/myEvents";
+import { itemTimed, loadMyDuties, loadMyEvents, myItems } from "@/lib/myEventsLoad";
+import { dutyTimed } from "@/lib/myDuties";
 import { cycleTimeline, upcomingCycleMonth } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
-import { eventMeeting, meetingShort } from "@/lib/meeting";
 import { loadStillToPlan } from "@/lib/publishingLoad";
 
 export const metadata: Metadata = { title: "Home" };
 
 const DAY = 86_400_000;
-const STEP_TONE: Record<NextStep["kind"], string> = {
-  action: "border-esn/30 bg-esn/5 text-esn-dark",
-  waiting: "border-gray-200 bg-gray-50 text-gray-700",
-  done: "border-emerald-200 bg-emerald-50 text-emerald-800",
-};
+/** Home lists this many of the member's next events; the rest are on My events. */
+const NEXT_UP = 3;
+/** Open slots named on Home; the rest are on the Calendar. */
+const OPEN_SLOTS = 3;
 
-// "What's next for me" (reworked in round 2026-11-02): what waits on the
-// member (an open volunteer form, claims), the planning timeline of the
-// coming month, my events with their next step, open slots, what comes up
-// in MESA, and one card per team queue for team members. The leaderboard
-// has its own page; the month at a glance is the Calendar.
+// "What's next for me" (round 2026-11-03 (2)): one "Waiting for you" with
+// everything that needs the member – an event happening now, a next step
+// overdue or due within a week, an open volunteer form, payout details,
+// paper receipts, open slots to claim, a duty at an office hour on now or its
+// cash box to sign off – then two panels, the member's next events and
+// duties and what comes up in MESA, and the team queues for team members.
+// Everything about the member's own events is on My events; the cycle dates
+// are on the Calendar.
 export default async function HomePage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
@@ -45,17 +46,14 @@ export default async function HomePage() {
   const isFinance = hasRole(viewer.roles, "finance");
   const isExec = viewer.roles.includes("executive");
 
-  const [forms, { data: assignments }, { data: slots }, { data: claims }, { count: everAssigned }, { data: payout }] = await Promise.all([
+  const [forms, events, duties, { data: slots }, { data: claims }, { count: everAssigned }, { data: payout }] = await Promise.all([
     volunteerForms(viewer.id),
-    supabase
-      .from("assignments")
-      .select("id, role, events(id, title, status, starts_at, ends_at, location, meeting_point, meeting_street, meeting_postal_code, meeting_city, meeting_time, helpers_needed, chat_space_name, chat_space_url, chat_space_requested_at, planning_cycles(description_deadline))")
-      .eq("profile_id", viewer.id)
-      .eq("status", "active"),
+    loadMyEvents(supabase, viewer.id, now, { since: now - 45 * DAY }),
+    loadMyDuties(supabase, viewer.id, now),
     supabase.rpc("open_slots"),
     supabase
       .from("reimbursements")
-      .select("id, status, payout_method, suggested_cents, approved_cents, events(id, title), receipts(vendor, amount_cents)")
+      .select("id, status, payout_method, event_id, events(id, title), receipts(vendor, amount_cents)")
       .eq("claimant_id", viewer.id)
       .in("status", ["not_submitted", "beleg_received", "checked"]),
     // A member who never had an event gets the orientation (usability review #14).
@@ -63,41 +61,24 @@ export default async function HomePage() {
     supabase.from("profile_payout_details").select("profile_id").eq("profile_id", viewer.id).maybeSingle(),
   ]);
 
-  // My events: upcoming, and recent ones whose hand-in is not finished.
-  type Ev = {
-    id: string;
-    title: string;
-    status: EventStatus;
-    starts_at: string;
-    ends_at: string | null;
-    location: string | null;
-    meeting_point: string | null;
-    meeting_street: string | null;
-    meeting_postal_code: string | null;
-    meeting_city: string | null;
-    meeting_time: string | null;
-    helpers_needed: number;
-    chat_space_name: string | null;
-    chat_space_url: string | null;
-    chat_space_requested_at: string | null;
-    planning_cycles: { description_deadline: string | null } | null;
-  };
-  const mine = (assignments ?? [])
-    .map((a) => ({ role: a.role as "oc" | "helper", event: a.events as unknown as Ev | null }))
-    .filter((a): a is { role: "oc" | "helper"; event: Ev } => !!a.event && Date.parse(a.event.starts_at) > now - 45 * DAY && !["draft", "dropped"].includes(a.event.status));
-  const withSteps = await Promise.all(
-    mine.map(async (a) => {
-      const input = await checklistInput(supabase, a.event, a.event.planning_cycles?.description_deadline ?? null, viewer.id);
-      return { ...a, step: nextStep(input, a.role) };
-    })
-  );
-  // Most urgent first (usability review #10): happening now, overdue, due soon, to do, waiting, done.
-  const myEvents = byUrgency(
-    withSteps.filter((a) => Date.parse(a.event.starts_at) > now - DAY || a.step.kind !== "done"),
+  const mine = events.filter((a) => a.event.status !== "dropped");
+  const needed = byUrgency(
+    mine.filter((a) => needsYou(a.event, a.step, now)),
     (a) => a.event,
     (a) => a.step,
     now
-  ).map((a) => ({ ...a, live: happeningNow(a.event, now) }));
+  );
+  const neededIds = new Set(needed.map((a) => a.event.id));
+  // Duties at office hours and Stammtisch: on duty now, or a cash box to sign off (round 2026-11-03 (2)).
+  const neededDuties = duties.filter((d) => needsYou(dutyTimed(d.duty), d.step, now));
+  const neededKeys = new Set(neededDuties.map((d) => d.key));
+  // The next events and duties not already under Waiting for you.
+  const nextUp = myItems(
+    mine.filter((a) => !neededIds.has(a.event.id)),
+    duties.filter((d) => !neededKeys.has(d.key))
+  )
+    .filter((x) => eventGroup(itemTimed(x), now) !== "past")
+    .sort((a, b) => itemTimed(a).starts_at.localeCompare(itemTimed(b).starts_at));
 
   const myIds = new Set(mine.map((a) => a.event.id));
   const claimable = (slots ?? []).filter((s) => !myIds.has(s.event_id));
@@ -105,93 +86,142 @@ export default async function HomePage() {
     ? await supabase.from("events").select("id, title, starts_at").in("id", claimable.map((s) => s.event_id)).order("starts_at")
     : { data: [] };
 
-  const needs = (claims ?? []).filter((c) => !c.payout_method || c.status === "not_submitted");
   const openForms = forms.filter((f) => !f.submittedAt);
-  // What waits on the member besides an event's next step (those are under My events).
-  const waiting = openForms.length + needs.length;
+  // Saved profile details reach every open claim; without them Finance cannot pay.
+  const noPayout = payout ? 0 : (claims ?? []).filter((c) => !c.payout_method).length;
+  // Paper receipts not handed in, unless their event's step already says so.
+  const receipts = (claims ?? []).filter((c) => c.status === "not_submitted" && !neededIds.has(c.event_id));
+  // Open slots are one offer at the end of the list.
+  const waiting = needed.length + neededDuties.length + openForms.length + (noPayout ? 1 : 0) + receipts.length + (claimable.length ? 1 : 0);
 
   return (
     <>
-      <PageHeader
-        title={`Hi ${viewer.name.split(" ")[0]}`}
-        description={
-          <>
-            {formatDateTime(new Date(now).toISOString()).slice(0, -7)}
-            {" · "}
-            {waiting ? <span className="font-medium text-amber-800">{plural(waiting, "thing")} waiting for you</span> : "nothing waiting for you right now"}
-          </>
-        }
-      />
+      <PageHeader title={`Hi ${viewer.name.split(" ")[0]}`} description={formatDateTime(new Date(now).toISOString()).slice(0, -7)} />
       <div className="space-y-6">
-        {!everAssigned && <OrientationCard formOpen={openForms.length > 0} hasPayout={!!payout} />}
+        {!everAssigned && <OrientationCard hasPayout={!!payout} />}
 
-        {waiting > 0 && (
+        {waiting > 0 ? (
           <section aria-labelledby="needs-you" className="rounded-xl border border-amber-200 bg-amber-50/60 p-4" data-testid="home-needs-you">
             <h2 id="needs-you" className="mb-2 text-sm font-semibold text-amber-900">
-              Waiting for you
+              Waiting for you · {waiting}
             </h2>
             <ul className="space-y-2">
+              {needed.map(({ event, step, live }) => (
+                <NeedItem
+                  key={event.id}
+                  icon={live ? <span className="text-esn-orange">●</span> : <StepIcon kind={step.kind} />}
+                  title={
+                    <Link href={stepHref(event.id, step, "home")} className="hover:underline" data-testid="next-step">
+                      {live ? `${event.title} – happening now` : step.label}
+                    </Link>
+                  }
+                  detail={
+                    <>
+                      {live ? step.label : `${event.title} · ${formatShortDate(event.starts_at)}`}
+                      {!live && step.due && (
+                        <>
+                          {" · "}
+                          <DueLabel iso={step.due} now={now} note={step.dueNote} />
+                        </>
+                      )}
+                    </>
+                  }
+                  testId="home-step"
+                >
+                  {live && (
+                    <Link href={`/events/${event.id}/attendance?from=home`} className={buttonVariants({ size: "sm" })} data-testid="happening-now">
+                      Open attendance (QR code)
+                    </Link>
+                  )}
+                </NeedItem>
+              ))}
+              {neededDuties.map((d) => (
+                <NeedItem
+                  key={d.key}
+                  icon={d.live ? <span className="text-esn-orange">●</span> : <StepIcon kind={d.step.kind} />}
+                  title={
+                    <Link href={dutyHref(d)} className="hover:underline" data-testid="duty-step">
+                      {d.live ? `${d.duty.title} – on duty now` : d.step.label}
+                    </Link>
+                  }
+                  detail={d.live ? d.step.label : `${d.duty.title} · ${formatShortDate(d.duty.starts_at)}`}
+                  testId="home-duty"
+                >
+                  {d.live && d.step.cash && (
+                    <Link href={dutyHref(d)} className={buttonVariants({ size: "sm" })}>
+                      Open the cash box
+                    </Link>
+                  )}
+                </NeedItem>
+              ))}
               {openForms.map((f) => (
-                <li key={f.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 shadow-sm" data-testid="home-volunteer">
-                  <span className="text-lg" aria-hidden>
-                    🙋
-                  </span>
-                  <div className="mr-auto min-w-0">
-                    <p className="font-medium text-gray-900">The volunteer form for {cycleLabel(f.month)} is open</p>
-                    <p className="text-xs text-gray-600">
-                      {f.form_closes_at ? <DueLabel iso={f.form_closes_at} now={now} /> : "Open now"} · say which events you can OC or help with
-                    </p>
-                  </div>
+                <NeedItem
+                  key={f.id}
+                  icon="🙋"
+                  title={`The volunteer form for ${cycleLabel(f.month)} is open`}
+                  detail={<>{f.form_closes_at ? <DueLabel iso={f.form_closes_at} now={now} /> : "Open now"} · say which events you can OC or help with</>}
+                  testId="home-volunteer"
+                >
                   <Link href="/volunteer" className={buttonVariants({ size: "sm" })}>
                     Fill in the form
                   </Link>
-                </li>
+                </NeedItem>
               ))}
-              {needs.map((c) => {
+              {noPayout > 0 && (
+                <NeedItem icon="🏦" title="Add your IBAN or PayPal" detail={`Finance cannot pay ${plural(noPayout, "claim")} until you do.`} testId="home-claims">
+                  <Link href="/me/reimbursements#payout" className={buttonVariants({ size: "sm", variant: "outline" })}>
+                    Add payout details
+                  </Link>
+                </NeedItem>
+              )}
+              {receipts.map((c) => {
                 const e = c.events as { id: string; title: string } | null;
                 const r = c.receipts as { vendor: string; amount_cents: number } | null;
                 return (
-                  <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 shadow-sm" data-testid="home-claims">
-                    <span className="text-lg" aria-hidden>
-                      🧾
-                    </span>
-                    <div className="mr-auto min-w-0">
-                      <p className="font-medium text-gray-900">
-                        {r?.vendor} · {formatCents(r?.amount_cents)}
-                      </p>
-                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
-                        {e?.title} <ClaimStatusBadge status={c.status as ClaimStatus} />
-                      </p>
-                    </div>
-                    <span className="text-xs text-amber-800">
-                      {!c.payout_method && (
-                        <Link href="/me#claims" className="underline">
-                          Add bank or PayPal details
-                        </Link>
-                      )}
-                      {!c.payout_method && c.status === "not_submitted" && " · "}
-                      {c.status === "not_submitted" && "Hand the paper receipt to Finance"}
-                    </span>
-                  </li>
+                  <NeedItem
+                    key={c.id}
+                    icon="🧾"
+                    title={
+                      <Link href={`/events/${c.event_id}/hand-in?from=home#your-receipts`} className="hover:underline">
+                        Hand the paper receipt to Finance
+                      </Link>
+                    }
+                    detail={`${r?.vendor} · ${formatCents(r?.amount_cents)}${e ? ` · ${e.title}` : ""}`}
+                    testId="home-claims"
+                  />
                 );
               })}
+              {claimable.length > 0 && (
+                <NeedItem
+                  icon="🤝"
+                  title={claimable.length === 1 ? `${slotEvents?.[0]?.title ?? "An event"} needs ${claimable[0].open_oc ? "an OC" : "a helper"}` : `${claimable.length} events need people`}
+                  detail={
+                    <>
+                      Claim an open slot:{" "}
+                      {(slotEvents ?? []).slice(0, OPEN_SLOTS).map((e, i) => (
+                        <span key={e.id}>
+                          {i > 0 && ", "}
+                          <Link href={`/events/${e.id}?from=home`} className="font-medium text-esn hover:underline">
+                            {e.title}
+                          </Link>{" "}
+                          ({formatShortDate(e.starts_at)})
+                        </span>
+                      ))}
+                      {claimable.length > OPEN_SLOTS && ` and ${claimable.length - OPEN_SLOTS} more on the Calendar`}
+                    </>
+                  }
+                  testId="home-open-slots"
+                />
+              )}
             </ul>
+          </section>
+        ) : (
+          <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm font-medium text-emerald-800" data-testid="home-needs-you">
+            Nothing waiting for you ✓
           </section>
         )}
 
-        <CycleTimelineCard viewerId={viewer.id} now={now} />
-        {forms
-          .filter((f) => f.submittedAt)
-          .map((f) => (
-            <Alert key={f.id} tone="success" data-testid="home-volunteer">
-              Volunteer form for <strong>{cycleLabel(f.month)}</strong>: submitted ✓ – you signed up for {plural(f.events, "event")}.{" "}
-              <Link href="/volunteer" className="font-medium underline">
-                See your answers
-              </Link>
-            </Alert>
-          ))}
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>My events</CardTitle>
@@ -200,93 +230,18 @@ export default async function HomePage() {
               </Link>
             </CardHeader>
             <CardContent>
-              {!myEvents.length && (
-                <EmptyState>{openForms.length ? "Nothing planned yet – fill in the volunteer form, or claim an open slot." : "Nothing planned. Volunteer when the next form opens, or claim an open slot."}</EmptyState>
-              )}
-              <ul className="space-y-3" data-testid="home-my-events">
-                {myEvents.map(({ event, role, step, live }) => (
-                  <li key={event.id} className={cn("flex gap-3 rounded-lg border p-3", live ? "border-esn-orange/60 ring-1 ring-esn-orange/40" : "border-gray-200")}>
-                    <DateTile iso={event.starts_at} live={live} />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/events/${event.id}?from=home`} className="font-medium text-gray-900 hover:text-esn break-words">
-                          {event.title}
-                        </Link>
-                        <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
-                        {live && (
-                          <Badge tone="amber" data-testid="happening-now">
-                            ● Happening now
-                          </Badge>
-                        )}
-                        {event.status !== "confirmed" && <EventStatusBadge status={event.status} />}
-                        <span className="ml-auto text-xs tabular-nums text-gray-500">{berlinTime(event.starts_at)}</span>
-                      </div>
-                      {live && (
-                        <Link href={`/events/${event.id}/attendance?from=home`} className={cn(buttonVariants({ size: "sm" }), "h-auto w-full whitespace-normal py-1.5 sm:w-auto")}>
-                          Happening now – open attendance (QR code)
-                        </Link>
-                      )}
-                      <Link
-                        href={`/events/${event.id}${step.tab ? `/${step.tab}` : ""}?from=home`}
-                        className={cn("flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm hover:underline", STEP_TONE[step.kind])}
-                        data-testid="next-step"
-                      >
-                        <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
-                        <span className="font-medium">{step.label}</span>
-                        {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-xs" />}
-                      </Link>
-                      {/* A helper's way in before the event (usability review #9): when, where, the Chat space. */}
-                      {role === "helper" && step.anchor === "chat-space" && (
-                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600" data-testid="helper-info">
-                          <span>
-                            Starts {berlinTime(event.starts_at)}
-                            {event.location && ` · ${event.location}`}
-                          </span>
-                          {/* Where to be first, when it is not the location (round 2026-11-02). */}
-                          {eventMeeting(event) && <span data-testid="helper-meeting">{meetingShort(eventMeeting(event))}</span>}
-                          {event.chat_space_url ? (
-                            <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="font-medium text-esn hover:underline">
-                              Open the Chat space ↗
-                            </a>
-                          ) : (
-                            <span>{event.chat_space_requested_at ? "The Chat space is being created." : "The Chat space is created when the month's roster is confirmed."}</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
+              {!nextUp.length && <EmptyState>{needed.length || neededDuties.length ? "Nothing else coming up." : "Nothing planned. Volunteer when the next form opens, or claim an open slot."}</EmptyState>}
+              <ul className="divide-y divide-gray-100" data-testid="home-my-events">
+                {nextUp.slice(0, NEXT_UP).map((x) => (x.type === "event" ? <MyEventRow key={x.key} item={x.item} now={now} /> : <MyDutyRow key={x.key} item={x.item} />))}
               </ul>
+              {nextUp.length > NEXT_UP && (
+                <Link href="/me" className="mt-2 block text-sm text-esn hover:underline">
+                  {plural(nextUp.length - NEXT_UP, "more event")} on My events →
+                </Link>
+              )}
             </CardContent>
           </Card>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Open slots</CardTitle>
-                <Badge tone={claimable.length ? "amber" : "gray"}>{claimable.length}</Badge>
-              </CardHeader>
-              <CardContent>
-                {!claimable.length && <EmptyState>No open slots right now.</EmptyState>}
-                <ul className="divide-y divide-gray-100 text-sm" data-testid="home-open-slots">
-                  {(slotEvents ?? []).map((e) => {
-                    const s = claimable.find((x) => x.event_id === e.id)!;
-                    return (
-                      <li key={e.id} className="flex flex-wrap items-center gap-2 py-2">
-                        <span className="w-20 shrink-0 text-xs tabular-nums text-gray-500">{formatShortDate(e.starts_at)}</span>
-                        <Link href={`/events/${e.id}?from=home`} className="min-w-0 flex-1 truncate font-medium text-gray-900 hover:text-esn">
-                          {e.title}
-                        </Link>
-                        <Badge tone="amber">{s.open_oc ? "OC needed" : plural(s.open_helpers, "helper slot")}</Badge>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </CardContent>
-            </Card>
-
-            <ComingUpCard viewerId={viewer.id} now={now} />
-          </div>
+          <ComingUpCard viewerId={viewer.id} now={now} />
         </div>
 
         {(isEvents || isComms || isFinance || isExec) && (
@@ -304,22 +259,24 @@ export default async function HomePage() {
   );
 }
 
-/** An event's day as a small calendar leaf ("Nov / 3 / Tue"). */
-function DateTile({ iso, live }: { iso: string; live: boolean }) {
-  const [weekday, day, month] = formatShortDate(iso).split(" ");
+/** One row of "Waiting for you": an icon, what to do, its detail, an optional button. */
+function NeedItem({ icon, title, detail, testId, children }: { icon: React.ReactNode; title: React.ReactNode; detail: React.ReactNode; testId: string; children?: React.ReactNode }) {
   return (
-    <div
-      className={cn("flex w-12 shrink-0 flex-col items-center self-start rounded-lg py-1.5 leading-tight", live ? "bg-esn-orange/10 text-esn-orange" : "bg-esn/5 text-esn-dark")}
-      aria-hidden="true"
-    >
-      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{month}</span>
-      <span className="text-lg font-bold tabular-nums">{day}</span>
-      <span className="text-[10px] text-gray-500">{weekday}</span>
-    </div>
+    <li className="flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2 shadow-sm" data-testid={testId}>
+      <span className="flex w-5 justify-center text-lg" aria-hidden>
+        {icon}
+      </span>
+      <div className="mr-auto min-w-0">
+        <p className="font-medium text-gray-900">{title}</p>
+        <p className="text-xs text-gray-600">{detail}</p>
+      </div>
+      {children}
+    </li>
   );
 }
 
-function QueueCard({ title, href, testId, children }: { title: string; href: string; testId: string; children: React.ReactNode }) {
+/** A team's card; `clear` when nothing in it waits (figures at zero are hidden). */
+function QueueCard({ title, href, testId, clear, children }: { title: string; href: string; testId: string; clear?: boolean; children: React.ReactNode }) {
   return (
     <Card data-testid={testId}>
       <CardHeader>
@@ -328,22 +285,26 @@ function QueueCard({ title, href, testId, children }: { title: string; href: str
           Open →
         </Link>
       </CardHeader>
-      <CardContent className="text-sm space-y-2">{children}</CardContent>
+      <CardContent className="text-sm space-y-2">
+        {clear && <p className="text-emerald-700">All clear ✓</p>}
+        {children}
+      </CardContent>
     </Card>
   );
 }
 
 function Figure({ label, value, tone, href }: { label: string; value: number; tone?: "amber" | "red" | "blue"; href?: string }) {
+  if (!value) return null;
   return (
     <p className="flex items-center gap-2">
-      {href && value ? (
+      {href ? (
         <Link href={href} className="text-esn hover:underline">
           {label}
         </Link>
       ) : (
         <span className="text-gray-600">{label}</span>
       )}
-      <Badge tone={value ? (tone ?? "blue") : "gray"} className="ml-auto tabular-nums">
+      <Badge tone={tone ?? "blue"} className="ml-auto tabular-nums">
         {value}
       </Badge>
     </p>
@@ -412,8 +373,9 @@ async function CommsQueue() {
   const link = (list: typeof rows, show: string) => (list.length ? `/team/comms?month=${monthParam(monthOf(list[0].starts_at))}&show=${show}` : undefined);
   const review = rows.filter((r) => r.status === "submitted");
   const late = rows.filter((r) => r.late);
+  const clear = !review.length && !late.length && !work.pretix.length && !work.toPlan.length && !thisWeek && !overdue;
   return (
-    <QueueCard title="Comms" href={link([...review, ...late].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), "needs") ?? "/team/comms"} testId="queue-comms">
+    <QueueCard title="Comms" href={link([...review, ...late].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), "needs") ?? "/team/comms"} testId="queue-comms" clear={clear}>
       <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
       <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
       {/* Approved descriptions go to the Chat space by themselves; then pretix, then the advertising (round 2026-11-03). */}
@@ -433,10 +395,12 @@ async function FinanceQueue() {
   ]);
   const open = new Set((batches ?? []).map((b) => b.id));
   const toPay = new Set((claims ?? []).filter((c) => c.status === "checked" && c.batch_id && open.has(c.batch_id)).map((c) => c.batch_id));
+  const receive = (claims ?? []).filter((c) => c.status === "not_submitted").length;
+  const check = (claims ?? []).filter((c) => c.status === "beleg_received").length;
   return (
-    <QueueCard title="Finance" href="/team/finance" testId="queue-finance">
-      <Figure label="Paper receipts to receive" value={(claims ?? []).filter((c) => c.status === "not_submitted").length} tone="amber" />
-      <Figure label="Claims to check" value={(claims ?? []).filter((c) => c.status === "beleg_received").length} />
+    <QueueCard title="Finance" href="/team/finance" testId="queue-finance" clear={!receive && !check && !toPay.size}>
+      <Figure label="Paper receipts to receive" value={receive} tone="amber" />
+      <Figure label="Claims to check" value={check} />
       <Figure label="Batches to pay" value={toPay.size} />
     </QueueCard>
   );

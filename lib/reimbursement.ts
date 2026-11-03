@@ -194,18 +194,6 @@ export function maskEmail(email: string): string {
 }
 
 /**
- * Where a claim's money goes (review 2026-10-29 B1): "Payout: …" until it is
- * paid, "Paid to …" afterwards (the details are deleted then, so only the
- * method is left). null: no details yet.
- */
-export function payoutLine(c: { status: ClaimStatus; payoutMethod: string | null; iban: string | null; paypalEmail: string | null }): string | null {
-  if (c.status === "paid") return c.payoutMethod === "paypal" ? "Paid to your PayPal account" : c.payoutMethod === "bank" ? "Paid to your bank account" : "Paid";
-  if (c.iban) return `Payout: bank transfer (${maskIban(c.iban)})`;
-  if (c.paypalEmail) return `Payout: PayPal (${maskEmail(c.paypalEmail)})`;
-  return null;
-}
-
-/**
  * The hand-in's receipt line (review 2026-10-29 B2): the member's own
  * receipts and the rest of the team's apart, so they see whose Beleg is
  * missing – counts only, never others' amounts.
@@ -225,6 +213,29 @@ export interface ClaimProgressInput {
   belegReceivedAt?: string | null;
   checkedAt?: string | null;
   paidAt?: string | null;
+}
+
+/**
+ * Where a claim stands, in one line for its owner (round 2026-11-03 (2)):
+ * what happened last and what comes next. `day` formats a date.
+ */
+export function claimState(
+  c: ClaimProgressInput & { rejectedReason?: string | null },
+  day: (iso: string) => string
+): { text: string; tone: "todo" | "waiting" | "done" | "failed" } {
+  const on = (iso: string | null | undefined) => (iso ? ` ${day(iso)}` : "");
+  switch (c.status) {
+    case "not_submitted":
+      return { text: "Hand the paper receipt to Finance", tone: "todo" };
+    case "beleg_received":
+      return { text: `Paper receipt received${on(c.belegReceivedAt)} – Finance checks it next`, tone: "waiting" };
+    case "checked":
+      return { text: `Checked${on(c.checkedAt)} – paid with the next payout`, tone: "waiting" };
+    case "paid":
+      return { text: `Paid${on(c.paidAt)}`, tone: "done" };
+    case "rejected":
+      return { text: `Rejected${c.rejectedReason ? `: ${c.rejectedReason}` : ""}`, tone: "failed" };
+  }
 }
 
 /**

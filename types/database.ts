@@ -669,6 +669,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"internal_attendance": {
+                  Row: {
+                    "added_by": string,"created_at": string,"internal_event_id": string,"profile_id": string,"removed_at": string | null,"removed_by": string | null,"via": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_by": string,"created_at"?: string,"internal_event_id": string,"profile_id": string,"removed_at"?: string | null,"removed_by"?: string | null,"via": string
+                  }
+                  Update: {
+                    "added_by"?: string,"created_at"?: string,"internal_event_id"?: string,"profile_id"?: string,"removed_at"?: string | null,"removed_by"?: string | null,"via"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "internal_attendance_internal_event_id_fkey"
+      columns: ["internal_event_id"]
+isOneToOne: false
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "internal_attendance_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"internal_event_people": {
                   Row: {
                     "created_at": string,"created_by": string | null,"id": string,"internal_event_id": string,"profile_id": string,"role": string
@@ -697,14 +723,14 @@ isOneToOne: false
                   ]
                 },"internal_events": {
                   Row: {
-                    "capacity": number | null,"created_at": string,"created_by": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"kind": Database["public"]['Enums']["internal_kind"],"location": string,"note": string,"presentation_url": string | null,"series_id": string | null,"starts_at": string,"status": string,"title": string,"updated_at": string
+                    "attendance_closed_at": string | null,"attendance_closed_by": string | null,"capacity": number | null,"created_at": string,"created_by": string | null,"ends_at": string | null,"helpers_needed": number,"id": string,"kind": Database["public"]['Enums']["internal_kind"],"location": string,"note": string,"presentation_url": string | null,"series_id": string | null,"starts_at": string,"status": string,"title": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind": Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: string,"title": string,"updated_at"?: string
+                    "attendance_closed_at"?: string | null,"attendance_closed_by"?: string | null,"capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind": Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at": string,"status"?: string,"title": string,"updated_at"?: string
                   }
                   Update: {
-                    "capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind"?: Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: string,"title"?: string,"updated_at"?: string
+                    "attendance_closed_at"?: string | null,"attendance_closed_by"?: string | null,"capacity"?: number | null,"created_at"?: string,"created_by"?: string | null,"ends_at"?: string | null,"helpers_needed"?: number,"id"?: string,"kind"?: Database["public"]['Enums']["internal_kind"],"location"?: string,"note"?: string,"presentation_url"?: string | null,"series_id"?: string | null,"starts_at"?: string,"status"?: string,"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1225,8 +1251,16 @@ isOneToOne: false
 "check_cash_report":
 { Args: { "report": string }; Returns: undefined
                            },
+"check_in_internal":
+{ Args: { "code"?: string,"internal_event": string,"token"?: string }; Returns: string
+                           },
 "check_reimbursement":
 { Args: { "approved": number,"claim": string,"note"?: string }; Returns: undefined
+                           },
+"checkin_code":
+{ Args: { "internal_event": string }; Returns: {
+              "code": string,"seconds_left": number,"token": string
+            }[]
                            },
 "claim_jobs":
 { Args: { "max_jobs"?: number,"worker": string }; Returns: {
@@ -1261,6 +1295,9 @@ isOneToOne: false
                            },
 "close_cash_report":
 { Args: { "report": string }; Returns: undefined
+                           },
+"close_internal_attendance":
+{ Args: { "closed": boolean,"internal_event": string }; Returns: undefined
                            },
 "close_volunteer_form":
 { Args: { "cycle": string }; Returns: undefined
@@ -1445,11 +1482,19 @@ isOneToOne: false
 "mark_esn_uploaded":
 { Args: { "event": string,"url": string }; Returns: undefined
                            },
+"mark_internal_attendance":
+{ Args: { "internal_event": string,"present": boolean,"profile": string }; Returns: undefined
+                           },
 "mark_photos_uploaded":
 { Args: { "event": string,"uploaded": boolean }; Returns: undefined
                            },
 "mark_post_published":
 { Args: { "link": string,"post": string }; Returns: undefined
+                           },
+"member_activity":
+{ Args: { "semester": string }; Returns: {
+              "email": string,"full_name": string,"helper_count": number,"meeting_count": number,"newbie": boolean,"oc_count": number,"office_hour_count": number,"profile_id": string,"talk_count": number
+            }[]
                            },
 "merge_formats":
 { Args: { "from_format": string,"into_format": string }; Returns: number

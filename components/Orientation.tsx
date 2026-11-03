@@ -5,11 +5,10 @@
 // shows again where storage is unavailable.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui";
 
 const KEY = "mesa-orientation-dismissed";
 
-export function OrientationCard({ formOpen, hasPayout }: { formOpen: boolean; hasPayout: boolean }) {
+export function OrientationCard({ hasPayout }: { hasPayout: boolean }) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     try {
@@ -56,18 +55,13 @@ export function OrientationCard({ formOpen, hasPayout }: { formOpen: boolean; ha
         </li>
       </ol>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        {formOpen && (
-          <Link href="/volunteer" className={buttonVariants({ size: "sm" })}>
-            Fill in the volunteer form
-          </Link>
-        )}
         <Link href="/ideas" className="text-esn hover:underline">
           Propose an idea →
         </Link>
         {!hasPayout && (
           <span className="text-xs text-gray-600">
-            The orange dot on your initials: no payout details yet.{" "}
-            <Link href="/me/payout" className="text-esn hover:underline">
+            No payout details yet.{" "}
+            <Link href="/me/reimbursements#payout" className="text-esn hover:underline">
               Add your IBAN or PayPal
             </Link>{" "}
             so Finance can pay you back what you spend for an event.

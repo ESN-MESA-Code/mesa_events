@@ -6,7 +6,8 @@ import { z } from "zod";
 import { dbError, defineAction, forbidden, PAGES, requireRole, uuid } from "@/lib/actions/core";
 import { DENOMINATIONS, countTotal } from "@/lib/cash";
 
-const CASH = [PAGES.officeHours, PAGES.event, PAGES.finance] as const;
+// My events and Home show an office hour's cash box step (round 2026-11-03 (2)).
+const CASH = [PAGES.officeHours, PAGES.event, PAGES.finance, PAGES.me, PAGES.home] as const;
 
 const counts = z
   .record(z.string(), z.number().int().min(0).max(100_000))

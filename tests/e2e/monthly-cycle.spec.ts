@@ -19,7 +19,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("a member proposes an idea (and will OC it)", async () => {
     await as(USERS.member);
-    await page.goto("/ideas");
+    await page.goto("/ideas#propose");
     await page.locator("#idea-title").fill(quiz);
     await page.locator("#idea-date").fill(`${month}-12`);
     await page.locator("#idea-helpers").fill("2");
@@ -212,7 +212,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("a helper registers a receipt with bank details", async () => {
     await as(USERS.volunteer1);
-    await page.goto(`/events/${quizId}/hand-in`);
+    await page.goto(`/events/${quizId}/hand-in#register-receipt`);
     await page.locator("#r-kind").selectOption({ label: "Ticket / entry fee" });
     await page.locator("#r-amount").fill("20");
     await expect(page.getByTestId("suggestion")).toContainText("€ 10.00");
@@ -222,7 +222,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.locator("#r-iban").fill("DE89 3704 0044 0532 0130 00");
     await page.getByRole("button", { name: "Register receipt" }).click();
     await expect(page.getByText("Registered. Now hand the paper receipt to Finance.")).toBeVisible();
-    await expect(page.getByTestId("my-claims")).toContainText("Paper receipt not handed in");
+    await expect(page.getByTestId("my-claims")).toContainText("Hand the paper receipt to Finance");
   });
 
   await test.step("Finance receives the Beleg, checks the claim and pays the month's batch", async () => {
@@ -244,7 +244,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("the helper sees the claim paid", async () => {
     await as(USERS.volunteer1);
-    await page.goto("/me");
-    await expect(page.getByTestId("my-reimbursements")).toContainText("Paid");
+    await page.goto("/me/reimbursements");
+    await expect(page.getByTestId(`settled-${vendor}`)).toContainText("Paid");
   });
 });

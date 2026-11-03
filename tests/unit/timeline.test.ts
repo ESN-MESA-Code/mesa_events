@@ -77,6 +77,22 @@ describe("milestones", () => {
     expect(milestones(cycleTimeline("2026-12-01"), t("2026-11-12T10:00:00Z"), { roster: true }).map((x) => x.id)).toContain("roster");
     expect(milestoneDay("2026-11-07T22:59:00.000Z")).toBe("7 Nov");
   });
+
+  it("a cycle run early: what it did wins over the dates, and steps stay in order (round 2026-11-03 (2))", () => {
+    // 3 Nov: the December form opened and closed (on the 2nd) before the ideas day (the 7th).
+    const dec = { ...cycleTimeline("2026-12-01"), formCloses: "2026-11-02T11:00:00Z" };
+    expect(milestones(dec, t("2026-11-03T10:00:00Z"), { done: ["formOpens", "formCloses"] }).map((x) => x.state)).toEqual(["passed", "passed", "passed", "next"]);
+    // Without the cycle the closed form alone ends the ideas too.
+    expect(milestones(dec, t("2026-11-03T10:00:00Z")).map((x) => x.state)).toEqual(["passed", "passed", "passed", "next"]);
+    // January opened early (3 Nov), closing the 7th: ideas over, the deadline next.
+    const jan = { ...cycleTimeline("2027-01-01"), formCloses: "2026-11-07T22:59:00Z" };
+    expect(milestones(jan, t("2026-11-03T10:00:00Z"), { done: ["formOpens"] }).map((x) => [x.id, x.state])).toEqual([
+      ["ideas", "passed"],
+      ["formOpens", "passed"],
+      ["formCloses", "next"],
+      ["descriptions", "later"],
+    ]);
+  });
 });
 
 describe("the setting", () => {

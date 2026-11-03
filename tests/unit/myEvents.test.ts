@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byUrgency, eventGroup, groupEvents, handInState, happeningNow } from "@/lib/myEvents";
+import { byUrgency, eventGroup, groupEvents, handInState, happeningNow, needsYou, sectionEvents } from "@/lib/myEvents";
 
 // 29 Oct 2026, 08:00 Berlin (CET, UTC+1).
 const NOW = Date.parse("2026-10-29T07:00:00Z");
@@ -72,5 +72,39 @@ describe("Home order (usability review #10)", () => {
     expect(happeningNow({ starts_at: at(-3), ends_at: null }, NOW)).toBe(true);
     expect(happeningNow({ starts_at: at(-5), ends_at: null }, NOW)).toBe(false);
     expect(happeningNow({ starts_at: at(-5), ends_at: at(1) }, NOW)).toBe(true);
+  });
+});
+
+describe("My events sections and Home's Waiting for you (round 2026-11-03 (2))", () => {
+  const at = (h: number) => new Date(NOW + h * 3_600_000).toISOString();
+  const row = (name: string, startsIn: number, kind: "action" | "waiting" | "done", dueIn?: number) => ({ name, e: { starts_at: at(startsIn), ends_at: null }, step: { kind, due: dueIn === undefined ? undefined : at(dueIn) } });
+  it("Today, To do by urgency, Coming up by date, To finish oldest first, Done newest first", () => {
+    const list = [
+      row("today", 4, "done"),
+      row("todo-later", 72, "action", 48),
+      row("todo-overdue", 96, "action", -5),
+      row("waiting", 50, "waiting"),
+      row("set", 30, "done"),
+      row("handin-old", -24 * 9, "action"),
+      row("handin-new", -24 * 2, "action"),
+      row("done-old", -24 * 20, "done"),
+      row("done-new", -24 * 3, "done"),
+    ];
+    const s = sectionEvents(list, (x) => x.e, (x) => x.step, NOW);
+    const names = (k: keyof typeof s) => s[k].map((x) => x.name);
+    expect(names("today")).toEqual(["today"]);
+    expect(names("todo")).toEqual(["todo-overdue", "todo-later"]);
+    expect(names("upcoming")).toEqual(["set", "waiting"]);
+    expect(names("finish")).toEqual(["handin-old", "handin-new"]);
+    expect(names("done")).toEqual(["done-new", "done-old"]);
+  });
+  it("Home takes what is live, overdue, due within a week or undated – not later deadlines or others' steps", () => {
+    const needs = (r: ReturnType<typeof row>) => needsYou(r.e, r.step, NOW);
+    expect(needs(row("live", -1, "done"))).toBe(true);
+    expect(needs(row("overdue", 100, "action", -1))).toBe(true);
+    expect(needs(row("week", 300, "action", 24 * 6))).toBe(true);
+    expect(needs(row("hand-in", -48, "action"))).toBe(true);
+    expect(needs(row("later", 900, "action", 24 * 20))).toBe(false);
+    expect(needs(row("waiting", 10, "waiting"))).toBe(false);
   });
 });

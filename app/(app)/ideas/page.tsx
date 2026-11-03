@@ -54,7 +54,7 @@ export default async function IdeasPage() {
         </span>
         <span className="text-gray-600">After that they go into {monthLabel(addMonths(open, 1))} or later – ideas for next year are welcome any time.</span>
       </div>
-      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats}>
+      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats} proposeOpen={!ideas?.length}>
         <Card>
           <CardHeader>
             <CardTitle>Your ideas</CardTitle>

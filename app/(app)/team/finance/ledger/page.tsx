@@ -11,6 +11,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader
 import { FinanceTabs } from "@/components/FinanceTabs";
 import { cn } from "@/lib/utils";
 import { Categories, EntryActions, EntryForm, type Category, type EntryValues } from "./LedgerClient";
+import { FoldCard } from "@/components/Fold";
 
 export const metadata: Metadata = { title: "Finance overview" };
 
@@ -187,15 +188,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
                 )}
               </CardContent>
             </Card>
+            {/* Folded until needed (round 2026-11-03 (2)): booking by hand is the exception next to the overview. */}
             {canAct && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Book income or spending</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <EntryForm categories={cats} events={eventOptions} today={today} />
-                </CardContent>
-              </Card>
+              <FoldCard title="Book income or spending" testId="book-entry">
+                <EntryForm categories={cats} events={eventOptions} today={today} />
+              </FoldCard>
             )}
           </div>
         </div>

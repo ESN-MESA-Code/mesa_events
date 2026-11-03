@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
+import { FoldCard } from "@/components/Fold";
 import { useAction } from "@/components/ActionButton";
 import {
   assignInternal,
@@ -548,134 +549,129 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
   }
 
   return (
-    <Card data-testid="repeat">
-      <CardHeader>
-        <CardTitle>Repeat over {period.label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setDone(null);
-            run(
-              createInternalSeries,
-              {
-                kind,
-                title: f.title,
-                days: picked,
-                start: f.start,
-                minutes: Number(f.minutes),
-                location: f.location,
-                ...(hasPresentation(kind) ? { presentation_url: f.presentation_url } : {}),
-                ...(isStaffed(kind) ? { helpers_needed: Number(f.helpers) } : {}),
-              },
-              (r) => {
-                setDone(`${plural(r.created, "date")} added.`);
-                setSkipped(new Set());
-              }
-            );
-          }}
-        >
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Field label="Kind" htmlFor="rp-kind">
-              <Select id="rp-kind" value={kind} onChange={(e) => chooseKind(e.target.value as InternalKind)}>
-                {INTERNAL_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {INTERNAL_KIND_LABELS[k]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Title" htmlFor="rp-title">
-              <Input id="rp-title" value={f.title} onChange={set("title")} maxLength={200} />
-            </Field>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <Field label="Weekday" htmlFor="rp-weekday">
-              <Select id="rp-weekday" value={f.weekday} onChange={set("weekday")}>
-                {WEEKDAY_NAMES.map((d, i) => (
-                  <option key={d} value={i}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Time" htmlFor="rp-start">
-              <Input id="rp-start" type="time" value={f.start} onChange={set("start")} />
-            </Field>
-            <Field label="Minutes" htmlFor="rp-minutes" hint={formatMinutes(Number(f.minutes) || 0)}>
-              <Input id="rp-minutes" type="number" min={15} max={1440} step={15} value={f.minutes} onChange={set("minutes")} />
-            </Field>
-          </div>
-          <fieldset>
-            <legend className="mb-1 text-sm font-medium text-gray-700">Which {WEEKDAY_NAMES[f.weekday]}s of each month</legend>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {OCCURRENCES.map((o) => (
-                <label key={String(o)} className="flex items-center gap-1">
-                  <input type="checkbox" checked={which.includes(o)} onChange={() => toggleOccurrence(o)} />
-                  {OCCURRENCE_LABELS[String(o)]}
-                </label>
+    <FoldCard title={`Repeat over ${period.label}`} testId="repeat">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setDone(null);
+          run(
+            createInternalSeries,
+            {
+              kind,
+              title: f.title,
+              days: picked,
+              start: f.start,
+              minutes: Number(f.minutes),
+              location: f.location,
+              ...(hasPresentation(kind) ? { presentation_url: f.presentation_url } : {}),
+              ...(isStaffed(kind) ? { helpers_needed: Number(f.helpers) } : {}),
+            },
+            (r) => {
+              setDone(`${plural(r.created, "date")} added.`);
+              setSkipped(new Set());
+            }
+          );
+        }}
+      >
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label="Kind" htmlFor="rp-kind">
+            <Select id="rp-kind" value={kind} onChange={(e) => chooseKind(e.target.value as InternalKind)}>
+              {INTERNAL_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {INTERNAL_KIND_LABELS[k]}
+                </option>
               ))}
-            </div>
-          </fieldset>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Field label="From" htmlFor="rp-from">
-              <Input id="rp-from" type="date" value={f.from} onChange={set("from")} />
-            </Field>
-            <Field label="Until" htmlFor="rp-to">
-              <Input id="rp-to" type="date" value={f.to} onChange={set("to")} />
-            </Field>
-          </div>
-          <Field label="Where" htmlFor="rp-location">
-            <Input id="rp-location" value={f.location} onChange={set("location")} maxLength={300} />
+            </Select>
           </Field>
-          {hasPresentation(kind) && (
-            <Field label="Presentation (link, optional)" htmlFor="rp-pres" hint="Each date can get its own link later.">
-              <Input id="rp-pres" type="url" value={f.presentation_url} onChange={set("presentation_url")} placeholder="https://" />
-            </Field>
-          )}
-          {isStaffed(kind) && (
-            <Field label="Helpers needed" htmlFor="rp-helpers">
-              <Input id="rp-helpers" type="number" min={0} max={20} value={f.helpers} onChange={set("helpers")} />
-            </Field>
-          )}
-          <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">
-              {picked.length} of {days.length} dates – untick holidays and breaks:
-            </p>
-            <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto" data-testid="repeat-dates">
-              {days.map((d) => {
-                const on = picked.includes(d);
-                return (
-                  <label key={d} className={cn("flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs tabular-nums", on ? "border-esn/40 bg-esn/5" : "border-gray-200 text-gray-400")} title={taken.has(d) ? "Already planned" : undefined}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() =>
-                        setSkipped((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(d)) next.delete(d);
-                          else next.add(d);
-                          return next;
-                        })
-                      }
-                    />
-                    {d.slice(8)}.{d.slice(5, 7)}.{taken.has(d) && " (planned)"}
-                  </label>
-                );
-              })}
-              {!days.length && <span className="text-xs text-gray-500">No dates – choose which weeks.</span>}
-            </div>
+          <Field label="Title" htmlFor="rp-title">
+            <Input id="rp-title" value={f.title} onChange={set("title")} maxLength={200} />
+          </Field>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Field label="Weekday" htmlFor="rp-weekday">
+            <Select id="rp-weekday" value={f.weekday} onChange={set("weekday")}>
+              {WEEKDAY_NAMES.map((d, i) => (
+                <option key={d} value={i}>
+                  {d}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Time" htmlFor="rp-start">
+            <Input id="rp-start" type="time" value={f.start} onChange={set("start")} />
+          </Field>
+          <Field label="Minutes" htmlFor="rp-minutes" hint={formatMinutes(Number(f.minutes) || 0)}>
+            <Input id="rp-minutes" type="number" min={15} max={1440} step={15} value={f.minutes} onChange={set("minutes")} />
+          </Field>
+        </div>
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium text-gray-700">Which {WEEKDAY_NAMES[f.weekday]}s of each month</legend>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {OCCURRENCES.map((o) => (
+              <label key={String(o)} className="flex items-center gap-1">
+                <input type="checkbox" checked={which.includes(o)} onChange={() => toggleOccurrence(o)} />
+                {OCCURRENCE_LABELS[String(o)]}
+              </label>
+            ))}
           </div>
-          <Button type="submit" disabled={pending || !picked.length || !f.title.trim()}>
-            Add {plural(picked.length, "date")}
-          </Button>
-          {done && <p className="text-sm text-emerald-700">{done}</p>}
-          {error && <p className="text-xs text-red-600">{error}</p>}
-        </form>
-      </CardContent>
-    </Card>
+        </fieldset>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label="From" htmlFor="rp-from">
+            <Input id="rp-from" type="date" value={f.from} onChange={set("from")} />
+          </Field>
+          <Field label="Until" htmlFor="rp-to">
+            <Input id="rp-to" type="date" value={f.to} onChange={set("to")} />
+          </Field>
+        </div>
+        <Field label="Where" htmlFor="rp-location">
+          <Input id="rp-location" value={f.location} onChange={set("location")} maxLength={300} />
+        </Field>
+        {hasPresentation(kind) && (
+          <Field label="Presentation (link, optional)" htmlFor="rp-pres" hint="Each date can get its own link later.">
+            <Input id="rp-pres" type="url" value={f.presentation_url} onChange={set("presentation_url")} placeholder="https://" />
+          </Field>
+        )}
+        {isStaffed(kind) && (
+          <Field label="Helpers needed" htmlFor="rp-helpers">
+            <Input id="rp-helpers" type="number" min={0} max={20} value={f.helpers} onChange={set("helpers")} />
+          </Field>
+        )}
+        <div>
+          <p className="mb-1 text-sm font-medium text-gray-700">
+            {picked.length} of {days.length} dates – untick holidays and breaks:
+          </p>
+          <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto" data-testid="repeat-dates">
+            {days.map((d) => {
+              const on = picked.includes(d);
+              return (
+                <label key={d} className={cn("flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs tabular-nums", on ? "border-esn/40 bg-esn/5" : "border-gray-200 text-gray-400")} title={taken.has(d) ? "Already planned" : undefined}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() =>
+                      setSkipped((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(d)) next.delete(d);
+                        else next.add(d);
+                        return next;
+                      })
+                    }
+                  />
+                  {d.slice(8)}.{d.slice(5, 7)}.{taken.has(d) && " (planned)"}
+                </label>
+              );
+            })}
+            {!days.length && <span className="text-xs text-gray-500">No dates – choose which weeks.</span>}
+          </div>
+        </div>
+        <Button type="submit" disabled={pending || !picked.length || !f.title.trim()}>
+          Add {plural(picked.length, "date")}
+        </Button>
+        {done && <p className="text-sm text-emerald-700">{done}</p>}
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </form>
+    </FoldCard>
   );
 }
 
@@ -684,21 +680,16 @@ function Settings({ kinds }: { kinds: KindSetting[] }) {
   const [kind, setKind] = useState<InternalKind>("office_hour");
   const k = kinds.find((x) => x.kind === kind)!;
   return (
-    <Card data-testid="kind-settings">
-      <CardHeader>
-        <CardTitle>Defaults per kind</CardTitle>
-        <Select aria-label="Kind" className="h-8 w-56" value={kind} onChange={(e) => setKind(e.target.value as InternalKind)}>
-          {INTERNAL_KINDS.map((x) => (
-            <option key={x} value={x}>
-              {INTERNAL_KIND_LABELS[x]}
-            </option>
-          ))}
-        </Select>
-      </CardHeader>
-      <CardContent>
-        <SettingsForm key={kind} k={k} />
-      </CardContent>
-    </Card>
+    <FoldCard title="Defaults per kind" testId="kind-settings">
+      <Select aria-label="Kind" className="mb-3 h-8 w-56" value={kind} onChange={(e) => setKind(e.target.value as InternalKind)}>
+        {INTERNAL_KINDS.map((x) => (
+          <option key={x} value={x}>
+            {INTERNAL_KIND_LABELS[x]}
+          </option>
+        ))}
+      </Select>
+      <SettingsForm key={kind} k={k} />
+    </FoldCard>
   );
 }
 

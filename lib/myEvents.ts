@@ -69,3 +69,40 @@ export function urgencyRank(e: Timed, step: Pick<NextStep, "kind" | "due">, now:
 export function byUrgency<T>(list: T[], timed: (x: T) => Timed, step: (x: T) => Pick<NextStep, "kind" | "due">, now: number): T[] {
   return [...list].sort((a, b) => urgencyRank(timed(a), step(a), now) - urgencyRank(timed(b), step(b), now) || timed(a).starts_at.localeCompare(timed(b).starts_at));
 }
+
+/**
+ * My events' sections (round 2026-11-03 (2)): Today, To do (coming up, the
+ * next step is the member's), Coming up (waiting on others or all set),
+ * To finish (past, the hand-in is still the member's), Done.
+ */
+export type MyEventSection = "today" | "todo" | "upcoming" | "finish" | "done";
+
+export function sectionOf(e: Timed, step: Pick<NextStep, "kind">, now: number): MyEventSection {
+  const group = eventGroup(e, now);
+  if (group === "today") return "today";
+  if (group === "upcoming") return step.kind === "action" ? "todo" : "upcoming";
+  return step.kind === "action" ? "finish" : "done";
+}
+
+/** To do by urgency, To finish oldest first, Done most recent first, the rest by start. */
+export function sectionEvents<T>(list: T[], timed: (x: T) => Timed, step: (x: T) => Pick<NextStep, "kind" | "due">, now: number): Record<MyEventSection, T[]> {
+  const out: Record<MyEventSection, T[]> = { today: [], todo: [], upcoming: [], finish: [], done: [] };
+  const sorted = [...list].sort((a, b) => timed(a).starts_at.localeCompare(timed(b).starts_at));
+  for (const x of sorted) out[sectionOf(timed(x), step(x), now)].push(x);
+  out.todo = byUrgency(out.todo, timed, step, now);
+  out.done.reverse();
+  return out;
+}
+
+const DAY = 24 * HOUR;
+
+/**
+ * Home's "Waiting for you" takes an event when it is happening now, or its
+ * next step is the member's and overdue, due within a week or without a
+ * date (a hand-in, a decision). Later deadlines wait on My events.
+ */
+export function needsYou(e: Timed, step: Pick<NextStep, "kind" | "due">, now: number): boolean {
+  if (happeningNow(e, now)) return true;
+  if (step.kind !== "action") return false;
+  return !step.due || Date.parse(step.due) - now < 7 * DAY;
+}

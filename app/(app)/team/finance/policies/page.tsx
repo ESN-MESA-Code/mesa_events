@@ -5,6 +5,7 @@ import { CATEGORY_LABELS, EXPENSE_KIND_LABELS, type Category, type ExpenseKind, 
 import { EVENT_TYPE_LABELS, type EventType } from "@/lib/labels";
 import { Badge, Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/components/ui";
 import { PolicyEditor } from "./PolicyEditor";
+import { FoldCard } from "@/components/Fold";
 
 export const metadata: Metadata = { title: "Reimbursement rules" };
 
@@ -69,15 +70,11 @@ export default async function PoliciesPage() {
             </CardContent>
           </Card>
         ))}
+        {/* Folded until the Treasurer changes the rules (round 2026-11-03 (2)). */}
         {isTreasurer && latest && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Publish a new version</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PolicyEditor rules={latest.reimbursement_rules as Rule[]} />
-            </CardContent>
-          </Card>
+          <FoldCard title="Change the rules – publish a new version" testId="policy-editor">
+            <PolicyEditor rules={latest.reimbursement_rules as Rule[]} />
+          </FoldCard>
         )}
       </div>
     </>

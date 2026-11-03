@@ -77,6 +77,7 @@ export const PAGES = {
   ideas: "/ideas",
   volunteer: "/volunteer",
   me: "/me",
+  reimbursements: "/me/reimbursements",
   event: ["/events/[id]", "layout"],
   eventsTeam: ["/team/events", "layout"],
   comms: "/team/comms",
@@ -86,6 +87,7 @@ export const PAGES = {
   finance: ["/team/finance", "layout"],
   internal: "/team/internal",
   internalEvent: ["/internal/[id]", "page"],
+  activity: "/team/internal/activity",
   officeHours: ["/office-hours", "layout"],
   admin: "/admin",
 } as const satisfies Record<string, RevalidateTarget>;

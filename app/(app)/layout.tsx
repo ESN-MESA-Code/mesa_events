@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import Nav from "@/components/Nav";
 import { BrandMark } from "@/components/BrandMark";
-import { createSessionClient, getViewer } from "@/lib/supabase/session";
+import { getViewer } from "@/lib/supabase/session";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { navItems } from "@/lib/nav";
 import { volunteerForms } from "@/lib/eventStatus";
@@ -14,11 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
   if (!viewer.accepted) redirect("/confidentiality");
-  const supabase = await createSessionClient();
-  const [forms, { data: payout }] = await Promise.all([
-    volunteerForms(viewer.id),
-    supabase.from("profile_payout_details").select("profile_id").eq("profile_id", viewer.id).maybeSingle(),
-  ]);
+  const forms = await volunteerForms(viewer.id);
 
   const initials = viewer.name
     .split(/[\s.]+/)
@@ -41,7 +37,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               email={viewer.email}
               roles={viewer.roles.length ? viewer.roles.map((r) => ROLE_LABELS[r]).join(" · ") : "Member"}
               initials={initials}
-              hasPayout={!!payout}
             />
           </div>
         </div>

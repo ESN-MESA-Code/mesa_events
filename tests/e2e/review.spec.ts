@@ -25,7 +25,7 @@ test.describe("Home per role", () => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: `Hi ${user.name.split(" ")[0]}` })).toBeVisible();
       await expect(page.getByRole("heading", { name: "My events" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Open slots" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Coming up in MESA" })).toBeVisible();
       for (const q of ["queue-events", "queue-comms", "queue-finance"]) {
         await expect(page.getByTestId(q), q).toHaveCount(queues.includes(q) ? 1 : 0);
       }
@@ -42,7 +42,7 @@ test.describe("Home per role", () => {
     try {
       await signInAs(context, baseURL!, USERS.oc);
       await page.goto("/");
-      const card = page.getByTestId("home-my-events").getByRole("listitem").filter({ hasText: ev.title });
+      const card = page.getByTestId("home-needs-you").getByRole("listitem").filter({ hasText: ev.title });
       await expect(card.getByTestId("next-step")).toContainText("Write the description");
       await card.getByTestId("next-step").click();
       await expect(page).toHaveURL(new RegExp(`/events/${ev.id}/description\\?from=home$`));
@@ -55,8 +55,9 @@ test.describe("Home per role", () => {
       const { data } = await admin.from("descriptions").select("fields").eq("event_id", ev.id).single();
       expect(data!.fields).toMatchObject({ venue: "Backstage", title: ev.title });
 
-      // From My events the breadcrumb leads back there; the banner and checklist link to tabs.
+      // From My events (under To do) the breadcrumb leads back there; the banner and checklist link to tabs.
       await page.goto("/me");
+      await expect(page.getByTestId("my-todo").getByRole("listitem").filter({ hasText: ev.title }).getByTestId("next-step")).toContainText("Write the description");
       await page.getByRole("link", { name: ev.title }).first().click();
       await expect(page.getByTestId("breadcrumb")).toHaveText("← My events");
       await expect(page.getByTestId("next-step-banner")).toContainText("Write the description");
@@ -113,8 +114,9 @@ test.describe("volunteer form, cycle month", () => {
     // Locked: no form any more.
     await expect(form.getByRole("button", { name: "Submit my answers" })).toHaveCount(0);
     await expect(form.getByRole("radiogroup")).toHaveCount(0);
+    // The answered form is off Home (Volunteer shows the answers, checked above).
     await page.goto("/");
-    await expect(page.getByTestId("home-volunteer").filter({ hasText: label })).toContainText("submitted ✓");
+    await expect(page.getByTestId("home-volunteer").filter({ hasText: label })).toHaveCount(0);
 
     // Events clears the answers on the cycle's volunteer form page, with a reason.
     await signInAs(context, baseURL!, USERS.events);

@@ -1140,3 +1140,71 @@ Decisions:
   its list entry, on its date in the calendar and on every post that advertises it (a bundle
   shows one dot per event). Pointing at an event (list or calendar) highlights its posts, as a
   click did before. The legend explains it.
+
+## 2026-11-03 (2) – Home, My events and Reimbursements apart
+
+- **Home is "what needs me now".** One "Waiting for you" list holds everything the member has to
+  do, each thing once: an event happening now (with the attendance button), an event's next step
+  when it is overdue, due within a week or has no date (hand-ins, decisions), an open volunteer
+  form, missing payout details (only without saved profile details), paper receipts whose event
+  step does not already say so, and open slots as one offer. Later deadlines wait on My events.
+  Empty, it says "Nothing waiting for you ✓". Below: the member's next three events not already
+  waiting, and Coming up in MESA; team queues for team members. The planning timeline left Home
+  (the cycle dates are on the Calendar; the open form and due descriptions are waiting items).
+- **My events is everything about the member's own events,** by what is to do: Today, To do
+  (coming up, the step is theirs), Coming up (waiting on others or all set), To finish (past, the
+  hand-in is theirs), Done (folded). Home and My events load the events the same way
+  (`lib/myEventsLoad.ts`) and show the same card (`components/MyEventCard.tsx`). Status badges
+  only for under-staffed, cancelled and dropped – the next step says the rest.
+- **My events holds only the events** – no reimbursements summary, no volunteer form card; the
+  form has Volunteer (and Home while it is open).
+- **Navigation order:** the member’s own things first – Home, My events, Reimbursements, Volunteer
+  (while a form is open) – then the pages to browse: Ideas, Calendar, Leaderboard.
+- **Attendance of Tuesday Talks and internal events** (migration `20261103000300`): members cannot
+  check in from home. HR or the Vice President opens "Show the check-in code" (`/checkin-screen/[id]`,
+  for the laptop or projector): a QR code and four digits that change every 20 seconds, derived
+  from a server key (`private.checkin_secret`, HMAC of the meeting and the 20-second window) – nothing
+  per meeting is stored or shown to members. Scanning opens `/checkin/[id]?t=…` (the login comes
+  back there); the token is accepted for three minutes (time to sign in), the typed digits for 40
+  seconds and five wrong tries per member and meeting. Checking in is open from 30 minutes before
+  to 30 minutes after the meeting (two hours without an end) and until HR closes the list. HR adds
+  anyone ("phone died") and takes check-ins back at any time, also after closing; a taken-back
+  check-in is kept with who and when, and that member cannot check in again. A member reads only
+  their own check-ins; HR, the VP and the executive board read all. Written only through the
+  functions (`check_in_internal`, `mark_internal_attendance`, `close_internal_attendance`).
+- **Activity** (`/team/internal/activity`, linked from Internal planning; HR, VP, executive board):
+  per member and semester OC and helper of ESN events (as on the leaderboard), office hours staffed,
+  Tuesday Talks and other internal meetings attended – what took place and was not cancelled
+  (`member_activity()`); every member with a profile is listed, sortable, searchable, as CSV.
+- **Office hours are duties, not a page.** HR assigns them, so an office hour only matters to the
+  people on duty: a member’s duties (OC or helper at an office hour or Stammtisch, six weeks back
+  to ten ahead) are cards in My events and rows on Home, with the step from the time and the
+  office hour’s cash box (count before opening; count and sign off at the end; the OC signs off an
+  open box afterwards under To finish). The overview page and its navigation item are gone –
+  all office hours are on the Calendar, who is on duty in Internal planning, the boxes under
+  Finance; `/office-hours` redirects to the Calendar’s internal events, the office hour’s own
+  page stays (back link: My events). Coming up in MESA leaves the member’s own duties out.
+- **Calendar subscription** is a button in the Calendar’s top row that opens a small panel, instead
+  of a card under the month.
+- **Folded until needed:** forms used now and then no longer fill their page every visit –
+  Ideas' propose form (unfolded while the member has no ideas, from a #propose link or "Propose
+  this again"), the ledger's "Book income or spending", the Treasurer's rules editor, and
+  Internal planning's "Repeat over …" and "Defaults per kind" (`components/Fold.tsx`).
+- **Reimbursements have their own page** (`/me/reimbursements`) and their own item in the main
+  navigation (My events is active on `/me` only): claims follow the money, not
+  the events, and outlive them by weeks. The payout details moved onto it (`/me/payout`
+  redirects); a claim shows the per-claim form only while it has no details at all. Paid and
+  rejected claims are folded into one line. The profile menu keeps only Sign out.
+- **A claim in three lines:** what it was for, the amount that counts (expected → approved →
+  paid, with the receipt amount when it differs), and one status line ("Paper receipt received
+  3 Nov – Finance checks it next") with four progress dots.
+- **The hand-in tab is its to-do list.** The status card and the sections below it were the
+  same steps twice, with both big forms always open. Now each step is one row (✓ / To do / Later,
+  or “OC” for a helper looking at the OC’s steps) that unfolds to where it is done; done steps stay
+  folded (photos keep “Open folder” in the row), the viewer’s first open step starts unfolded, and
+  a link into a step (#register-receipt, #your-receipts, #event-report …) unfolds it. Folds keep
+  the member’s choice across the refresh after saving. Receipts: the member’s claims first, the
+  form behind “Register a receipt” (open while there are none), the Beleg rule as one line.
+- **The planning timeline keeps its steps in order.** A form opened or closed before the ideas
+  day used to leave "Ideas due" as the next step after ticked later steps. Now a later passed
+  step passes the earlier ones, and what the cycle did wins over the standard dates.

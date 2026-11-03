@@ -123,8 +123,14 @@ const MILESTONE_LABELS: Record<MilestoneId, string> = {
   descriptions: "Descriptions due",
 };
 
-/** The milestones of a cycle in order, each passed / next / later. The roster one only for the Events team. */
-export function milestones(t: CycleTimeline, now: number, { roster = false } = {}): Milestone[] {
+/**
+ * The milestones of a cycle in order, each passed / next / later. The roster
+ * one only for the Events team. `done` are steps the cycle has taken whatever
+ * their date (a form opened early). Steps happen in order: once a later one
+ * is passed, the earlier ones are too – a form opened or closed before the
+ * ideas day ends the ideas for that month (round 2026-11-03 (2)).
+ */
+export function milestones(t: CycleTimeline, now: number, { roster = false, done = [] as MilestoneId[] } = {}): Milestone[] {
   const list: Array<[MilestoneId, string]> = [
     ["ideas", t.ideasDue],
     ["formOpens", t.formOpens],
@@ -132,13 +138,8 @@ export function milestones(t: CycleTimeline, now: number, { roster = false } = {
     ...(roster ? [["roster", t.rosterDue] as [MilestoneId, string]] : []),
     ["descriptions", t.descriptionsDue],
   ];
-  let seenNext = false;
-  return list.map(([id, iso]) => {
-    const passed = Date.parse(iso) < now;
-    const state = passed ? "passed" : seenNext ? "later" : "next";
-    if (!passed) seenNext = true;
-    return { id, label: MILESTONE_LABELS[id], at: iso, state };
-  });
+  const last = list.map(([id, iso]) => done.includes(id) || Date.parse(iso) < now).lastIndexOf(true);
+  return list.map(([id, iso], i) => ({ id, label: MILESTONE_LABELS[id], at: iso, state: i <= last ? "passed" : i === last + 1 ? "next" : "later" }));
 }
 
 /** "7 Nov" – the day of a milestone, short. */
