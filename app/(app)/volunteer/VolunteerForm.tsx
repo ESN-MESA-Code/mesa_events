@@ -109,12 +109,14 @@ function Segmented({ label, short, value, onChange }: { label: string; short: st
             <label
               key={o.label}
               className={cn(
-                // relative: the hidden radio sits inside its own option, not under a neighbour.
+                // relative: the radio sits inside its own option, not under a neighbour.
                 "relative cursor-pointer px-2.5 py-1.5 first:rounded-l-md last:rounded-r-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-esn-accent",
                 checked ? (o.value ? "bg-esn text-white" : "bg-gray-200 text-gray-800") : "text-gray-600 hover:bg-gray-50"
               )}
             >
-              <input type="radio" className="sr-only" name={label} checked={checked} onChange={() => onChange(o.value)} />
+              {/* An invisible radio over the whole option (round 2026-11-03 (2)): a click lands on the radio itself –
+                  a 1-pixel sr-only radio left the label on top, which automated clicks refuse. */}
+              <input type="radio" className="absolute inset-0 m-0 cursor-pointer opacity-0" name={label} checked={checked} onChange={() => onChange(o.value)} />
               {o.label}
             </label>
           );

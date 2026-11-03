@@ -239,6 +239,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.goto(`/team/finance/batches/${claim!.batch_id}`);
     await expect(page.getByTestId("transfers")).toContainText("DE89370400440532013000");
     await page.getByRole("button", { name: "Mark batch paid" }).click();
+    // Paying asks first (contextual confirm dialogs, round 2026-10-31).
+    expect(await answerConfirm(page)).toContain("Mark every claim of this batch as paid?");
     await expect(page.getByTestId("transfers")).toContainText("deleted after payout");
   });
 
