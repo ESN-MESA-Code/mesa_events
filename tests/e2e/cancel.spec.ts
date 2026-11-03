@@ -1,7 +1,7 @@
 // Cancelling an event tells the team and can be undone (review 2026-10-29
 // A2): Events cancels with a reason, the Chat space hears of it, Comms sees
-// the published description is now wrong, Events reopens it. The OC's
-// cancel of an under-staffed event states the consequences.
+// the published description is now wrong, Events reopens it. The OC asks
+// the Events team to cancel instead (round 2026-11-03).
 import { USERS, admin, as as asClient, createEvent, daysFromNow } from "../helpers/local";
 import { answerConfirm, expect, runJobs, signInAs, test } from "./fixtures";
 
@@ -60,18 +60,35 @@ test("Events cancels an event, Comms is shown it, Events reopens it", async ({ p
   }
 });
 
-test("the OC cancels an under-staffed event and is told what that means", async ({ page, context, baseURL }) => {
+test("the OC asks the Events team to cancel; Events is told in Chat and decides", async ({ page, context, baseURL }) => {
   const ev = await createEvent({ title: `Short ${Math.random().toString(36).slice(2, 7)}`, oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 3, starts_at: daysFromNow(6) });
   try {
+    // The OC cannot cancel any more (round 2026-11-03), only ask – with a reason.
+    expect((await (await asClient(USERS.oc)).rpc("cancel_event", { event: ev.id })).error?.code).toBe("42501");
     await signInAs(context, baseURL!, USERS.oc);
     await page.goto(`/events/${ev.id}`);
-    await page.getByTestId("understaffed-banner").getByRole("button", { name: "Cancel the event" }).click();
-    expect(await answerConfirm(page)).toContain("The team and the Chat space are told; registered receipts stay valid.");
-    await expect(page.getByTestId("event-status")).toHaveText("Cancelled");
-    // No space yet: OC and helper get a direct message.
+    const banner = page.getByTestId("understaffed-banner");
+    await expect(banner.getByRole("button", { name: "Cancel the event" })).toHaveCount(0);
+    await banner.getByRole("button", { name: "Ask the Events team to cancel…" }).click();
+    await banner.getByLabel("Why should it be cancelled?").fill("Nobody can come");
+    await banner.getByRole("button", { name: "Send the request" }).click();
+    expect(await answerConfirm(page)).toContain("The Events team is told in Chat and decides");
+    await expect(page.getByTestId("cancellation-request")).toContainText("“Nobody can come” – it stays on until the Events team decides.");
+    await expect(page.getByTestId("event-status")).not.toHaveText("Cancelled");
+    // No space yet: each member of the Events team gets a direct message.
     await runJobs(baseURL!);
-    const { data } = await admin.from("fake_chat_messages").select("text").eq("space", "dm:helper@esnmesa.org").like("text", `%${ev.title}%is cancelled%`);
+    const { data } = await admin.from("fake_chat_messages").select("text").eq("space", `dm:${USERS.events.email}`).like("text", `%asks to cancel *${ev.title}*%`);
     expect(data).toHaveLength(1);
+
+    // The Events team sees it on its page and cancels.
+    await signInAs(context, baseURL!, USERS.events);
+    await page.goto(`/events/${ev.id}`);
+    await page.getByTestId("cancellation-request").getByRole("button", { name: "Cancel the event" }).click();
+    await answerConfirm(page);
+    await expect(page.getByTestId("event-status")).toHaveText("Cancelled");
+    await runJobs(baseURL!);
+    const { data: told } = await admin.from("fake_chat_messages").select("text").eq("space", "dm:helper@esnmesa.org").like("text", `%${ev.title}%is cancelled%`);
+    expect(told).toHaveLength(1);
   } finally {
     await admin.from("events").delete().eq("id", ev.id);
   }

@@ -16,7 +16,7 @@ export function NewCycleForm({ suggested = "" }: { suggested?: string }) {
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        run(createCycle, { month }, (data) => router.push(`/team/events/cycles/${(data as { id: string }).id}`));
+        run(createCycle, { month }, (data) => router.push(`/team/events/cycles/${(data as { id: string }).id}/ideas`));
       }}
     >
       <div>

@@ -5,6 +5,7 @@ import { APP_ROLES } from "@/lib/roles";
 import { WORKSPACE_DOMAIN } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { timelineDaysError } from "@/lib/timeline";
+import { reminderDaysError } from "@/lib/reminders";
 
 const workspaceEmail = z
   .email()
@@ -66,6 +67,15 @@ export const SETTINGS = {
       const problem = timelineDaysError({ ideasDue: v.ideas_due, formOpens: v.form_opens, formCloses: v.form_closes, descriptionsDue: v.descriptions_due });
       if (problem) c.addIssue({ code: "custom", message: problem });
     }),
+  // Days the OC has to send a description again that Comms sent back, then the event is cancelled (round 2026-11-03).
+  description_fix_days: z.number().int().min(1).max(14),
+  // The automatic reminders to the OC (round 2026-11-03); the database checks the ranges too.
+  oc_reminders: z
+    .object({ description_days_before: z.number().int(), description_every_days: z.number().int(), handin_days_after: z.number().int(), handin_every_days: z.number().int(), handin_max: z.number().int() })
+    .superRefine((v, c) => {
+      const problem = reminderDaysError({ descriptionDaysBefore: v.description_days_before, descriptionEveryDays: v.description_every_days, handinDaysAfter: v.handin_days_after, handinEveryDays: v.handin_every_days, handinMax: v.handin_max });
+      if (problem) c.addIssue({ code: "custom", message: problem });
+    }),
 } as const;
 
 export const updateSetting = defineAction(
@@ -74,6 +84,8 @@ export const updateSetting = defineAction(
     z.object({ key: z.literal("chat_notifications"), value: SETTINGS.chat_notifications }),
     z.object({ key: z.literal("early_payout_threshold_cents"), value: SETTINGS.early_payout_threshold_cents }),
     z.object({ key: z.literal("cycle_timeline"), value: SETTINGS.cycle_timeline }),
+    z.object({ key: z.literal("oc_reminders"), value: SETTINGS.oc_reminders }),
+    z.object({ key: z.literal("description_fix_days"), value: SETTINGS.description_fix_days }),
   ]),
   async (ctx, { key, value }) => {
     requireRole(ctx, "admin");

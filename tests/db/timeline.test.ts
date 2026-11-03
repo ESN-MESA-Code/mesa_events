@@ -1,7 +1,7 @@
 // The cycle's fixed timeline in the database (round 2026-11-02): the same
 // dates as lib/timeline.ts, ideas closing on the 7th for the month after,
 // the form opening by itself on the 10th, the description deadline
-// defaulting to the 20th, the reminder the day before it.
+// defaulting to the 20th (the reminders before it: tests/db/remind.test.ts).
 import { afterAll, describe, expect, it } from "vitest";
 import { USERS, admin, as, createCycle, createEvent } from "../helpers/local";
 import { actionContext } from "./actionContext";
@@ -94,21 +94,23 @@ describe("the form opens by itself", () => {
 });
 
 describe("descriptions", () => {
-  it("confirming the roster sets the deadline to the 20th; the OC is reminded the day before", async () => {
+  it("confirming the roster sets the deadline to the 20th; the OC is reminded before it", async () => {
     const { cycle, event, timeline } = await cycleWithEvent("allocated");
     const { error } = await (await as(USERS.events)).rpc("confirm_allocation", { cycle: cycle.id });
     expect(error).toBeNull();
     const { data: c } = await admin.from("planning_cycles").select("description_deadline").eq("id", cycle.id).single();
     expect(new Date(c!.description_deadline!).toISOString()).toBe(timeline.descriptionsDue);
 
-    const dayBefore = new Date(Date.parse(timeline.descriptionsDue) - 6 * 3_600_000).toISOString();
-    expect((await admin.rpc("remind_due_descriptions", { at: new Date(Date.parse(timeline.descriptionsDue) - 30 * 3_600_000).toISOString() })).data).toBe(0);
-    expect((await admin.rpc("remind_due_descriptions", { at: dayBefore })).data).toBeGreaterThanOrEqual(1);
+    // The automatic reminders (round 2026-11-03): from 3 days before (the default), by day.
+    const daysBefore = (n: number) => `${new Date(Date.parse(timeline.descriptionsDue) - n * 86_400_000).toISOString().slice(0, 10)}T11:00:00Z`;
+    await admin.rpc("send_oc_reminders", { at: daysBefore(5) });
+    expect((await admin.from("jobs").select("id").eq("event_id", event.id).eq("kind", "chat.remind_oc")).data).toHaveLength(0);
+    await admin.rpc("send_oc_reminders", { at: daysBefore(1) });
     const { data: jobs } = await admin.from("jobs").select("kind, payload").eq("event_id", event.id).eq("kind", "chat.remind_oc");
     expect(jobs).toHaveLength(1);
     expect(jobs![0].payload).toMatchObject({ about: "description" });
-    // Once.
-    await admin.rpc("remind_due_descriptions", { at: dayBefore });
+    // Once a day.
+    await admin.rpc("send_oc_reminders", { at: daysBefore(1) });
     expect((await admin.from("jobs").select("id").eq("event_id", event.id).eq("kind", "chat.remind_oc")).data).toHaveLength(1);
     await admin.from("jobs").delete().eq("event_id", event.id);
   });

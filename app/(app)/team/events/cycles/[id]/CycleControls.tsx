@@ -119,16 +119,15 @@ export function AllocationControls({ cycleId, month, status }: { cycleId: string
 }
 
 /**
- * The month's description deadline: set once the roster is confirmed, to a
- * time ahead; locked once it has passed (events whose description was not
- * submitted by then are cancelled).
+ * The month's description deadline while it is ahead: set once the roster
+ * is confirmed (events whose description is not submitted by then are
+ * cancelled). Once passed, the Descriptions tab shows it as a line.
  */
 export function DeadlineControl({
   cycleId,
   status,
   deadline,
   deadlineLabel,
-  passed,
   latest,
   standard,
   canEdit,
@@ -138,7 +137,6 @@ export function DeadlineControl({
   /** Berlin input value ("" when not set). */
   deadline: string;
   deadlineLabel: string | null;
-  passed: boolean;
   latest: { input: string; label: string } | null;
   /** The timeline's description day (round 2026-11-02) while still ahead: the field starts with it when no deadline is set. */
   standard: { input: string; label: string } | null;
@@ -150,13 +148,6 @@ export function DeadlineControl({
     return (
       <p className="text-sm text-gray-600" data-testid="deadline-not-yet">
         The description deadline is set once the roster is confirmed.
-      </p>
-    );
-  }
-  if (passed) {
-    return (
-      <p className="text-sm text-gray-700" data-testid="deadline-locked">
-        🔒 Deadline <strong>{deadlineLabel}</strong> has passed and can no longer be changed. Events whose description was not submitted by then were cancelled.
       </p>
     );
   }

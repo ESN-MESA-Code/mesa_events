@@ -76,6 +76,27 @@ export function eventStatusMessage(kind: "cancelled" | "reopened", e: SpaceEvent
   return [`✅ *${e.title}* on ${formatDateTime(e.starts_at)} is back on – the Events team reopened it.`, `Event page: ${eventUrl}${tell}`].join("\n");
 }
 
+/**
+ * The OC asks the Events team to cancel (round 2026-11-03): the Events team
+ * mentioned, the reason, and that the event runs until they decide; or the
+ * Events team keeps it on and tells the OC why.
+ */
+export function cancellationMessage(
+  kind: "requested" | "declined",
+  e: SpaceEvent,
+  who: { oc: string | null; ocEmail: string | null; events: string[] },
+  text: string,
+  eventUrl: string
+): string {
+  if (kind === "requested") {
+    return [
+      `🛑 ${who.events.map(mention).join(" ")} ${who.oc ?? "The OC"} asks to cancel *${e.title}* on ${formatDateTime(e.starts_at)}: “${text}”`,
+      `It stays on until the Events team cancels it or keeps it on: ${eventUrl}`,
+    ].join("\n");
+  }
+  return `✅ ${who.ocEmail ? `${mention(who.ocEmail)} ` : ""}The Events team keeps *${e.title}* on ${formatDateTime(e.starts_at)}: “${text}” – ${eventUrl}`;
+}
+
 /** At the event's start (the bot's photo reminder). */
 export function photoStartMessage(title: string): string {
   return `${MENTION_ALL} 📸 *${title}* starts now – please take lots of pictures and videos for our socials! 🎉`;
@@ -96,13 +117,35 @@ export function esnUploadedMessage(title: string, url: string): string {
   return `${MENTION_ALL} 📢 The executive board has uploaded *${title}* on ESN Activities. <${url}|Open>`;
 }
 
-/** Comms (or Events) reminds the OC: the description, or the event report after the event. */
-export function remindOcMessage(about: "description" | "report", title: string, ocEmail: string | null, eventUrl: string, deadline: string | null): string {
+/**
+ * The automatic reminder to the OC (round 2026-11-03): the description, or
+ * what is missing from the hand-in after the event (`missing`, e.g.
+ * ["the attendance list", "the event report"]). "report" is the old manual
+ * reminder of the event report, still in the queue. A description Comms
+ * sent back (`sentBack`) is asked for again, with its own due date.
+ */
+export function remindOcMessage(
+  about: "description" | "handin" | "report",
+  title: string,
+  ocEmail: string | null,
+  eventUrl: string,
+  deadline: string | null,
+  missing: string[] = [],
+  sentBack = false
+): string {
   const who = ocEmail ? `${mention(ocEmail)} ` : "";
-  if (about === "description") {
-    return `✍️ ${who}A reminder from Comms: please write the description of *${title}*${deadline ? ` – due ${formatDateTime(deadline)}` : ""}: ${eventUrl}/description`;
+  const due = deadline ? ` – due ${formatDateTime(deadline)}, otherwise the event is cancelled` : "";
+  if (about === "description" && sentBack) {
+    return `✍️ ${who}A reminder: Comms asked for changes to the description of *${title}* – please send it again${due}: ${eventUrl}/description`;
   }
-  return `📝 ${who}A reminder from Comms: please fill in the short event report of *${title}* (for ESN Activities): ${eventUrl}/hand-in#event-report`;
+  if (about === "description") {
+    return `✍️ ${who}A reminder: please write the description of *${title}*${due}: ${eventUrl}/description`;
+  }
+  if (about === "report" || !missing.length) {
+    return `📝 ${who}A reminder: please fill in the short event report of *${title}* (for ESN Activities): ${eventUrl}/hand-in#event-report`;
+  }
+  const list = missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}` : missing[0];
+  return `📝 ${who}A reminder: the hand-in of *${title}* is still missing ${list}: ${eventUrl}/hand-in`;
 }
 
 /** Comms published the event on a channel (the bot's "📢 PR has uploaded … on Telegram"), once per event and channel. */

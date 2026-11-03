@@ -2,7 +2,7 @@
 // failure or a crash halfway through.
 import { roleGroups, type AppRole } from "@/lib/roles";
 import type { JobHandler } from "@/lib/jobs/runner";
-import { createSpace, eventStatusChange, remindOc, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
+import { cancellation, createSpace, eventStatusChange, remindOc, rosterChange, syncSpaceMembers } from "@/lib/jobs/chat";
 import { publishDescription } from "@/lib/jobs/descriptions";
 import { countPhotos, ensureFolder, photoReminder } from "@/lib/jobs/photos";
 import { esnUploaded } from "@/lib/jobs/esn";
@@ -38,6 +38,7 @@ export const HANDLERS: Record<string, JobHandler> = {
   "chat.photo_reminder": photoReminder,
   "chat.esn_uploaded": esnUploaded,
   "chat.remind_oc": remindOc,
+  "chat.cancellation": cancellation,
   "telegram.publish_post": publishTelegramPost,
   "chat.channel_published": channelPublished,
 };

@@ -6,7 +6,7 @@ describe("event breadcrumbs", () => {
     expect(backLink("me")).toEqual({ label: "My events", href: "/me" });
     expect(backLink("home")).toEqual({ label: "Home", href: "/" });
     expect(backLink("reimbursements")).toEqual({ label: "Reimbursements", href: "/me/reimbursements" });
-    expect(backLink("cycle:0b4a3c2e-1111-4222-8333-444455556666")).toEqual({ label: "Month schedule", href: "/team/events/cycles/0b4a3c2e-1111-4222-8333-444455556666" });
+    expect(backLink("cycle:0b4a3c2e-1111-4222-8333-444455556666")).toEqual({ label: "The month", href: "/team/events/cycles/0b4a3c2e-1111-4222-8333-444455556666" });
   });
 
   it("anything else falls back to the calendar and is not passed on", () => {

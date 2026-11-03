@@ -134,7 +134,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
         <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
       </span>
       <span className="col-span-2 text-xs text-gray-500 sm:col-span-1" title={event.proposer ? `idea by ${event.proposer}` : undefined}>
-        {plural(event.helpersNeeded, "helper")} · {plural(event.signups, "sign-up")}
+        {plural(event.helpersNeeded, "helper")} · {event.signups} volunteered
       </span>
       {canEdit ? (
         <span className="col-span-2 flex gap-1 sm:col-span-1 sm:justify-self-end">
@@ -145,7 +145,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
             action={dropEvent}
             input={{ id: event.id }}
             variant="ghost"
-            confirm={{ title: `Remove ${event.title} (${event.startsLabel}) from the schedule?`, body: `${plural(event.signups, "sign-up")} so far. It is dropped from the month and the volunteer form.`, confirmLabel: "Remove", danger: true }}
+            confirm={{ title: `Remove ${event.title} (${event.startsLabel}) from the schedule?`, body: `${event.signups} volunteered so far. It is dropped from the month and the volunteer form.`, confirmLabel: "Remove", danger: true }}
             done={`${event.title} removed from the schedule.`}
           >
             Remove

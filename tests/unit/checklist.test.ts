@@ -132,7 +132,7 @@ describe("next-step banner link (review 2026-10-29 B4)", () => {
 
 describe("under-staffed banner (review 2026-10-29 B6)", () => {
   it("tells the OC they decide, everyone else who does", () => {
-    expect(understaffedNote(true, "oc")).toBe("As OC you decide whether it runs as it is or is cancelled.");
+    expect(understaffedNote(true, "oc")).toBe("As OC you can run it as it is, or ask the Events team to cancel it.");
     expect(understaffedNote(true, "events")).toBe("The OC decides whether it runs; the Events team can decide in their place.");
     expect(understaffedNote(true, "other")).toBe("The OC decides whether it runs.");
   });

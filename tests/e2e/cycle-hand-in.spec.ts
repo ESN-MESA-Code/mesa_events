@@ -5,7 +5,7 @@
 // so its events really happened – no time travel, no event outside its
 // cycle's month (A7).
 import { USERS, admin, createEvent, pastTestMonth } from "../helpers/local";
-import { cycleLabel } from "../../lib/dates";
+import { cycleLabel, monthLabel } from "../../lib/dates";
 import { expect, signInAs, test } from "./fixtures";
 
 test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
@@ -28,24 +28,20 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   const label = cycleLabel(month);
 
   await signInAs(context, baseURL!, USERS.events);
+  // No description was written, but the events are over: the month opens on its hand-in (round 2026-11-03).
   await page.goto(`/team/events/cycles/${cycle!.id}`);
-  // No description was written, but the events are over: no more reminders.
-  await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toHaveText(/Hand-in/);
-  await expect(page.getByTestId("cycle-next")).toContainText("Remind the OCs of 1 event that is not handed in yet");
-  await expect(page.getByTestId("cycle-next")).toContainText("1 of 2 events handed in");
-  await expect(page.getByTestId("cycle-next")).not.toContainText("descriptions are missing");
-  // The hand-in step has its own page; the next action leads there (round 2026-10-30).
-  await page.getByTestId("cycle-next").click();
   await page.waitForURL(/\/hand-in$/);
+  await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toHaveText(/Hand-in/);
+  await expect(page.getByTestId("hand-in-count")).toHaveText("1 of 2 handed in");
   const missing = page.getByTestId("hand-in-open");
   await expect(missing).toContainText(`Not handed in ${tag}`);
   await expect(missing).toContainText("missing attendance list, photos, event report");
   await expect(missing).not.toContainText(`Handed in ${tag}`);
   await expect(missing.getByRole("link", { name: `Not handed in ${tag}` })).toHaveAttribute("href", `/events/${open.id}/hand-in?from=cycle:${cycle!.id}`);
 
-  // Still running: the month on the Events page, each event with what is missing.
+  // Still running: ?month= leads there too, each event with what is missing.
   await page.goto(`/team/events?month=${month.slice(0, 7)}`);
-  await expect(page.getByTestId("month-summary")).toContainText("hand-in · 1 of 2 events handed in");
+  await page.waitForURL(/\/hand-in$/);
   await expect(page.getByTestId(`month-event-${open.id}`).getByTestId("handin")).toHaveText("Hand-in: missing attendance list, photos, event report");
   await expect(page.getByTestId(`month-event-${done.id}`).getByTestId("handin")).toHaveText("Hand-in: ✓ handed in");
 
@@ -55,12 +51,10 @@ test("a past cycle: hand-in, then done", async ({ page, context, baseURL }) => {
   // The last event is handed in: done.
   await handIn(open.id);
   await page.goto(`/team/events/cycles/${cycle!.id}`);
-  await expect(page.getByTestId("cycle-next")).toContainText("Every event is handed in – the cycle is done");
+  await page.waitForURL(/\/hand-in$/);
+  await expect(page.getByTestId("hand-in-count")).toHaveText("2 of 2 handed in");
   await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toHaveCount(0);
-
-  await page.goto(`/team/events?month=${month.slice(0, 7)}`);
-  await expect(page.getByTestId("month-next")).toContainText("Every event is handed in");
-  await expect(page.getByLabel("Month", { exact: true }).locator(`option[value="${month.slice(0, 7)}"]`)).toHaveText(`${label} · done`);
+  await expect(page.getByLabel("Month", { exact: true }).locator(`option[value="${month.slice(0, 7)}"]`)).toHaveText(`${monthLabel(month)} · done`);
 
   await page.goto("/");
   await expect(page.getByTestId("queue-events")).not.toContainText(label);

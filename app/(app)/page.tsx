@@ -338,7 +338,7 @@ async function EventsQueue() {
       <ul className="space-y-1.5">
         {near.map((c) => (
           <li key={c.id}>
-            <Link href={`/team/events?month=${monthParam(c.month)}`} className={cn("font-medium hover:underline", c.progress.late ? "text-red-700" : "text-esn")}>
+            <Link href={`/team/events/cycles/${c.id}`} className={cn("font-medium hover:underline", c.progress.late ? "text-red-700" : "text-esn")}>
               {cycleLabel(c.month)}
             </Link>
             <span className="block text-xs text-gray-600">{c.progress.current ? `${c.progress.steps.find((s) => s.state === "current")!.label}: ${c.progress.action}` : c.progress.summary}</span>

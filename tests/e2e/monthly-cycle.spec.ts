@@ -33,17 +33,19 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
   await test.step("Events builds the month's schedule", async () => {
     await as(USERS.events);
     await page.goto("/team/events");
-    // "+ Plan a new month" sits in the month list (brief 2026-10-29, C).
-    await page.getByLabel("Month", { exact: true }).selectOption({ label: "+ Plan a new month" });
+    // A new month opens on its Ideas tab, the first step (round 2026-11-03).
+    await page.getByRole("link", { name: "+ Plan a new month" }).click();
     await page.locator("#cycle-month").fill(month);
     await page.getByRole("button", { name: "Start planning" }).click();
-    await page.waitForURL(/\/team\/events\/cycles\/[0-9a-f-]{36}$/);
-    cycleUrl = page.url();
+    await page.waitForURL(/\/team\/events\/cycles\/[0-9a-f-]{36}\/ideas$/);
+    cycleUrl = page.url().replace(/\/ideas$/, "");
 
     const card = page.getByTestId(`idea-${quiz}`);
     await card.getByRole("button", { name: "Accept" }).click();
     await card.getByLabel("Event type").selectOption({ label: "Special" });
     await card.getByRole("button", { name: "Add to schedule" }).click();
+    await page.getByRole("navigation", { name: "Cycle pages" }).getByRole("link", { name: "Schedule" }).click();
+    await page.waitForURL(/\/schedule$/);
     await expect(page.getByTestId("schedule")).toContainText(quiz);
 
     await page.getByRole("button", { name: "+ Add an event" }).click();
@@ -85,7 +87,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.getByRole("button", { name: "Close form now" }).click();
     await answerConfirm(page);
     await expect(page.getByTestId("form-state")).toContainText("Closed");
-    await page.getByTestId("cycle-next").click();
+    await page.getByRole("navigation", { name: "Cycle pages" }).getByRole("link", { name: "Roster" }).click();
     await page.waitForURL(/\/roster$/);
     await page.getByRole("button", { name: "Run allocation" }).click();
     await expect(page.getByText(/Allocation done: 5 assignments/)).toBeVisible();

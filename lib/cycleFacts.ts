@@ -35,8 +35,11 @@ export type CycleWithProgress = CycleRow & {
 };
 
 
-/** Handed in: list signed off, photos in Drive, the event report written, every Beleg with Finance. */
-const handedIn = (h: HandInRow) => h.signed_off && h.photos_in && h.report_in && h.belege_missing === 0;
+/**
+ * Handed in: list signed off, photos in Drive, the event report written.
+ * Receipts are Finance's, not part of the Events team's hand-in (round 2026-11-03).
+ */
+const handedIn = (h: HandInRow) => h.signed_off && h.photos_in && h.report_in;
 
 /** Description states that count as "in". */
 const IN = ["submitted", "approved", "published"];

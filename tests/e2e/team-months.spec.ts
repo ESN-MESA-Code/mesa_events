@@ -1,8 +1,8 @@
 // Comms and Events one month at a time (brief 2026-10-29, C): switching
 // months (arrows, list, remembered choice), the stage filters with counts,
-// the inline actions (Review, Remind OC, Tick pretix, Advertise – round
-// 2026-11-03), late as a mark, the phone track, and the Events page's month
-// with its events.
+// the inline actions (Review, Tick pretix, Advertise – round 2026-11-03;
+// reminders are automatic), late as a mark, the phone track, and the Events
+// page's month with its events.
 import { USERS, admin, createEvent, hoursFromNow, TEST_TAG } from "../helpers/local";
 import { expect, freshMonth, test } from "./fixtures";
 
@@ -86,9 +86,8 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   await expect(row(advertiseOne.id).locator('[aria-current="step"]')).toHaveText(/Advertised$/);
   await expect(row(advertiseOne.id).getByRole("link", { name: "Advertise", exact: true })).toBeVisible();
 
-  // Inline: remind the OC of the late one (once a day).
-  await row(late.id).getByRole("button", { name: "Remind OC" }).click();
-  await expect(row(late.id).getByRole("button", { name: "Reminded ✓" })).toBeVisible();
+  // No reminder button: the OC is reminded automatically (round 2026-11-03).
+  await expect(row(late.id).getByTestId("row-action")).toHaveText("The OC writes it – reminded automatically");
   await page.getByTestId("filter-waiting").click();
   await expect(rows).toContainText(waiting.title);
   await expect(row(waiting.id)).toContainText("Advertised – the event is on");
@@ -114,7 +113,7 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   await admin.from("fake_chat_messages").delete().like("text", `%${tag}%`);
 });
 
-test("Events: the month's cycle and events; planning a new month from the list", async ({ page, as }) => {
+test("Events: the month's overview, every month's open steps, planning a new month", async ({ page, as }) => {
   const month = freshMonth();
   const tag = Math.random().toString(36).slice(2, 7);
   const { data: cycle } = await admin.from("planning_cycles").insert({ month: `${month}-01`, status: "confirmed", created_by: TEST_TAG }).select("id").single();
@@ -122,24 +121,31 @@ test("Events: the month's cycle and events; planning a new month from the list",
   const full = await createEvent({ title: `Full ${tag}`, cycle_id: cycle!.id, starts_at: `${month}-09T18:00:00Z`, oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 1 });
   await admin.from("descriptions").upsert({ event_id: full.id, status: "submitted" });
 
+  // ?month= opens the month on its current step's tab (round 2026-11-03).
   await as(USERS.events);
   await page.goto(`/team/events?month=${month}`);
-  await expect(page.getByTestId("month-stepper").locator('[aria-current="step"]')).toHaveText(/Descriptions\s*by \d+ \w+$/);
-  await expect(page.getByTestId("month-next")).toHaveAttribute("href", `/team/events/cycles/${cycle!.id}/descriptions`);
+  await page.waitForURL(new RegExp(`/team/events/cycles/${cycle!.id}/descriptions$`));
+  await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toHaveText(/Descriptions\s*by \d+ \w+$/);
   await expect(page.getByTestId(`month-event-${short.id}`).getByTestId("staffing")).toHaveText(`OC ${USERS.oc.name} · 0/2 helpers`);
   await expect(page.getByTestId(`month-event-${full.id}`).getByTestId("description")).toHaveText("Description: Waiting for Comms review");
-  await expect(page.getByTestId("month-events").locator("> li")).toHaveCount(2);
+  await expect(page.getByTestId("cycle-descriptions").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("descriptions-oc")).toContainText(short.title);
+  await expect(page.getByTestId("descriptions-comms")).toContainText(full.title);
+  // The Events page lists the open step of every month.
+  await page.goto("/team/events");
+  await expect(page.getByTestId(`todo-${month}-descriptions`)).toContainText("Set the deadline");
 
   // Executives read the month, without planning.
   await as(USERS.executive);
   await page.goto(`/team/events?month=${month}`);
-  await expect(page.getByTestId("month-events")).toContainText(full.title);
-  await expect(page.getByLabel("Month", { exact: true }).locator("option", { hasText: "Plan a new month" })).toHaveCount(0);
+  await expect(page.getByTestId("cycle-descriptions")).toContainText(full.title);
+  await page.goto("/team/events");
+  await expect(page.getByRole("link", { name: "+ Plan a new month" })).toHaveCount(0);
 
-  // Planning the next month starts from the month list.
+  // Planning the next month starts from the Events page.
   await as(USERS.events);
-  await page.goto(`/team/events?month=${month}`);
-  await page.getByLabel("Month", { exact: true }).selectOption({ label: "+ Plan a new month" });
+  await page.goto("/team/events");
+  await page.getByRole("link", { name: "+ Plan a new month" }).click();
   await expect(page.getByTestId("new-cycle")).toBeVisible();
   await expect(page.getByLabel("New cycle: events in")).toBeVisible();
 });

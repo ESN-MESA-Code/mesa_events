@@ -14,7 +14,6 @@ import { loadEsn } from "@/lib/esn/load";
 import { FILTERS, STAGES, eventStage, parseFilter, stageCounts, type FilterId } from "@/lib/commsStages";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
 import { cn } from "@/lib/utils";
-import { RemindButton } from "@/components/RemindButton";
 import { STATE_MARK, boardMonthFor, stateLabel, type ChannelState } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Comms" };
@@ -254,7 +253,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                           </span>
                         )}
                         <span className="ml-auto flex flex-wrap items-center gap-2" data-testid="row-action">
-                          {v.current === "write" && (isComms ? <RemindButton eventId={r.event_id} about="description" /> : <span className="text-xs text-gray-500">The OC writes it</span>)}
+                          {v.current === "write" && <span className="text-xs text-gray-500">The OC writes it – reminded automatically</span>}
                           {v.current === "review" && (
                             <Link href={`/events/${r.event_id}/description?from=comms`} className={buttonVariants({ size: "sm" })}>
                               Review
@@ -271,7 +270,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                             </Link>
                           )}
                           {v.current === "happened" && <span className="text-xs text-gray-500">Advertised – the event is on {formatShortDate(r.starts_at)}</span>}
-                          {v.current === "report" && (isComms ? <RemindButton eventId={r.event_id} about="report" /> : <span className="text-xs text-gray-500">The OC writes the report</span>)}
+                          {v.current === "report" && <span className="text-xs text-gray-500">The OC writes the report – reminded automatically</span>}
                         </span>
                       </div>
                       <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />

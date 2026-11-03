@@ -14,7 +14,7 @@ const PLACES: Record<string, { label: string; href: string }> = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function backLink(from: string | null | undefined): { label: string; href: string } {
-  if (from?.startsWith("cycle:") && UUID.test(from.slice(6))) return { label: "Month schedule", href: `/team/events/cycles/${from.slice(6)}` };
+  if (from?.startsWith("cycle:") && UUID.test(from.slice(6))) return { label: "The month", href: `/team/events/cycles/${from.slice(6)}` };
   return PLACES[from ?? ""] ?? PLACES.calendar;
 }
 

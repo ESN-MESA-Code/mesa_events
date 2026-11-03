@@ -3,7 +3,9 @@
 // a failure halfway through finishes the work without duplicates.
 import { createHash } from "node:crypto";
 import type { Job, JobDeps, JobHandler } from "@/lib/jobs/runner";
-import { eventStatusMessage, remindOcMessage, rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
+import { photosIn } from "@/lib/photos";
+import { descriptionDueAt } from "@/lib/reminders";
+import { cancellationMessage, eventStatusMessage, remindOcMessage, rosterMessage, spaceDescription, spaceDisplayName, spaceGuidelines, welcomeMessage, type SpacePerson } from "@/lib/chatMessages";
 
 const eventIdOf = (job: Job) => {
   const id = (job.payload as { event_id?: string }).event_id;
@@ -132,18 +134,42 @@ export const eventStatusChange: JobHandler = async (job, deps) => {
 };
 
 /**
- * Comms reminds the OC (brief 2026-10-29, C): in the event's space,
- * @-mentioning the OC; without a space, a direct message to the OC.
- * remind_oc() enqueues at most one per event, topic and day.
+ * The automatic reminder to the OC (send_oc_reminders(), round 2026-11-03):
+ * in the event's space, @-mentioning the OC; without a space, a direct
+ * message to the OC. At most one per event, topic and day. A hand-in
+ * reminder names what is still missing – and is skipped once nothing is.
  */
 export const remindOc: JobHandler = async (job, deps) => {
-  const p = job.payload as { event_id: string; about: "description" | "report" };
+  const p = job.payload as { event_id: string; about: "description" | "handin" | "report" };
   const { data: event, error } = await deps.admin.from("events").select("id, title, starts_at, status, chat_space_name, planning_cycles(description_deadline)").eq("id", p.event_id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!event) return { skipped: "event gone" };
+  let missing: string[] = [];
+  if (p.about === "handin") {
+    const [{ data: list }, { data: folder }, { data: report }] = await Promise.all([
+      deps.admin.from("attendance_lists").select("signed_off_at").eq("event_id", event.id).maybeSingle(),
+      deps.admin.from("event_photo_folders").select("photo_count, marked_uploaded_at").eq("event_id", event.id).maybeSingle(),
+      deps.admin.from("event_reports").select("event_id").eq("event_id", event.id).maybeSingle(),
+    ]);
+    missing = [!list?.signed_off_at && "the signed-off attendance list", !photosIn(folder) && "the photos", !report && "the event report"].filter(Boolean) as string[];
+    if (!missing.length) return { skipped: "handed in" };
+  }
   const oc = (await roster(deps, event.id)).find((x) => x.kind === "oc") ?? null;
   const deadline = (event.planning_cycles as { description_deadline: string | null } | null)?.description_deadline ?? null;
-  const text = remindOcMessage(p.about, event.title, oc?.email ?? null, eventUrl(deps, event.id), deadline);
+  // A description Comms sent back has its own due date (round 2026-11-03).
+  let due = deadline;
+  let sentBack = false;
+  if (p.about === "description") {
+    const [{ data: d }, { data: review }, { data: fix }] = await Promise.all([
+      deps.admin.from("descriptions").select("status, submitted_at").eq("event_id", event.id).maybeSingle(),
+      deps.admin.from("reviews").select("created_at").eq("event_id", event.id).eq("decision", "changes_requested").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      deps.admin.from("app_settings").select("value").eq("key", "description_fix_days").maybeSingle(),
+    ]);
+    sentBack = !!d?.submitted_at;
+    due = descriptionDueAt({ deadline, status: d?.status ?? "missing", submittedAt: d?.submitted_at ?? null, sentBackAt: review?.created_at ?? null, startsAt: event.starts_at, fixDays: typeof fix?.value === "number" ? fix.value : 4 });
+    if (!due) return { skipped: "description in" };
+  }
+  const text = remindOcMessage(p.about, event.title, oc?.email ?? null, eventUrl(deps, event.id), due, missing, sentBack);
   const id = `remind-${p.about}-${createHash("sha256").update(job.idempotency_key).digest("hex").slice(0, 32)}`;
   if (event.chat_space_name) {
     await deps.google.chat.postMessage(event.chat_space_name, text, id);
@@ -152,4 +178,33 @@ export const remindOc: JobHandler = async (job, deps) => {
   if (!oc) return { skipped: "no space and no OC" };
   await deps.google.chat.notify(oc.email, text, id);
   return { notified: oc.email };
+};
+
+/**
+ * A cancellation request (round 2026-11-03): "requested" mentions the
+ * Events team in the event's space (without a space, a direct message to
+ * each of them); "declined" tells the OC why the event stays on.
+ */
+export const cancellation: JobHandler = async (job, deps) => {
+  const p = job.payload as { request_id: string; kind: "requested" | "declined" };
+  const { data: r, error } = await deps.admin.from("cancellation_requests").select("id, event_id, reason, decision, decision_note").eq("id", p.request_id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!r) return { skipped: "request gone" };
+  if (p.kind === "requested" && r.decision) return { skipped: "decided since" };
+  const event = await loadEvent(deps, r.event_id);
+  if (!event) return { skipped: "event gone" };
+  const people = await roster(deps, event.id);
+  const oc = people.find((x) => x.kind === "oc") ?? null;
+  const { data: team, error: e2 } = await deps.admin.from("role_members").select("email").eq("role", "events");
+  if (e2) throw new Error(e2.message);
+  const events = [...new Set((team ?? []).map((t) => t.email))].sort();
+  const text = cancellationMessage(p.kind, event, { oc: oc?.name ?? null, ocEmail: oc?.email ?? null, events }, p.kind === "requested" ? r.reason : (r.decision_note ?? ""), eventUrl(deps, event.id));
+  const id = `cancel-${p.kind}-${createHash("sha256").update(r.id).digest("hex").slice(0, 32)}`;
+  if (event.chat_space_name) {
+    await deps.google.chat.postMessage(event.chat_space_name, text, id);
+    return { posted: true };
+  }
+  const to = p.kind === "requested" ? events : oc ? [oc.email] : [];
+  for (const email of to) await deps.google.chat.notify(email, text, `${id}-${email}`);
+  return { posted: false, notified: to.length };
 };

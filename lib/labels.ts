@@ -44,3 +44,17 @@ export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
 
 /** What cancelling means, said wherever an event is cancelled (review 2026-10-29 A2). */
 export const CANCEL_CONSEQUENCES = "The team and the Chat space are told; registered receipts stay valid.";
+
+/**
+ * The status a team list shows (review 2026-11-03 #10). The stored one lags:
+ * nothing marks an event short of people when a helper drops out after the
+ * roster, and a job marks events completed only a day after the start. So a
+ * confirmed or under-staffed event shows what its staffing says until it
+ * starts, and "completed" once it ended (`endsAt`, else once it started).
+ */
+export function shownStatus(e: { status: EventStatus; startsAt: string; endsAt?: string | null; short: boolean }, now: number): EventStatus {
+  if (e.status !== "confirmed" && e.status !== "understaffed") return e.status;
+  if (Date.parse(e.endsAt ?? e.startsAt) <= now) return "completed";
+  if (Date.parse(e.startsAt) <= now) return "confirmed";
+  return e.short ? "understaffed" : "confirmed";
+}

@@ -207,7 +207,7 @@ export function understaffedNote(hasOc: boolean, viewer: "oc" | "events" | "othe
       ? "Without an OC the Events team decides: find an OC (an open slot or the roster) so it can run, or cancel it."
       : "Without an OC the Events team decides whether it runs.";
   }
-  if (viewer === "oc") return "As OC you decide whether it runs as it is or is cancelled.";
+  if (viewer === "oc") return "As OC you can run it as it is, or ask the Events team to cancel it.";
   if (viewer === "events") return "The OC decides whether it runs; the Events team can decide in their place.";
   return "The OC decides whether it runs.";
 }

@@ -145,6 +145,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"cancellation_requests": {
+                  Row: {
+                    "decided_at": string | null,"decided_by": string | null,"decision": string | null,"decision_note": string | null,"event_id": string,"id": string,"reason": string,"requested_at": string,"requested_by": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "decided_at"?: string | null,"decided_by"?: string | null,"decision"?: string | null,"decision_note"?: string | null,"event_id": string,"id"?: string,"reason": string,"requested_at"?: string,"requested_by": string
+                  }
+                  Update: {
+                    "decided_at"?: string | null,"decided_by"?: string | null,"decision"?: string | null,"decision_note"?: string | null,"event_id"?: string,"id"?: string,"reason"?: string,"requested_at"?: string,"requested_by"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cancellation_requests_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"cash_box_changes": {
                   Row: {
                     "box_id": string,"cash_report_id": string | null,"cents_after": number,"cents_before": number,"counts": NonNullable<Json>,"created_at": string,"created_by": string | null,"id": string,"kind": string,"note": string
@@ -1351,6 +1371,9 @@ isOneToOne: false
               "descriptions_due": string,"form_closes": string,"form_opens": string,"ideas_due": string
             }[]
                            },
+"decide_cancellation":
+{ Args: { "decision": string,"note"?: string,"request": string }; Returns: undefined
+                           },
 "decide_preapproval":
 { Args: { "approve": boolean,"decision_note"?: string,"preapproval": string }; Returns: undefined
                            },
@@ -1371,6 +1394,11 @@ isOneToOne: false
                            },
 "delete_post":
 { Args: { "post": string }; Returns: undefined
+                           },
+"description_due":
+{ Args: { "events": (string)[] }; Returns: {
+              "due_at": string,"event_id": string,"sent_back": boolean
+            }[]
                            },
 "description_overview":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -1560,12 +1588,6 @@ isOneToOne: false
 "reject_reimbursement":
 { Args: { "claim": string,"reason": string }; Returns: undefined
                            },
-"remind_due_descriptions":
-{ Args: { "at"?: string }; Returns: number
-                           },
-"remind_oc":
-{ Args: { "about": string,"event": string }; Returns: boolean
-                           },
 "remove_cash_box":
 { Args: { "box": string }; Returns: undefined
                            },
@@ -1583,6 +1605,9 @@ isOneToOne: false
                            },
 "replace_group_role":
 { Args: { "emails": (string)[],"member_role": Database["public"]['Enums']["app_role"] }; Returns: number
+                           },
+"request_cancellation":
+{ Args: { "event": string,"reason": string }; Returns: string
                            },
 "request_chat_space":
 { Args: { "event": string }; Returns: undefined
@@ -1627,6 +1652,9 @@ isOneToOne: false
                            },
 "sees_board_meetings":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"send_oc_reminders":
+{ Args: { "at"?: string }; Returns: number
                            },
 "set_cash_box_default":
 { Args: { "box": string,"kind": string }; Returns: undefined

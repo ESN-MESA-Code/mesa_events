@@ -20,6 +20,14 @@ export async function cancelEvent(input: unknown) {
   return run(A.cancelEvent, input);
 }
 
+export async function requestCancellation(input: unknown) {
+  return run(A.requestCancellation, input);
+}
+
+export async function decideCancellation(input: unknown) {
+  return run(A.decideCancellation, input);
+}
+
 export async function reopenEvent(input: unknown) {
   return run(A.reopenEvent, input);
 }

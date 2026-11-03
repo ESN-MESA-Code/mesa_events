@@ -150,7 +150,8 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
               ))}
             </ul>
             {cycle.status === "form_open" && missing.length > 0 && (
-              <details className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm" data-testid="not-answered">
+              // Open: nudging them is the step's task; the cycle's next action links here (review 2026-11-03 #11).
+              <details id="not-answered" open className="mt-3 scroll-mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm" data-testid="not-answered">
                 <summary className="cursor-pointer font-medium text-amber-900">Not answered yet: {plural(missing.length, "member")}</summary>
                 <p className="mt-1 text-xs text-amber-900">Everyone who has signed in to the app at least once. Nudge them in the members&apos; Chat, or copy the addresses.</p>
                 <ul className="mt-2 columns-1 gap-4 text-xs text-gray-800 sm:columns-2">

@@ -83,11 +83,11 @@ export function MonthSelector({
     );
 
   return (
-    <div className="flex items-center gap-2" data-testid="month-selector">
+    <div className="flex min-w-0 max-w-full items-center gap-2" data-testid="month-selector">
       {arrow(prev, "Previous month", "←")}
       <Select
         aria-label="Month"
-        className="w-auto min-w-0 max-w-[16rem]"
+        className="w-auto min-w-0 flex-1 sm:max-w-[22rem] sm:flex-none"
         value={current ?? ""}
         onChange={(e) => {
           const v = e.target.value;

@@ -6,7 +6,7 @@ import { understaffedNote } from "@/lib/checklist";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
-import { CancelEventForm, DropOutButton, EventDetailsForm } from "./EventClient";
+import { CancelEventForm, CancellationDecision, DropOutButton, EventDetailsForm, RequestCancellationForm } from "./EventClient";
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { EventChecklist } from "./EventChecklist";
 import { isAre, plural } from "@/lib/plural";
@@ -20,7 +20,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam, cycle } = await loadEventForPage(id);
 
-  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }] = await Promise.all([
+  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }, { data: requests }] = await Promise.all([
     supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
     supabase.rpc("open_slots"),
     supabase.from("activity_log").select("id, at, actor_email, entity, action, details").eq("event_id", id).order("at", { ascending: false }).limit(20),
@@ -28,6 +28,10 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
     canManage ? supabase.from("assignment_drop_reasons").select("assignment_id, reason").eq("event_id", id) : Promise.resolve({ data: [] }),
     // Where the event is published (brief 2026-10-29, E1): staff and teams, read-only.
     isStaff || isTeam ? supabase.rpc("publication_status", { events: [id] }) : Promise.resolve({ data: [] }),
+    // Cancellation requests (round 2026-11-03): the OC asks, the Events team decides.
+    isStaff || isTeam
+      ? supabase.from("cancellation_requests").select("id, requested_by, reason, requested_at, decision, decision_note, decided_at").eq("event_id", id).order("requested_at", { ascending: false }).limit(1)
+      : Promise.resolve({ data: [] }),
   ]);
   const { data: channelNames } = (published ?? []).length ? await supabase.from("publication_channels").select("key, name") : { data: [] };
   const channelName = new Map((channelNames ?? []).map((c) => [c.key, c.name]));
@@ -36,6 +40,11 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
   const slot = (slots ?? []).find((s) => s.event_id === id);
   const hasOc = active.some((a) => a.role === "oc");
+  const lastRequest = (requests ?? [])[0] ?? null;
+  const openRequest = lastRequest && !lastRequest.decision ? lastRequest : null;
+  const requester = openRequest ? ((roster ?? []).find((a) => (a.profiles as { email: string } | null)?.email === openRequest.requested_by)?.profiles as { full_name: string } | null)?.full_name ?? openRequest.requested_by : null;
+  // The OC asks instead of cancelling; the Events team cancels directly.
+  const mayAsk = isOc && !isEvents && !openRequest && ["confirmed", "understaffed"].includes(event.status);
   const upcoming = Date.parse(event.starts_at) > nowMs();
   // What a confirm dialog names (usability review #8).
   const when = formatDateTime(event.starts_at);
@@ -68,17 +77,36 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                     Run it anyway
                   </ActionButton>
                 )}
-                <ActionButton
-                  action={decideUnderstaffed}
-                  input={{ event_id: id, decision: "cancel" }}
-                  variant="destructive"
-                  confirm={{ title: `Cancel ${event.title} on ${when}?`, body: CANCEL_CONSEQUENCES, confirmLabel: "Cancel the event", cancelLabel: "Keep it", danger: true }}
-                  done="Event cancelled."
-                >
-                  Cancel the event
-                </ActionButton>
+                {isEvents ? (
+                  <ActionButton
+                    action={decideUnderstaffed}
+                    input={{ event_id: id, decision: "cancel" }}
+                    variant="destructive"
+                    confirm={{ title: `Cancel ${event.title} on ${when}?`, body: CANCEL_CONSEQUENCES, confirmLabel: "Cancel the event", cancelLabel: "Keep it", danger: true }}
+                    done="Event cancelled."
+                  >
+                    Cancel the event
+                  </ActionButton>
+                ) : (
+                  mayAsk && upcoming && <RequestCancellationForm eventId={id} title={event.title} when={when} />
+                )}
               </div>
             )}
+          </Alert>
+        )}
+
+        {openRequest && (
+          <Alert tone="warning" data-testid="cancellation-request">
+            <p className="font-medium">
+              {requester} asked the Events team to cancel this event ({formatShortDate(openRequest.requested_at)}).
+            </p>
+            <p className="mt-1">“{openRequest.reason}” – it stays on until the Events team decides.</p>
+            <CancellationDecision requestId={openRequest.id} title={event.title} when={when} canDecide={isEvents && upcoming} canWithdraw={isOc && !isEvents} />
+          </Alert>
+        )}
+        {!openRequest && lastRequest?.decision === "declined" && (isOc || isEvents) && event.status !== "cancelled" && (
+          <Alert tone="info" data-testid="cancellation-declined">
+            The Events team kept this event on ({formatShortDate(lastRequest.decided_at!)}): “{lastRequest.decision_note}”
           </Alert>
         )}
 
@@ -148,6 +176,11 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             {isEvents && upcoming && ["confirmed", "understaffed"].includes(event.status) && (
               <div className="mt-4 border-t border-gray-100 pt-4">
                 <CancelEventForm eventId={id} title={event.title} when={when} />
+              </div>
+            )}
+            {mayAsk && upcoming && event.status === "confirmed" && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <RequestCancellationForm eventId={id} title={event.title} when={when} />
               </div>
             )}
           </CardContent>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import { cancelEvent, dropOut } from "@/app/actions/roster";
+import { cancelEvent, decideCancellation, dropOut, requestCancellation } from "@/app/actions/roster";
 import { updateEvent } from "@/app/actions/planning";
 import { parseEuroToCents } from "@/lib/dates";
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
@@ -78,6 +78,101 @@ export function CancelEventForm({ eventId, title, when }: { eventId: string; tit
       </div>
       {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
     </form>
+  );
+}
+
+/** The OC asks the Events team to cancel (round 2026-11-03): a reason, posted in Chat; the event runs until they decide. */
+export function RequestCancellationForm({ eventId, title, when }: { eventId: string; title: string; when: string }) {
+  const { run, pending, error, confirm } = useAction();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} data-testid="request-cancellation">
+        Ask the Events team to cancel…
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="space-y-2"
+      data-testid="request-cancellation-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!reason.trim()) return;
+        if (!(await confirm({ title: `Ask to cancel ${title} on ${when}?`, body: "The Events team is told in Chat and decides. Until then the event stays on.", confirmLabel: "Send the request", cancelLabel: "Back" }))) return;
+        run(requestCancellation, { event_id: eventId, reason: reason.trim() }, () => setOpen(false), "Request sent – the Events team decides.");
+      }}
+    >
+      <Input aria-label="Why should it be cancelled?" placeholder="Why should it be cancelled?" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} required />
+      <p className="text-xs text-gray-500">The Events team is mentioned in the event&apos;s Chat space with your reason. The event stays on until they decide.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={pending || !reason.trim()}>
+          Send the request
+        </Button>
+        <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>
+          Back
+        </Button>
+      </div>
+      {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
+    </form>
+  );
+}
+
+/**
+ * An open cancellation request: the Events team cancels the event or keeps
+ * it on (with a note for the OC); the OC can withdraw it.
+ */
+export function CancellationDecision({ requestId, title, when, canDecide, canWithdraw }: { requestId: string; title: string; when: string; canDecide: boolean; canWithdraw: boolean }) {
+  const { run, pending, error, confirm } = useAction();
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  return (
+    <div className="mt-2 space-y-2" data-testid="cancellation-decision">
+      {canDecide && !keeping && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={pending}
+            onClick={async () => {
+              if (!(await confirm({ title: `Cancel ${title} on ${when}?`, body: CANCEL_CONSEQUENCES, confirmLabel: "Cancel the event", cancelLabel: "Back", danger: true }))) return;
+              run(decideCancellation, { request_id: requestId, decision: "cancelled" }, undefined, "Event cancelled.");
+            }}
+          >
+            Cancel the event
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setKeeping(true)}>
+            Keep it on…
+          </Button>
+        </div>
+      )}
+      {canDecide && keeping && (
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (note.trim()) run(decideCancellation, { request_id: requestId, decision: "declined", note: note.trim() }, () => setKeeping(false), "The event stays on – the OC is told why.");
+          }}
+        >
+          <Input aria-label="Why does it stay on? (for the OC)" placeholder="Why does it stay on? (for the OC)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} required />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={pending || !note.trim()}>
+              Keep it on
+            </Button>
+            <Button size="sm" type="button" variant="ghost" onClick={() => setKeeping(false)}>
+              Back
+            </Button>
+          </div>
+        </form>
+      )}
+      {canWithdraw && (
+        <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(decideCancellation, { request_id: requestId, decision: "withdrawn" }, undefined, "Request withdrawn.")}>
+          Withdraw my request
+        </Button>
+      )}
+      {error && <span role="alert" className="block text-xs text-red-600">{error}</span>}
+    </div>
   );
 }
 

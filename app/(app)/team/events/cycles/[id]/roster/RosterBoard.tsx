@@ -11,6 +11,7 @@ import { staffingStatus } from "@/lib/allocation";
 import { berlinDate, formatShortDate } from "@/lib/dates";
 import { rosterLoad, HEAVY_LOAD } from "@/lib/rosterLoad";
 import { cn } from "@/lib/utils";
+import { plural } from "@/lib/plural";
 
 export interface BoardPerson {
   id: string;
@@ -40,7 +41,7 @@ const STAFFING = {
   dropped: { label: "Nobody – will be dropped", tone: "red" },
 } as const;
 
-function Chip({ id, data, children, disabled }: { id: string; data: DragData; children: React.ReactNode; disabled: boolean }) {
+function Chip({ id, data, children, disabled, highlight }: { id: string; data: DragData; children: React.ReactNode; disabled: boolean; highlight?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id, data, disabled });
   return (
     <div
@@ -50,6 +51,7 @@ function Chip({ id, data, children, disabled }: { id: string; data: DragData; ch
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
       className={cn(
         "rounded-md border border-gray-200 bg-white px-2 py-1 text-sm shadow-sm",
+        highlight && "border-l-4 border-l-amber-400",
         !disabled && "cursor-grab active:cursor-grabbing",
         isDragging && "opacity-60 ring-2 ring-esn-accent relative z-10"
       )}
@@ -166,7 +168,10 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
     );
   };
 
-  const shown = people.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase()));
+  // Those without an event first, marked (review 2026-11-03 #15): they are who fills the gaps.
+  const countOf = (id: string) => load.get(id)?.count ?? 0;
+  const free = people.filter((p) => countOf(p.id) === 0);
+  const shown = people.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => Number(countOf(a.id) > 0) - Number(countOf(b.id) > 0));
 
   return (
     <DndContext id="roster-board" sensors={sensors} onDragEnd={onDragEnd}>
@@ -191,20 +196,31 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
             onChange={(e) => setFilter(e.target.value)}
           />
           <Slot id="pool" label="Volunteers" disabled={!editable}>
-            {shown.map((p) => {
+            {shown.map((p, i) => {
               const l = load.get(p.id);
               const count = l?.count ?? 0;
+              const heading =
+                i === 0 && count === 0 ? (
+                  <p key="h-free" className="text-[11px] font-semibold uppercase tracking-wide text-amber-800" data-testid="pool-free">
+                    Not assigned yet ({free.length})
+                  </p>
+                ) : count > 0 && (i === 0 || countOf(shown[i - 1].id) === 0) ? (
+                  <p key="h-assigned" className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    Assigned
+                  </p>
+                ) : null;
               const days = [...new Set([...(l?.sameDay.keys() ?? [])].map((id) => events.find((e) => e.id === id)!.startsAt))].map((iso) => formatShortDate(iso));
-              return (
-                <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable}>
+              return [
+                heading,
+                <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable} highlight={count === 0}>
                   <span className="font-medium">{p.name}</span>
                   <span className={cn("text-xs", count >= HEAVY_LOAD ? "font-semibold text-amber-700" : "text-gray-500")}>
                     {" "}
-                    · {Object.keys(p.wishes).length} wishes · {count} assigned{count >= HEAVY_LOAD && " – a lot"}
+                    · {plural(Object.keys(p.wishes).length, "wish", "wishes")} · {count} assigned{count >= HEAVY_LOAD && " – a lot"}
                   </span>
                   {days.length > 0 && <span className="block text-[11px] font-medium text-red-700">⚠ two events on {[...new Set(days)].join(", ")}</span>}
-                </Chip>
-              );
+                </Chip>,
+              ];
             })}
           </Slot>
           <p className="text-xs text-gray-500 mt-2">Drag a name onto an OC or helper slot, or a chip to another event. Drop an assigned person here to remove them. Keyboard: focus a chip, Space to pick it up, arrows to move, Space to drop.</p>
@@ -251,6 +267,11 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                 {wishers.length > 0 && (
                   <p className="text-xs text-gray-500">
                     Also wanted: {wishers.map((p) => `${p.name} (${wishLabel(p, ev.id)})`).join("; ")}
+                  </p>
+                )}
+                {editable && staffing !== STAFFING.staffed && free.some((p) => !wishers.includes(p)) && (
+                  <p className="text-xs text-amber-800" data-testid="free-hint">
+                    Not assigned anywhere yet: {free.filter((p) => !wishers.includes(p)).map((p) => p.name).join(", ")}
                   </p>
                 )}
               </Card>

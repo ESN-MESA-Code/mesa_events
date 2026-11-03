@@ -1,6 +1,7 @@
 // Roster changes after confirmation: dropping out, claiming open slots, the
-// OC's decision on an under-staffed event, cancelling and reopening, Chat
-// spaces on request.
+// OC's decision on an under-staffed event, cancelling (the OC asks, the
+// Events team decides – round 2026-11-03) and reopening, Chat spaces on
+// request.
 import { z } from "zod";
 import { dbError, defineAction, PAGES, forbidden, notFound, requireEventOc, requireRole, uuid } from "@/lib/actions/core";
 
@@ -33,6 +34,23 @@ export const cancelEvent = defineAction(z.object({ event_id: uuid, reason: z.str
   requireRole(ctx, "events");
   dbError((await ctx.supabase.rpc("cancel_event", { event: i.event_id, reason: i.reason || undefined })).error);
 }, { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam, PAGES.comms] });
+
+/** The OC asks the Events team to cancel, with a reason; the Events team is mentioned in Chat (request_cancellation()). */
+export const requestCancellation = defineAction(z.object({ event_id: uuid, reason: z.string().trim().min(1, "Say why the event should be cancelled.").max(300) }), async (ctx, i) => {
+  // The Events team cancels directly; asking is the OC's.
+  await requireEventOc(ctx, i.event_id, null);
+  dbError((await ctx.supabase.rpc("request_cancellation", { event: i.event_id, reason: i.reason })).error);
+}, { revalidate: [PAGES.event, PAGES.eventsTeam] });
+
+/** The Events team cancels the event or keeps it on (a note for the OC); the OC withdraws the request. */
+export const decideCancellation = defineAction(
+  z.object({ request_id: uuid, decision: z.enum(["cancelled", "declined", "withdrawn"]), note: z.string().trim().max(300).optional() }),
+  async (ctx, i) => {
+    if (i.decision !== "withdrawn") requireRole(ctx, "events");
+    dbError((await ctx.supabase.rpc("decide_cancellation", { request: i.request_id, decision: i.decision, note: i.note || undefined })).error);
+  },
+  { revalidate: [PAGES.event, PAGES.calendar, PAGES.me, PAGES.home, PAGES.eventsTeam, PAGES.comms] }
+);
 
 /** The Events team reopens a cancelled event: back to the status its staffing gives. */
 export const reopenEvent = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {

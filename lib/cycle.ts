@@ -1,8 +1,8 @@
 // A planning cycle as steps (review C9): Ideas → Schedule → Volunteer form →
-// Allocation → Roster confirmed → Descriptions → Hand-in → Done (review
-// 2026-10-29 A4). Pure, so the rules are tested (tests/unit/cycle.test.ts);
-// the cycle page and the Events dashboard show it as a stepper with the
-// current step's main action.
+// Allocation → Roster → Descriptions → Hand-in → Done (review 2026-10-29
+// A4). Pure, so the rules are tested (tests/unit/cycle.test.ts); the cycle
+// pages show it as a stepper with the open steps' actions, the Events page
+// lists every month's open steps.
 import type { CycleStatus } from "@/lib/labels";
 import { isAre, plural } from "@/lib/plural";
 import { berlinTime, formatShortDate } from "@/lib/dates";
@@ -27,8 +27,8 @@ export interface CycleFacts {
   descriptions: { total: number; in: number; published: number; upcomingMissing: number };
   /**
    * Running events (not cancelled), how many have started, and how many are
-   * handed in: attendance list signed off, photos in Drive, the event report,
-   * every Beleg with Finance.
+   * handed in: attendance list signed off, photos in Drive, the event report
+   * (receipts are Finance's).
    */
   handIn: { total: number; happened: number; done: number };
   /** The cycle's standard dates (lib/timeline.ts): each step shows its date, the current one turns late. */
@@ -46,10 +46,22 @@ export interface Step {
   late?: boolean;
 }
 
+/** One thing to do in a cycle: the step and what to do there. */
+export interface CycleTodo {
+  step: StepId;
+  action: string;
+}
+
 export interface CycleProgress {
   steps: Step[];
+  /** The first open step. */
   current: StepId | null;
-  /** What the Events team does next (the highlighted action). */
+  /**
+   * The open steps with their action – usually one; a running month can
+   * have descriptions and hand-ins open at once (review 2026-11-03 #8).
+   */
+  todos: CycleTodo[];
+  /** What the Events team does next: the todos' actions in one line. */
   action: string;
   /** One line for the dashboard. */
   summary: string;
@@ -65,7 +77,8 @@ const LABELS: Record<StepId, string> = {
   schedule: "Schedule",
   form: "Volunteer form",
   allocation: "Allocation",
-  roster: "Roster confirmed",
+  // A task, not a state: "to do: roster" must not read as done (review 2026-11-03 #3).
+  roster: "Roster",
   descriptions: "Descriptions",
   handin: "Hand-in",
   done: "Done",
@@ -77,8 +90,9 @@ export function stepHref(cycleId: string, step: StepId): string {
   const base = `/team/events/cycles/${cycleId}`;
   switch (step) {
     case "ideas":
+      return `${base}/ideas`;
     case "schedule":
-      return base;
+      return `${base}/schedule`;
     case "form":
       return `${base}/form`;
     case "allocation":
@@ -92,10 +106,16 @@ export function stepHref(cycleId: string, step: StepId): string {
   }
 }
 
+/** The month's line in a month selector: "done", or what is open ("to do: descriptions, hand-in"). */
+export function monthNote(p: CycleProgress): string {
+  return p.done ? "done" : `to do: ${p.todos.map((t) => LABELS[t.step].toLowerCase()).join(", ")}`;
+}
+
 export function cycleProgress(f: CycleFacts): CycleProgress {
   let current: StepId;
   let action: string;
   let summary: string;
+  const todos: CycleTodo[] = [];
   switch (f.status) {
     case "planning":
       if (f.events === 0) {
@@ -110,7 +130,7 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
       break;
     case "form_open":
       current = "form";
-      action = "Nudge those who have not answered (volunteer form page), or close the form early";
+      action = "Nudge the members who have not answered yet, or close the form early";
       summary = `form open · ${plural(f.responses, "answer")}`;
       break;
     case "form_closed":
@@ -127,20 +147,33 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
       const { total, in: done, upcomingMissing } = f.descriptions;
       const h = f.handIn;
       const handedIn = `${h.done} of ${plural(h.total, "event")} handed in`;
+      const handInOpen = h.happened - h.done;
       if (h.total === 0 || (h.happened >= h.total && h.done >= h.total)) {
         current = "done";
         action = "Every event is handed in – the cycle is done";
         summary = h.total ? `done · ${handedIn}` : "done · no events ran";
-      } else if (upcomingMissing > 0) {
-        current = "descriptions";
-        action = f.descriptionDeadline ? "Remind OCs whose descriptions are missing" : "Set the description deadline";
-        summary = `roster confirmed · ${done} of ${total} descriptions in`;
-      } else {
-        current = "handin";
-        const open = h.happened - h.done;
-        action = open > 0 ? `Remind the OCs of ${plural(open, "event")} that ${isAre(open)} not handed in yet` : "Hand-in opens on each event's day";
-        summary = `hand-in · ${handedIn}`;
+        break;
       }
+      // Descriptions and hand-ins overlap once the first event happened:
+      // both are open steps (review 2026-11-03 #8).
+      if (upcomingMissing > 0)
+        todos.push({
+          step: "descriptions",
+          action: !f.descriptionDeadline
+            ? "Set the description deadline"
+            : // The OCs are reminded automatically (round 2026-11-03): this says what is open.
+              `${plural(upcomingMissing, "description")} ${isAre(upcomingMissing)} not in yet – the OCs are reminded automatically`,
+        });
+      if (handInOpen > 0 || !todos.length)
+        todos.push({ step: "handin", action: handInOpen > 0 ? `${plural(handInOpen, "event")} ${isAre(handInOpen)} not handed in yet – the OCs are reminded automatically` : "Hand-in opens on each event's day" });
+      current = todos[0].step;
+      action = todos.map((t) => t.action).join(" · ");
+      summary =
+        upcomingMissing > 0 && h.happened > 0
+          ? `running · ${done} of ${total} descriptions in · ${handedIn}`
+          : upcomingMissing > 0
+            ? `roster confirmed · ${done} of ${total} descriptions in`
+            : `hand-in · ${handedIn}`;
       break;
     }
   }
@@ -150,12 +183,14 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
   // The timeline (round 2026-11-02): a date per step; the current step is late once its date passed.
   const t = f.timeline;
   const now = f.now ?? Date.now();
+  // A form that closes before the standard opening day was opened early: the
+  // standard ideas and schedule dates would run backwards (review 2026-11-03 #17).
+  const early = !!t && Date.parse(f.formClosesAt ?? t.formCloses) <= Date.parse(t.formOpens);
   const notes: Partial<Record<StepId, string>> = t
     ? {
-        ideas: `ideas by ${milestoneDay(t.ideasDue)}`,
-        schedule: `by ${milestoneDay(t.formOpens)}`,
-        // A form someone closed before the standard opening day shows its own date only.
-        form: Date.parse(f.formClosesAt ?? t.formCloses) > Date.parse(t.formOpens) ?dayRange(t.formOpens, f.formClosesAt ?? t.formCloses) : `until ${milestoneDay(f.formClosesAt!)}`,
+        ideas: early ? undefined : `ideas by ${milestoneDay(t.ideasDue)}`,
+        schedule: early ? undefined : `by ${milestoneDay(t.formOpens)}`,
+        form: early ? `opened early · until ${milestoneDay(f.formClosesAt!)}` : dayRange(t.formOpens, f.formClosesAt ?? t.formCloses),
         roster: `by ${milestoneDay(t.rosterDue)}`,
         descriptions: `by ${milestoneDay(f.descriptionDeadline ?? t.descriptionsDue)}`,
       }
@@ -170,8 +205,10 @@ export function cycleProgress(f: CycleFacts): CycleProgress {
     action = current === "schedule" ? `Set the event types – the form opens by itself on ${opens} (or open it earlier)` : `${action} – the form opens by itself on ${opens} with the events on the schedule`;
   }
 
+  if (!finished && !todos.length) todos.push({ step: current, action });
+  const open = new Set(todos.map((x) => x.step));
   const steps = STEP_ORDER.map(
-    (id, i) => ({ id, label: LABELS[id], state: i < at ? "done" : i === at ? "current" : "todo", note: notes[id], late: i === at && late ? true : undefined }) as Step
+    (id, i) => ({ id, label: LABELS[id], state: i < at ? "done" : open.has(id) ? "current" : "todo", note: notes[id], late: i === at && late ? true : undefined }) as Step
   );
-  return { steps, current: finished ? null : current, action, summary, done: finished, late, due };
+  return { steps, current: finished ? null : current, todos, action, summary, done: finished, late, due };
 }
