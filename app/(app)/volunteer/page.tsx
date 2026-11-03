@@ -3,6 +3,7 @@ import { createSessionClient, getViewer } from "@/lib/supabase/session";
 import { cycleLabel, formatDateTime } from "@/lib/dates";
 import { EVENT_TYPE_LABELS } from "@/lib/labels";
 import { RANK_LABELS } from "@/lib/volunteer";
+import { plural } from "@/lib/plural";
 import { Alert, Badge, Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
 import { VolunteerForm } from "./VolunteerForm";
 
@@ -18,16 +19,23 @@ export default async function VolunteerPage() {
 
   const forms = await Promise.all(
     (cycles ?? []).map(async (c) => {
-      const [{ data: events }, { data: response }] = await Promise.all([
-        supabase.from("events").select("id, title, type, starts_at, location, helpers_needed").eq("cycle_id", c.id).eq("status", "scheduled").order("starts_at"),
+      const [{ data: events }, { data: response }, { data: ideas }] = await Promise.all([
+        supabase
+          .from("events")
+          .select("id, title, type, starts_at, location, helpers_needed, proposed_by, profiles:proposed_by(full_name)")
+          .eq("cycle_id", c.id)
+          .eq("status", "scheduled")
+          .order("starts_at"),
         supabase
           .from("volunteer_responses")
-          .select("note, submitted_at, volunteer_choices(event_id, oc_rank, helper_rank)")
+          .select("note, submitted_at, max_events, max_oc, volunteer_choices(event_id, oc_rank, helper_rank)")
           .eq("cycle_id", c.id)
           .eq("profile_id", viewer.id)
           .maybeSingle(),
+        // The viewer's own ideas on the form (also those they do not OC).
+        supabase.from("event_ideas").select("event_id").eq("proposer_id", viewer.id).not("event_id", "is", null),
       ]);
-      return { cycle: c, events: events ?? [], response };
+      return { cycle: c, events: events ?? [], response, ideas: new Set((ideas ?? []).map((i) => i.event_id)) };
     })
   );
 
@@ -35,7 +43,7 @@ export default async function VolunteerPage() {
     <>
       <PageHeader
         title="Volunteer"
-        description="Pick the events you can do and say how much you want to be OC or helper. You submit once; after the deadline the roster is allocated: top choices first, then first come, first served by submission time."
+        description="Pick the events you can do and say how much you want to be OC or helper. You submit once; after the deadline the roster is allocated fairly – how is explained below the form."
       />
       {!forms.length && (
         <Card>
@@ -43,7 +51,7 @@ export default async function VolunteerPage() {
         </Card>
       )}
       <div className="space-y-8">
-        {forms.map(({ cycle, events, response }) => {
+        {forms.map(({ cycle, events, response, ideas }) => {
           const label = cycleLabel(cycle.month);
           const chosen = new Map((response?.volunteer_choices ?? []).map((c) => [c.event_id, c]));
           return (
@@ -80,6 +88,22 @@ export default async function VolunteerPage() {
                     ) : (
                       <p className="text-sm text-gray-600">You did not pick any event this month.</p>
                     )}
+                    {events.some((e) => e.proposed_by === viewer.id) && (
+                      <p className="text-sm text-gray-600">
+                        You are the OC of your {events.filter((e) => e.proposed_by === viewer.id).length === 1 ? "idea" : "ideas"}:{" "}
+                        {events
+                          .filter((e) => e.proposed_by === viewer.id)
+                          .map((e) => e.title)
+                          .join(", ")}
+                        .
+                      </p>
+                    )}
+                    {chosen.size > 0 && (
+                      <p className="text-sm text-gray-600">
+                        {response.max_events ? `At most ${plural(response.max_events, "event")}` : "No limit on events"}
+                        {response.max_oc ? `, OC of at most ${plural(response.max_oc, "event")}.` : "."}
+                      </p>
+                    )}
                     {response.note && <p className="text-sm text-gray-600">Your note: {response.note}</p>}
                   </CardContent>
                 </Card>
@@ -96,6 +120,8 @@ export default async function VolunteerPage() {
                         when: formatDateTime(e.starts_at),
                         location: e.location ?? "",
                         helpers: e.helpers_needed,
+                        fixedOc: e.proposed_by ? (e.proposed_by === viewer.id ? "you" : ((e.profiles as { full_name: string } | null)?.full_name ?? "the proposer")) : null,
+                        mine: ideas.has(e.id),
                       }))}
                     />
                   </CardContent>

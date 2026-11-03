@@ -1189,14 +1189,14 @@ isOneToOne: false
                   ]
                 },"volunteer_responses": {
                   Row: {
-                    "cycle_id": string,"id": string,"note": string,"profile_id": string,"submitted_at": string,"updated_at": string
+                    "cycle_id": string,"id": string,"max_events": number | null,"max_oc": number | null,"note": string,"profile_id": string,"submitted_at": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "cycle_id": string,"id"?: string,"note"?: string,"profile_id": string,"submitted_at"?: string,"updated_at"?: string
+                    "cycle_id": string,"id"?: string,"max_events"?: number | null,"max_oc"?: number | null,"note"?: string,"profile_id": string,"submitted_at"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "cycle_id"?: string,"id"?: string,"note"?: string,"profile_id"?: string,"submitted_at"?: string,"updated_at"?: string
+                    "cycle_id"?: string,"id"?: string,"max_events"?: number | null,"max_oc"?: number | null,"note"?: string,"profile_id"?: string,"submitted_at"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1233,6 +1233,11 @@ isOneToOne: false
                            },
 "adjust_cash_box":
 { Args: { "box": string,"counts": Json,"mode": string,"note"?: string }; Returns: number
+                           },
+"allocation_history":
+{ Args: { "cycle": string }; Returns: {
+              "past_events": number,"profile_id": string,"recent_events": number,"unplaced_last_cycle": boolean
+            }[]
                            },
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -1363,7 +1368,7 @@ isOneToOne: false
                            },
 "cycle_signups":
 { Args: { "cycle": string }; Returns: {
-              "email": string,"event_id": string,"full_name": string,"helper_rank": number,"oc_rank": number,"profile_id": string,"submitted_at": string
+              "email": string,"event_id": string,"full_name": string,"helper_rank": number,"max_events": number,"max_oc": number,"oc_rank": number,"profile_id": string,"submitted_at": string
             }[]
                            },
 "cycle_timeline":
@@ -1722,7 +1727,7 @@ isOneToOne: false
 { Args: { "event": string,"rendered": string }; Returns: undefined
                            },
 "submit_volunteer_form":
-{ Args: { "choices": Json,"cycle": string,"note"?: string }; Returns: string
+{ Args: { "choices": Json,"cycle": string,"max_events"?: number,"max_oc"?: number,"note"?: string }; Returns: string
                            },
 "suggest_reimbursement":
 { Args: { "amount_cents": number,"budget_left_cents"?: number,"claim_role": string,"days"?: number,"preapproved"?: boolean,"rule": string }; Returns: {

@@ -70,6 +70,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
       await page.goto("/volunteer");
       const form = page.getByRole("region", { name: `Volunteer form ${cycleLabel(`${month}-01`)}` });
       for (const [label, choice] of picks) await form.getByRole("radiogroup", { name: label }).getByRole("radio", { name: choice }).check();
+      // Required once an event is picked (round 2026-11-03: fair allocation).
+      await form.getByRole("radiogroup", { name: /How many of these events can you do/ }).getByRole("radio", { name: "No limit" }).check();
       await form.getByRole("button", { name: "Submit my answers" }).click();
       await answerConfirm(page);
       const summary = form.getByTestId("volunteer-summary");

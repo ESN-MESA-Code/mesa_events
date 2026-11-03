@@ -366,37 +366,37 @@ interface FutureSpec extends Spec {
   answers: Array<[string, Rank | null, Rank | null]>;
 }
 const NEXT: FutureSpec[] = [
-  { key: "stammtisch", plan: "stammtisch", cycle: 1, day: 5, description: "submitted", answers: [["felix", 1, null], ["liam", null, 1], ["sara", null, 2]] },
-  { key: "nuremberg", plan: "nuremberg", cycle: 1, day: 8, description: "none", answers: [["oskar", 1, 2], ["emil", null, 1]] },
+  { key: "stammtisch", plan: "stammtisch", cycle: 1, day: 5, description: "submitted", answers: [["felix", 1, null], ["liam", null, 1], ["sara", null, 3]] },
+  { key: "nuremberg", plan: "nuremberg", cycle: 1, day: 8, description: "none", answers: [["oskar", 1, 3], ["emil", null, 1]] },
   {
-    key: "swing", plan: "swing", cycle: 1, day: 12, description: "none", answers: [["isabel", null, 1], ["thanh", null, 2]],
+    key: "swing", plan: "swing", cycle: 1, day: 12, description: "none", answers: [["isabel", null, 1], ["thanh", null, 4]],
   },
   { key: "escapeRoom", plan: "escapeRoom", cycle: 1, day: 14, description: "none", answers: [] },
   {
     key: "thanksgiving", plan: "thanksgiving", cycle: 1, day: 19, description: "changes_requested", idea: { proposer: "zeynep", wantsOc: true },
     review: "Lovely text! Two things: please add the exact address of the Amerika Haus, and say whether vegetarian dishes are welcome.",
-    answers: [["zeynep", 1, null], ["aisha", null, 1], ["hiro", 2, 1], ["camila", null, 2]],
+    answers: [["zeynep", 1, null], ["aisha", null, 1], ["hiro", 3, 1], ["camila", null, 3]],
   },
   {
     key: "prague", plan: "prague", cycle: 1, day: 20, description: "draft",
-    answers: [["tomasz", 1, 2], ["chloe", 2, 1], ["diego", 3, 1], ["fatima", null, 1], ["nikos", null, 2]],
+    answers: [["tomasz", 1, 3], ["chloe", 2, 1], ["diego", 5, 1], ["fatima", null, 1], ["nikos", null, 3]],
   },
   {
     key: "christmasOpening", plan: "christmasMarket", cycle: 1, day: 26, description: "none",
-    answers: [["giulia", 1, 1], ["kwame", 2, 1], ["pedro", null, 1], ["mateo", null, 3]],
+    answers: [["giulia", 1, 1], ["kwame", 3, 1], ["pedro", null, 1], ["mateo", null, 5]],
   },
   // The OC persona's description still to write (next month: its deadline is ahead).
-  { key: "cityRally", plan: "cityRally", cycle: 1, day: 16, description: "none", answers: [["chloe", 1, null], ["kwame", null, 1], ["giulia", null, 2], ["hiro", null, 1]] },
-  { key: "cleanUp", plan: "cleanUp", cycle: 1, day: 22, description: "none", answers: [["ingrid", 1, 2], ["sara", null, 1]] },
+  { key: "cityRally", plan: "cityRally", cycle: 1, day: 16, description: "none", answers: [["chloe", 1, null], ["kwame", null, 1], ["giulia", null, 3], ["hiro", null, 1]] },
+  { key: "cleanUp", plan: "cleanUp", cycle: 1, day: 22, description: "none", answers: [["ingrid", 1, 3], ["sara", null, 1]] },
 ];
 
 // The month after: volunteer form open, ideas coming in.
 const LATER: FutureSpec[] = [
   { key: "iceStock", plan: "iceStock", cycle: 2, day: 9, answers: [["felix", 1, 1], ["yusuf", null, 1]] },
-  { key: "zugspitze", plan: "zugspitze", cycle: 2, day: 12, answers: [["oskar", 1, null], ["emil", null, 1], ["chloe", 3, 2]] },
+  { key: "zugspitze", plan: "zugspitze", cycle: 2, day: 12, answers: [["oskar", 1, null], ["emil", null, 1], ["chloe", 5, 3]] },
   { key: "christmasDinner", plan: "christmasDinner", cycle: 2, day: 17, idea: { proposer: "lea", wantsOc: true }, answers: [["lea", 1, null], ["rafael", null, 1]] },
-  { key: "uglySweater", plan: "uglySweater", cycle: 2, day: 19, answers: [["kwame", 2, 1], ["giulia", null, 1], ["tomasz", 1, null]] },
-  { key: "volleyball", plan: "volleyball", cycle: 2, day: 4, answers: [["diego", 1, null], ["arjun", null, 1], ["mei", null, 2]] },
+  { key: "uglySweater", plan: "uglySweater", cycle: 2, day: 19, answers: [["kwame", 3, 1], ["giulia", null, 1], ["tomasz", 1, null]] },
+  { key: "volleyball", plan: "volleyball", cycle: 2, day: 4, answers: [["diego", 1, null], ["arjun", null, 1], ["mei", null, 3]] },
 ];
 
 const IDEAS: Array<{ title: string; cycle: 1 | 2 | 3; day: number; proposer: string; pitch: string; helpers: number; wantsOc: boolean; status: "proposed" | "rejected" | "merged"; note?: string; mergedInto?: string }> = [
@@ -655,7 +655,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
     }
     b.helpers = b.assignments.filter((a) => a.role === "helper" && a.status === "active").map((a) => a.who);
     if (s.oc) answer(c, s.oc, [{ event: b.id, oc: 1, helper: null }]);
-    for (const h of s.helpers ?? []) answer(c, h, [{ event: b.id, oc: null, helper: rng.pick([1, 1, 2] as const) }]);
+    for (const h of s.helpers ?? []) answer(c, h, [{ event: b.id, oc: null, helper: rng.pick([1, 1, 2, 3] as const) }]);
   }
   // The dropped event: nobody signed up. Answers without it.
 
@@ -672,8 +672,9 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
       .flatMap((r) =>
         choices
           .filter((c) => c.response_id === r.id)
-          .map((c): AllocationChoice => ({ profileId: r.profile_id, eventId: c.event_id, ocRank: (c.oc_rank ?? null) as Rank | null, helperRank: (c.helper_rank ?? null) as Rank | null, submittedAt: r.submitted_at! }))
-      )
+          .map((c): AllocationChoice => ({ profileId: r.profile_id, eventId: c.event_id, ocRank: (c.oc_rank ?? null) as Rank | null, helperRank: (c.helper_rank ?? null) as Rank | null }))
+      ),
+    { seed: next.id! }
   );
   const keyOf = new Map(DEMO_PEOPLE.map((p) => [p.id, p.key]));
   for (const a of allocation.assignments) {
@@ -683,7 +684,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
   // The Events team swapped OC and helper on the Christmas market tour.
   const xmas = byKey.get("christmasOpening")!;
   const xOc = xmas.assignments.find((a) => a.role === "oc");
-  const xHelper = xmas.assignments.find((a) => a.role === "helper" && a.who === "kwame");
+  const xHelper = xmas.assignments.find((a) => a.role === "helper");
   if (xOc && xHelper) {
     for (const [a, role] of [[xOc, "helper"], [xHelper, "oc"]] as const) {
       const row = assignmentRows.find((r) => r.id === a.id)!;

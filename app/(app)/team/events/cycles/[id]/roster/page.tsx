@@ -36,7 +36,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
   // Volunteers: everyone who answered the form, with their wishes per event.
   const people = new Map<string, BoardPerson>();
   for (const s of signups ?? []) {
-    const p = people.get(s.profile_id) ?? { id: s.profile_id, name: s.full_name, email: s.email, wishes: {} };
+    const p = people.get(s.profile_id) ?? { id: s.profile_id, name: s.full_name, email: s.email, wishes: {}, maxEvents: s.max_events };
     p.wishes[s.event_id] = { oc: s.oc_rank, helper: s.helper_rank };
     people.set(s.profile_id, p);
   }

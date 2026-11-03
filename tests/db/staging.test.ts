@@ -77,7 +77,8 @@ describe("seed:staging", () => {
 
   it("has volunteer answers with ranks and times, the allocation with manual moves, drop-outs with reasons and claimed slots", async () => {
     const choices = await rows(admin.from("volunteer_choices").select("oc_rank, helper_rank").in("event_id", eventIds));
-    expect(choices.some((c) => c.oc_rank === 1) && choices.some((c) => c.helper_rank === 2) && choices.some((c) => c.helper_rank === 3)).toBe(true);
+    // The five levels (round 2026-11-03), not just the old three.
+    expect(choices.some((c) => c.oc_rank === 1) && [3, 4, 5].every((r) => choices.some((c) => c.helper_rank === r))).toBe(true);
     const assignments = await rows(admin.from("assignments").select("source, status").in("event_id", eventIds));
     for (const s of ["auto", "manual", "replacement", "proposer"]) expect(assignments.some((a) => a.source === s), s).toBe(true);
     expect(assignments.some((a) => a.status === "dropped_out")).toBe(true);

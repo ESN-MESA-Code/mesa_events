@@ -48,7 +48,7 @@ export function OrientationCard({ hasPayout }: { hasPayout: boolean }) {
           <strong>Fill in the volunteer form</strong> each month: pick the events you can do, as <strong>OC</strong> or <strong>helper</strong>. You submit once.
         </li>
         <li>
-          <strong>The roster</strong> is allocated after the deadline: top choices first, then first come, first served. Your events then show up here.
+          <strong>The roster</strong> is allocated after the deadline: every event gets an OC first, then everyone gets one event before anyone gets a second. Your events then show up here.
         </li>
         <li>
           <strong>OC</strong> = owns the event: description, attendance list, hand-in. <strong>Helper</strong> = helps on the day. Missed the form? Claim an <strong>open slot</strong> any time.

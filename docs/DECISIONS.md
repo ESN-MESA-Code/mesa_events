@@ -1208,3 +1208,37 @@ Decisions:
 - **The planning timeline keeps its steps in order.** A form opened or closed before the ideas
   day used to leave "Ideas due" as the next step after ticked later steps. Now a later passed
   step passes the earlier ones, and what the cycle did wins over the standard dates.
+
+## 2026-11-03 (3) – A fairer allocation
+
+- **Why:** the allocation filled each event on its own. Marking everything "top choice" won
+  everywhere, ties went to whoever clicked first when the form opened, nobody had a limit, and
+  overlapping events were only reported. A keen member could get five events while others who
+  signed up got none.
+- **Five levels** instead of three: top choice, keen, happy to, could do, if needed (stored as
+  1–5, 1 = best; old answers mapped 2 → 3, 3 → 5).
+- **Limits per volunteer:** "How many of these events can you do?" (1–5 or no limit, required
+  once an event is picked) and "How many of them as OC, at most?" (preselected 1). Stored on
+  `volunteer_responses` (`max_events`, `max_oc`, null = no limit; answers from before have none).
+  Both questions are always shown, not only after the first pick, so nobody misses them.
+- **Proposer events:** when the idea's proposer OCs it (`events.proposed_by`), the form shows
+  "OC: <name> (proposed the idea)" instead of the OC question; the proposer sees "You are the OC"
+  and no questions for it, and a "Your idea" badge marks their ideas (also those they do not OC).
+  `submit_volunteer_form()` refuses OC answers for such events and the proposer as helper.
+- **The algorithm** (`lib/allocation.ts`): 0. proposers; 1. OCs, the event with the fewest
+  candidates first, preferring people without an OC role; 2. helpers in rounds (round n: nobody
+  gets more than n events, an OC already has one), the event with the fewest candidates per open
+  slot first. Hard rules: limits, no overlapping events (a proposer's two overlapping ideas: the
+  later one is reported and needs an OC from the Events team). Score: half the rank (1–5 points
+  / 3), half the rank relative to the person's own answers (points / their mean, at most 2 –
+  padding the form with "if needed" does not make a top choice unbeatable); +0.5 if they signed
+  up last month and got nothing; −0.1 per event in the three months before (at most 5); +0.3 for
+  experience as OC, and as helper while the team has nobody experienced.
+- **Ties by lottery, not submission time:** a hash of the cycle id and the person – the same
+  roster on every re-run, no reason to race the form at 09:00. The submission time is still
+  stored and shown.
+- **History** comes from `allocation_history(cycle)` (Events and executives only).
+- **The run's summary** adds top choices met, volunteers without an event and proposer clashes;
+  the roster board shows each person's maximum and flags anyone over it.
+- **Explained under the form** in seven short points (`HowItWorks` in `VolunteerForm.tsx`) –
+  keep it in step with `lib/allocation.ts`.

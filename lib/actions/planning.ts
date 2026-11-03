@@ -2,7 +2,7 @@
 // roster adjustments, confirmation.
 import { z } from "zod";
 import { dbError, defineAction, PAGES, forbidden, notFound, requireEventOc, requireRole, uuid, ActionError, type ActionContext } from "@/lib/actions/core";
-import { allocate, type AllocationChoice, type Rank } from "@/lib/allocation";
+import { allocate, type AllocationChoice, type AllocationPerson, type Rank } from "@/lib/allocation";
 import { berlinInputToIso, monthLabel, monthOf } from "@/lib/dates";
 import { EVENT_TYPES } from "@/lib/labels";
 import { hasRole } from "@/lib/roles";
@@ -17,7 +17,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date (YYYY-MM-DD)
 const title = z.string().trim().min(1, "Required").max(200);
 const helpers = z.number().int().min(0).max(50);
 const eventType = z.enum(EVENT_TYPES as [string, ...string[]]).transform((t) => t as (typeof EVENT_TYPES)[number]);
-const rank = z.union([z.literal(1), z.literal(2), z.literal(3), z.null()]);
+const rank = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.null()]);
 /** Category and format (round 2026-11-01); a format brings its category (trigger). */
 const sorting = { category_id: uuid.nullable().optional(), format_id: uuid.nullable().optional() };
 
@@ -252,6 +252,10 @@ export const submitVolunteerForm = defineAction(
   z.object({
     cycle_id: uuid,
     note: z.string().trim().max(1000).default(""),
+    /** How many events this month; null = no limit. */
+    max_events: z.number().int().min(1).max(31).nullable().default(null),
+    /** How many of them as OC; null = no limit. */
+    max_oc: z.number().int().min(1).max(31).nullable().default(1),
     choices: z
       .array(z.object({ event_id: uuid, oc_rank: rank, helper_rank: rank }))
       .max(200)
@@ -259,7 +263,14 @@ export const submitVolunteerForm = defineAction(
       .transform((cs) => cs.filter((c) => c.oc_rank !== null || c.helper_rank !== null)),
   }),
   async (ctx, i) => {
-    const { error } = await ctx.supabase.rpc("submit_volunteer_form", { cycle: i.cycle_id, choices: i.choices, note: i.note });
+    const { error } = await ctx.supabase.rpc("submit_volunteer_form", {
+      cycle: i.cycle_id,
+      choices: i.choices,
+      note: i.note,
+      // Omitted = no limit (the function's default).
+      ...(i.max_events !== null && { max_events: i.max_events }),
+      ...(i.max_oc !== null && { max_oc: i.max_oc }),
+    });
     dbError(error);
     return { events: i.choices.length };
   },
@@ -281,25 +292,34 @@ export const clearVolunteerResponse = defineAction(
 /** Runs the automatic allocation on the form's answers and saves it (replacing any earlier run). */
 export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (ctx, { cycle_id }) => {
   requireRole(ctx, "events");
-  const [{ data: events, error: e1 }, { data: signups, error: e2 }] = await Promise.all([
+  const [{ data: events, error: e1 }, { data: signups, error: e2 }, { data: history, error: e3 }] = await Promise.all([
     ctx.supabase.from("events").select("id, starts_at, ends_at, helpers_needed, proposed_by").eq("cycle_id", cycle_id).eq("status", "scheduled"),
     ctx.supabase.rpc("cycle_signups", { cycle: cycle_id }),
+    ctx.supabase.rpc("allocation_history", { cycle: cycle_id }),
   ]);
-  dbError(e1 ?? e2);
+  dbError(e1 ?? e2 ?? e3);
   const choices: AllocationChoice[] = (signups ?? []).map((s) => ({
     profileId: s.profile_id,
     eventId: s.event_id,
     ocRank: s.oc_rank as Rank | null,
     helperRank: s.helper_rank as Rank | null,
-    submittedAt: s.submitted_at,
+  }));
+  const limits = new Map((signups ?? []).map((s) => [s.profile_id, { maxEvents: s.max_events, maxOc: s.max_oc }]));
+  const people: AllocationPerson[] = (history ?? []).map((h) => ({
+    profileId: h.profile_id,
+    ...limits.get(h.profile_id),
+    recentEvents: h.recent_events,
+    pastEvents: h.past_events,
+    unplacedLastCycle: h.unplaced_last_cycle,
   }));
   const result = allocate(
     (events ?? []).map((e) => ({ id: e.id, startsAt: e.starts_at, endsAt: e.ends_at, helpersNeeded: e.helpers_needed, defaultOcId: e.proposed_by })),
-    choices
+    choices,
+    { seed: cycle_id, people }
   );
   const rows = result.assignments.map((a) => ({ event_id: a.eventId, profile_id: a.profileId, role: a.role, source: a.source }));
   dbError((await ctx.supabase.rpc("save_allocation", { cycle: cycle_id, rows })).error);
-  return { assignments: rows.length, events: result.events, conflicts: result.conflicts };
+  return { assignments: rows.length, events: result.events, conflicts: result.conflicts, issues: result.issues, unplaced: result.unplaced.length, topChoices: result.topChoices };
 }, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 async function requireAdjustable(ctx: ActionContext, eventId: string) {

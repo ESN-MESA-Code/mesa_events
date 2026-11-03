@@ -100,7 +100,7 @@ describe("planning cycle end to end", () => {
     expect(data!.every((e) => e.status === "scheduled")).toBe(true);
   });
 
-  const submit = async (u: SeedUser, choices: Array<{ event_id: string; oc_rank: 1 | 2 | 3 | null; helper_rank: 1 | 2 | 3 | null }>) =>
+  const submit = async (u: SeedUser, choices: Array<{ event_id: string; oc_rank: 1 | 2 | 3 | 4 | 5 | null; helper_rank: 1 | 2 | 3 | 4 | 5 | null }>) =>
     P.submitVolunteerForm(await ctx(u), { cycle_id: cycleId, choices });
 
   it("volunteers answer once; the form locks after submitting", async () => {
@@ -165,6 +165,29 @@ describe("planning cycle end to end", () => {
     await admin.from("planning_cycles").delete().eq("id", other.id);
   });
 
+  it("an event whose proposer is its OC takes no OC answers, and the proposer cannot help on it", async () => {
+    const ocVote = await submit(USERS.volunteer2, [{ event_id: quizId, oc_rank: 1, helper_rank: null }]);
+    expect(ocVote).toMatchObject({ ok: false });
+    expect((ocVote as { message: string }).message).toMatch(/OC already/);
+    expect(await submit(USERS.member, [{ event_id: quizId, oc_rank: null, helper_rank: 1 }])).toMatchObject({ ok: false });
+    // Refused before anything is saved: both can still submit.
+    const events = await as(USERS.events);
+    const rows = (await events.rpc("cycle_signups", { cycle: cycleId })).data!;
+    expect(rows.some((r) => r.profile_id === USERS.volunteer2.id || r.profile_id === USERS.member.id)).toBe(false);
+  });
+
+  it("stores each volunteer's limits; the allocation history is for Events and executives", async () => {
+    const events = await as(USERS.events);
+    const rows = (await events.rpc("cycle_signups", { cycle: cycleId })).data!;
+    // The form's defaults: no limit on events, at most one OC role.
+    expect(rows.find((r) => r.profile_id === USERS.oc.id)).toMatchObject({ max_events: null, max_oc: 1 });
+    expect(await P.submitVolunteerForm(await ctx(USERS.member), { cycle_id: cycleId, choices: [{ event_id: hikeId, oc_rank: null, helper_rank: 4 }], max_events: 0 })).toMatchObject({ ok: false, error: "invalid_input" });
+    const history = (await events.rpc("allocation_history", { cycle: cycleId })).data!;
+    expect(history.map((h) => h.profile_id).sort()).toEqual([...new Set(rows.map((r) => r.profile_id))].sort());
+    expect(history.every((h) => typeof h.recent_events === "number" && typeof h.unplaced_last_cycle === "boolean")).toBe(true);
+    expect((await (await as(USERS.member)).rpc("allocation_history", { cycle: cycleId })).data).toEqual([]);
+  });
+
   it("the form closes at its deadline (pg_cron job)", async () => {
     await admin.from("planning_cycles").update({ form_closes_at: new Date(Date.now() - 3_600_000).toISOString() }).eq("id", cycleId);
     expect(await submit(USERS.member, [{ event_id: hikeId, oc_rank: 1, helper_rank: null }])).toMatchObject({ ok: false });
@@ -181,8 +204,8 @@ describe("planning cycle end to end", () => {
     const r = await P.runAllocation(await ctx(USERS.events), { cycle_id: cycleId });
     expect(r.ok).toBe(true);
     const res = (r as { data: { events: Record<string, { status: string; ocId: string | null; helperIds: string[] }> } }).data;
-    // Quiz: proposer (member) is OC by default; helpers by rank then time.
-    expect(res.events[quizId]).toMatchObject({ status: "staffed", ocId: USERS.member.id, helperIds: [USERS.oc.id, USERS.volunteer1.id] });
+    // Quiz: proposer (member) is OC by default. Helpers in rounds: volunteer1 in round 1, oc@ (already the hike's OC) in round 2.
+    expect(res.events[quizId]).toMatchObject({ status: "staffed", ocId: USERS.member.id, helperIds: [USERS.volunteer1.id, USERS.oc.id] });
     // Hike: oc@ wanted OC (2), helper@ helper (1).
     expect(res.events[hikeId]).toMatchObject({ status: "staffed", ocId: USERS.oc.id, helperIds: [USERS.helper.id] });
     expect(res.events[ghostId]).toMatchObject({ status: "dropped" });

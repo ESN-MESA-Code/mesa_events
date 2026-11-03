@@ -12,12 +12,15 @@ import { berlinDate, formatShortDate } from "@/lib/dates";
 import { rosterLoad, HEAVY_LOAD } from "@/lib/rosterLoad";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
+import { RANK_LABELS } from "@/lib/volunteer";
 
 export interface BoardPerson {
   id: string;
   name: string;
   email: string;
   wishes: Record<string, { oc: number | null; helper: number | null }>;
+  /** From the volunteer form: at most this many events; null = no limit. */
+  maxEvents?: number | null;
 }
 
 export interface BoardEvent {
@@ -32,7 +35,6 @@ export interface BoardEvent {
 }
 
 type DragData = { kind: "assignment"; assignmentId: string } | { kind: "person"; profileId: string };
-const RANK = ["", "top choice", "happy to", "if needed"];
 
 const STAFFING = {
   staffed: { label: "Staffed", tone: "green" },
@@ -152,7 +154,7 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
   const wishLabel = (p: BoardPerson, eventId: string) => {
     const w = p.wishes[eventId];
     if (!w) return null;
-    return [w.oc && `OC: ${RANK[w.oc]}`, w.helper && `helper: ${RANK[w.helper]}`].filter(Boolean).join(", ");
+    return [w.oc && `OC: ${RANK_LABELS[w.oc].toLowerCase()}`, w.helper && `helper: ${RANK_LABELS[w.helper].toLowerCase()}`].filter(Boolean).join(", ");
   };
 
   // Drag and drop only (the "Move to…" menu is gone, round 2026-10-30); the keyboard sensor still moves chips without a mouse.
@@ -214,9 +216,11 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                 heading,
                 <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable} highlight={count === 0}>
                   <span className="font-medium">{p.name}</span>
-                  <span className={cn("text-xs", count >= HEAVY_LOAD ? "font-semibold text-amber-700" : "text-gray-500")}>
+                  <span className={cn("text-xs", count >= HEAVY_LOAD || (p.maxEvents && count > p.maxEvents) ? "font-semibold text-amber-700" : "text-gray-500")}>
                     {" "}
-                    · {plural(Object.keys(p.wishes).length, "wish", "wishes")} · {count} assigned{count >= HEAVY_LOAD && " – a lot"}
+                    · {plural(Object.keys(p.wishes).length, "wish", "wishes")}
+                    {p.maxEvents && ` · max ${p.maxEvents}`} · {count} assigned
+                    {p.maxEvents && count > p.maxEvents ? " – more than they can do" : count >= HEAVY_LOAD && " – a lot"}
                   </span>
                   {days.length > 0 && <span className="block text-[11px] font-medium text-red-700">⚠ two events on {[...new Set(days)].join(", ")}</span>}
                 </Chip>,

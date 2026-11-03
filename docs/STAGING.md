@@ -129,7 +129,9 @@ The CI workflow builds and smoke-tests the staging image too (banner, noindex, r
 
 Open `https://<staging-domain>/login` → **Demo sign-in (staging)** → access code → pick a role.
 **Switch role** (in the amber banner) brings the picker back; **Demo outbox** shows what the
-platform would have posted.
+platform would have posted. Every page except the sign-in pages needs a session: a link opened in a
+browser that is not signed in lands on `/login`, and the demo sign-in then starts at the persona's
+own page, not the link's – use the banner's links after signing in.
 
 | Role | Demo person | Starts at | Shows |
 |---|---|---|---|
@@ -137,7 +139,7 @@ platform would have posted.
 | Member | Hannah Becker | Home | Volunteer form banner (not answered yet), calendar, own ideas, open slots to claim |
 | OC (organiser) | Chloé Dubois | Home | Her events today (attendance and cash box open), hand-ins (photos missing, list and cash box to sign off), claims needing Belege; descriptions: one to write for next month, one sent back, one with Comms; an office hour she leads next week; saved bank details, a calendar link |
 | Helper | Kwame Mensah | Home | Events he helps at, a drop-out, a slot he claimed, his claims, an office hour shift |
-| Comms team | Sofia Marino | Comms | Descriptions by stage (late, in review, approved, published), ESN Activities (with her access tokens), publishing schedule |
+| Comms team | Sofia Marino | Comms | Each event by stage (To write → In review → Approved · in the Chat space → pretix page → Advertised → Event happened → Report), the Advertisement schedule (Telegram previews with pictures, posts planned weeks ahead), default pictures, ESN Activities (with her access tokens) |
 | Finance team | Priya Raman | Finance | Claims in every status, the open payout batch, paid batches, an early payout; cash boxes with history (money in and out, a recount, a removed box), cash reports counting, to sign off, to check, to book; the ledger with missing Belege |
 | Treasurer | Mateo Álvarez | Finance | Finance plus rules and the pre-approval waiting for him |
 | HR | Ines Kraft | Internal | Office hours every Wednesday, Stammtisch every Thursday, Tuesday Talks, board meetings and internal events: staffed, a helper or the OC missing, cancelled, a full sign-up list |
@@ -146,23 +148,44 @@ platform would have posted.
 | Admin (IT) | Nadia Haddad | Admin | Roles, settings, jobs, **Reset demo data** |
 | Newcomer | Noor Al-Sayed | Confidentiality rules | What a new member sees first |
 
-### A 10-minute walkthrough
+### A 15-minute walkthrough: one month, end to end
 
-1. **(1 min) The idea.** As **Member**: Home shows the open volunteer form; Ideas → "Get inspired"
-   finds earlier pub quizzes and day trips (history from the bot); propose one.
-2. **(2 min) Planning the month.** **Events team** → Events: the month after next has its form open
-   (answers coming in); next month is allocated – open its roster board, move someone, see the
-   under-staffed trip and the event without an OC. This month: the stepper is at Descriptions.
-3. **(2 min) Running an event.** **OC**: Home lists today's Language Café – its attendance list is
-   open (QR code, kiosk, live names). Tomorrow's events: one short of a helper (she decides to run
-   it), one where a helper dropped out and someone claimed the slot.
-4. **(2 min) Comms.** **Comms team** → Comms: this month by stage – a late description (with the
-   reminder sent), one approved and ready to publish, a missed one, a cancellation after publishing
-   to handle; ESN Activities statuses; the publishing schedule. **Demo outbox**: the welcome
-   messages, the published post with @all, the drop-out notice.
-5. **(2 min) Money.** **Finance team**: claims from "not submitted" to "paid", the open batch of this
-   month, an early payout above €100; **Treasurer**: the pre-approval for the Prague trip.
-6. **(1 min) Oversight.** **Executive**: the same pages read-only, closed attendance lists with names.
+The demo holds four months at four stages, so one month can be followed from idea to payout
+without waiting for a deadline: month +3 has ideas but no cycle, month +2 has its volunteer form
+open with answers, month +1 is allocated with descriptions being written, and this month has events
+today, hand-ins and claims. Keep the **Demo outbox** open in a second tab for steps 4, 6 and 7.
+
+1. **(1 min) An idea.** **Member**: Home shows the planning timeline and the open volunteer form
+   in "Waiting for you"; Ideas shows which month new ideas go into and the countdown to the 7th;
+   "Get inspired" → "Propose this again" into month +3.
+2. **(2 min) Planning the month.** **Events team** → Events → "+ Plan a new month" → month +3 →
+   "Start planning": the stepper with the cycle's dates (7 / 10 / 15 / 20); accept the month's
+   ideas (Sledging at the Blomberg, Pancake Breakfast and the one just proposed), set type and
+   format, a meeting point apart from the location.
+3. **(1 min) The volunteer form.** Still Events: "Open volunteer form" (the deadline is prefilled
+   with the 15th; normally the form opens by itself on the 10th). **Member**: fill it in, rank OC and
+   helper – then it is locked.
+4. **(2 min) Allocation and roster.** **Events team** → month +2: "Close the form" → "Run
+   allocation" → the roster board with an under-staffed event; move someone → "Confirm roster".
+   **Demo outbox**: the Chat spaces and welcome messages (the jobs run every 30 s).
+5. **(1 min) The description.** **OC**: "Waiting for you" → the "Panel: Life after Erasmus"
+   description Comms sent back: the comment, the live preview, the 4,096 counter → submit.
+6. **(2 min) Comms.** **Comms team** → Comms by stage → the Erasmus panel in review → "Approve": it
+   goes to the Chat space by itself (**Demo outbox**: the post with @all). Advertisement schedule:
+   tick pretix for an event with an approved description, drag its Telegram chip onto a day, the
+   preview with the picture, confirm; big events of the next months are planned weeks ahead.
+7. **(1.5 min) Event day.** **OC**: today's Language Café – attendance open (QR code, kiosk, live
+   names), the cash box counted. **Helper**: drop out of an upcoming event; the slot is open to all
+   members and the OC is told (**Demo outbox**).
+8. **(1 min) Hand-in.** **OC**: the Tegernsee trip from two days ago → Hand-in: the to-do list
+   (photos, attendance list, report, Belege) → "Sign off & close".
+9. **(2 min) Money.** **Finance team**: claims from "not submitted" to "paid", the open batch of this
+   month, an early payout above €100, cash boxes, the ledger with missing Belege; **Treasurer**: the
+   pre-approval for the Prague trip.
+10. **(1.5 min) Oversight.** **Executive**: the same pages read-only, closed attendance lists with
+    names.
+
+The walkthrough changes the demo data: reset after a dry run, and again shortly before presenting.
 
 Dates move with today: rerun the reset before a presentation if the site has been up for weeks,
 so "today" and "next month" still match. The extra office hour "running now" starts half an hour

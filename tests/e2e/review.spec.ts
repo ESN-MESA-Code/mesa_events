@@ -99,6 +99,7 @@ test.describe("volunteer form, cycle month", () => {
       await page.goto("/volunteer");
       const form = page.getByRole("region", { name: `Volunteer form ${label}` });
       await form.getByRole("radiogroup", { name: `Helper for Form test ${month}` }).getByRole("radio", { name: "Top choice" }).check();
+      await form.getByRole("radiogroup", { name: /How many of these events can you do/ }).getByRole("radio", { name: "2" }).check();
       await form.getByRole("button", { name: "Submit my answers" }).click();
       await answerConfirm(page);
       return form;

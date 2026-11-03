@@ -85,10 +85,20 @@ export function AllocationControls({ cycleId, month, status }: { cycleId: string
             )
               return;
             run(runAllocation, { cycle_id: cycleId }, (d) => {
-              const r = d as { assignments: number; events: Record<string, { status: string }>; conflicts: unknown[] };
+              const r = d as { assignments: number; events: Record<string, { status: string }>; issues: unknown[]; unplaced: number; topChoices: { wished: number; met: number } };
               const st = Object.values(r.events).map((e) => e.status);
               setSummary(
-                `${r.assignments} assignments · ${st.filter((s) => s === "staffed").length} staffed · ${st.filter((s) => s === "understaffed" || s === "no_oc").length} short · ${st.filter((s) => s === "dropped").length} dropped · ${r.conflicts.length} time conflicts`
+                [
+                  `${r.assignments} assignments`,
+                  `${st.filter((s) => s === "staffed").length} staffed`,
+                  `${st.filter((s) => s === "understaffed" || s === "no_oc").length} short`,
+                  `${st.filter((s) => s === "dropped").length} dropped`,
+                  r.topChoices.wished > 0 && `${r.topChoices.met} of ${r.topChoices.wished} top choices met`,
+                  `${plural(r.unplaced, "volunteer")} without an event`,
+                  r.issues.length > 0 && `${plural(r.issues.length, "proposer")} with two overlapping events – the later one needs an OC from you`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               );
             });
           }}
