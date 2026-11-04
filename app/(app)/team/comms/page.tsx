@@ -124,15 +124,13 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader title="Comms" description="Each event of the month from its description to its report – approved descriptions go to the Chat space by themselves; then the pretix page and the advertising. What is next, and the action right there.">
-        <div className="flex flex-wrap items-center gap-3">
-          <MonthSelector
-            options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
-            current={month ? monthParam(month) : null}
-            path="/team/comms"
-            storageKey="mesa:month:comms"
-            explicit={!!parseMonthParam(sp.month)}
-          />
-        </div>
+        <MonthSelector
+          options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
+          current={month ? monthParam(month) : null}
+          path="/team/comms"
+          storageKey="mesa:month:comms"
+          explicit={!!parseMonthParam(sp.month)}
+        />
       </PageHeader>
       <CommsTabs current="stages" month={month ? monthParam(month) : null} executive={isExecutive} />
 

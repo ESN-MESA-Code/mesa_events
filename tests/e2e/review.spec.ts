@@ -142,6 +142,9 @@ test.describe("volunteer form, cycle month", () => {
     await page.goto(`/team/events/cycles/${cycleId}`);
     await expect(page.getByRole("heading", { name: cycleLabel(month) })).toBeVisible();
     await expect(page.getByTestId("cycle-stepper").locator('[aria-current="step"]')).toContainText("Volunteer form");
+    // Adding events is on the cycle's Schedule tab.
+    await page.getByRole("navigation", { name: "Cycle pages" }).getByRole("link", { name: "Schedule" }).click();
+    await page.waitForURL(/\/schedule$/);
     await page.getByRole("button", { name: "+ Add an event" }).click();
     await page.locator("#new-title").fill("Wrong month");
     const [y, m] = month.split("-").map(Number);

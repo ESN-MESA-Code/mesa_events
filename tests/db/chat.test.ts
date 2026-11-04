@@ -315,13 +315,20 @@ describe("cancelling and reopening (review 2026-10-29 A2)", () => {
     expect(count).toBe(2);
   });
 
-  it("the OC cancels an under-staffed event; without a space, OC and helpers get direct messages", async () => {
+  it("the OC asks to cancel an under-staffed event, the Events team cancels; without a space, OC and helpers get direct messages", async () => {
     const e = await createEvent({ title: `No space ${Math.random().toString(36).slice(2, 7)}`, oc: USERS.oc, helpers: [USERS.helper], helpers_needed: 3, starts_at: daysFromNow(16) });
     try {
       expect((await admin.from("events").select("status").eq("id", e.id).single()).data!.status).toBe("understaffed");
+      // The Events team decides cancellations: the OC can neither cancel nor decide "cancel", only ask.
       expect((await (await as(USERS.oc)).rpc("cancel_event", { event: e.id })).error?.code).toBe("42501");
-      expect((await R.decideUnderstaffed(await actionContext(USERS.oc), { event_id: e.id, decision: "cancel" })).ok).toBe(true);
+      expect((await (await as(USERS.oc)).rpc("decide_understaffed", { event: e.id, decision: "cancel" })).error?.code).toBe("42501");
+      expect((await R.decideUnderstaffed(await actionContext(USERS.oc), { event_id: e.id, decision: "cancel" })).ok).toBe(false);
+      expect((await R.requestCancellation(await actionContext(USERS.oc), { event_id: e.id, reason: "Too few helpers" })).ok).toBe(true);
+      expect((await admin.from("events").select("status").eq("id", e.id).single()).data!.status).toBe("understaffed");
+      expect((await R.decideUnderstaffed(await actionContext(USERS.events), { event_id: e.id, decision: "cancel" })).ok).toBe(true);
       expect((await admin.from("events").select("status, cancel_reason").eq("id", e.id).single()).data).toEqual({ status: "cancelled", cancel_reason: "Not enough people" });
+      // Cancelled another way, the open request is settled.
+      expect((await admin.from("cancellation_requests").select("decision").eq("event_id", e.id).single()).data).toEqual({ decision: "cancelled" });
       await runJobs();
       for (const email of ["oc@esnmesa.org", "helper@esnmesa.org"]) {
         const { data } = await admin.from("fake_chat_messages").select("text").eq("space", `dm:${email}`).like("text", `%${e.title}%is cancelled%`);

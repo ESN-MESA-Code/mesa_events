@@ -156,15 +156,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Comms" description="Every event is advertised on Telegram and Instagram once its pretix page is up: tick pretix off, drag the event from the list onto a day, bundle posts, post. The list also holds the events of the next months, so big ones can be advertised weeks ahead. Telegram posts go out by themselves once confirmed.">
-        <div className="flex flex-wrap items-center gap-3">
-          <MonthSelector
-            options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
-            current={monthParam(month)}
-            path="/team/comms/schedule"
-            storageKey="mesa:month:schedule"
-            explicit={!!parseMonthParam(sp.month)}
-          />
-        </div>
+        <MonthSelector
+          options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
+          current={monthParam(month)}
+          path="/team/comms/schedule"
+          storageKey="mesa:month:schedule"
+          explicit={!!parseMonthParam(sp.month)}
+        />
       </PageHeader>
       <CommsTabs current="schedule" month={monthParam(month)} executive={viewer.roles.includes("executive")} />
       {!channels.length ? (
