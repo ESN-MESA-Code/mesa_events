@@ -1270,3 +1270,29 @@ Decisions:
 - **Chat:** mentions, reminders and direct messages go to every OC; the space description lists
   all OC names. The attendance list names every OC who may sign off.
 
+
+## 2026-11-04 – Calendar redesign (month grid, day list, phones)
+
+- **One set of entries, two layouts.** The page builds one list of entries (ESN events, internal
+  events, next month's cycle deadlines) and shows it as a month grid (`MonthGrid.tsx`) or a day
+  list (`DayList.tsx`, `?view=list`). On phones (below `md`) both views are the day list under a
+  mini month (`MiniMonth.tsx`); the Month/List switch is hidden there. Grouping, folding, week
+  labels and venues are pure (`lib/calendarView.ts`).
+- **One colour per category** (`lib/calendarStyle.ts`): a left bar in the grid and the list, a dot
+  in the mini month. Deadlines are red with a clock (they were dashed amber, like a Stammtisch).
+- **Grid:** visible month title (the month select styled as a heading, `MonthSelector title`),
+  a Today button, today as a filled day number; past days grey without fading their text; the
+  neighbouring months' dates in the first and last weeks; titles wrap to two lines; the viewer's
+  part and open slots are icons (with the text for screen readers and on hover) instead of badges;
+  more than three events → two and "+N more", which opens the list at that day.
+- **List:** days are headings (sticky), weeks are labelled, time in its own column; the type only
+  when it adds something ("Standard" and labels the title repeats are dropped); "You" and "Needs"
+  are separate columns ("You: OC / helper / signed up" alike for ESN and internal events);
+  "Completed" is dropped (past rows are grey), cancelled rows are struck through; the venue (up to
+  the first comma) instead of the full address, which shows on hover; deadlines are rows on their
+  day.
+- **Today first:** in the current month the days before today fold into "Show 1–3 Nov · 6 earlier
+  events"; today always has a heading ("Nothing planned today" when empty). `#day-YYYY-MM-DD`
+  links (Today, "+N more", mini-month taps) open the fold when needed (`reveal.ts`).
+- **"Mine" filter** (`?show=mine`): only what the member is OC, helper or signed up for.
+- **Phones:** Subscribe moves under the list (left-aligned so its panel fits the screen).

@@ -1,33 +1,40 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { addMonths, berlinDate, berlinTime, cycleLabel, formatDate, formatDateTime, monthLabel, monthOf, monthStartIso, nextMonthStartIso, nowMs } from "@/lib/dates";
-import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS } from "@/lib/labels";
-import { INTERNAL_KIND_CHIPS, INTERNAL_KIND_LABELS, INTERNAL_KIND_TONES, internalPath, type InternalKind } from "@/lib/internal";
+import { addMonths, berlinDate, berlinTime, formatDate, formatDateTime, monthLabel, monthOf, monthStartIso, nextMonthStartIso, nowMs } from "@/lib/dates";
+import { EVENT_TYPE_LABELS } from "@/lib/labels";
+import { INTERNAL_KIND_LABELS, internalPath, type InternalKind } from "@/lib/internal";
 import { calendarWeeks, monthParam, parseMonthParam } from "@/lib/month";
-import { Badge, Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
+import { fillWeek, groupByDay, splitEarlier, typeLabelFor, withToday, type CalEntry, type Category } from "@/lib/calendarView";
+import { CATEGORY_ORDER, CATEGORY_STYLE } from "@/lib/calendarStyle";
+import { buttonVariants, Card, CardContent, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
 import { CalendarSubscribe } from "@/components/CalendarSubscribe";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 import { cycleTimeline, milestones } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
+import { MonthGrid } from "./MonthGrid";
+import { DayList } from "./DayList";
+import { MiniMonth } from "./MiniMonth";
+import { RevealOnHash } from "./RevealOnHash";
 
 export const metadata: Metadata = { title: "Calendar" };
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const SHOW = { all: "Everything", events: "ESN events", internal: "Internal" } as const;
+const SHOW = { all: "Everything", events: "ESN events", internal: "Internal", mine: "Mine" } as const;
 type Show = keyof typeof SHOW;
 
-// The internal calendar, one month at a time: a month grid or an aligned
-// list (?view=list) of every scheduled event (RLS decides what a member
-// sees), with the member's own role and open slots anyone can claim; and
-// the internal events, meetings and office hours (round 2026-10-30; board
-// meetings only for the executive board), and the calendar subscription.
+// The internal calendar, one month at a time (redesign 2026-11-04): on wide
+// screens a month grid or a day list (?view=list); on phones a mini month
+// over the day list. Every scheduled event (RLS decides what a member sees)
+// with the member's own part and the open slots anyone can claim; the
+// internal events, meetings and office hours (board meetings only for the
+// executive board); next month's cycle deadlines on their days; "Mine" for
+// what the member is part of; and the calendar subscription.
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; view?: string; show?: string }> }) {
   const sp = await searchParams;
   const view = sp.view === "list" ? "list" : "calendar";
-  const show: Show = sp.show === "events" || sp.show === "internal" ? sp.show : "all";
+  const show: Show = sp.show === "events" || sp.show === "internal" || sp.show === "mine" ? sp.show : "all";
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
   const now = nowMs();
@@ -41,7 +48,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       ? Promise.resolve({ data: [] })
       : supabase
           .from("events")
-          .select("id, title, type, starts_at, location, status, helpers_needed")
+          .select("id, title, type, starts_at, location, status")
           .gte("starts_at", monthStartIso(month))
           .lt("starts_at", nextMonthStartIso(month))
           .neq("status", "draft")
@@ -69,226 +76,159 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const myRole = new Map((mine ?? []).map((a) => [a.event_id, a.role]));
   const myInternal = new Map((mineInternal ?? []).map((p) => [p.internal_event_id, p.role]));
   const openSlots = new Map((slots ?? []).map((s) => [s.event_id, s]));
-  const list = events ?? [];
-  const inner = (internals ?? []).map((i) => ({ ...i, kind: i.kind as InternalKind }));
   const today = berlinDate(new Date(now).toISOString());
-  // The timeline of next month's cycle falls in this month (round 2026-11-02): its deadlines on their days.
+
+  // Everything in the month as entries: ESN events, internal ones, and the
+  // deadlines of next month's cycle, which fall in this month (round 2026-11-02).
+  const esnEntries: CalEntry[] = (events ?? []).map((e) => {
+    const slot = openSlots.get(e.id);
+    const role = myRole.get(e.id);
+    const upcoming = Date.parse(e.starts_at) > now;
+    const needs: CalEntry["needs"] = [];
+    if (upcoming && slot?.open_oc) needs.push({ text: "OC needed", tone: "red" });
+    if (upcoming && slot && slot.open_helpers > 0) needs.push({ text: `${plural(slot.open_helpers, "helper slot")} open`, tone: "amber" });
+    if (upcoming && !needs.length && e.status === "understaffed") needs.push({ text: "Under-staffed", tone: "amber" });
+    const day = berlinDate(e.starts_at);
+    return {
+      key: `e-${e.id}`,
+      day,
+      time: berlinTime(e.starts_at),
+      at: e.starts_at,
+      title: e.title,
+      href: `/events/${e.id}?from=calendar`,
+      category: "esn",
+      typeLabel: e.type === "standard" ? null : EVENT_TYPE_LABELS[e.type],
+      cancelled: e.status === "cancelled",
+      past: day < today,
+      you: role ? `You: ${role === "oc" ? "OC" : "helper"}` : null,
+      needs,
+      place: e.location,
+    };
+  });
+  const internalEntries: CalEntry[] = (internals ?? []).map((i) => {
+    const kind = i.kind as InternalKind;
+    const role = myInternal.get(i.id);
+    const day = berlinDate(i.starts_at);
+    return {
+      key: `i-${i.id}`,
+      day,
+      time: berlinTime(i.starts_at),
+      at: i.starts_at,
+      title: i.title,
+      href: internalPath(kind, i.id),
+      category: kind,
+      typeLabel: typeLabelFor(i.title, INTERNAL_KIND_LABELS[kind]),
+      cancelled: i.status === "cancelled",
+      past: day < today,
+      you: role ? `You: ${role === "oc" ? "OC" : role === "helper" ? "helper" : "signed up"}` : null,
+      needs: [],
+      place: i.location,
+      testId: `cal-internal-${kind}`,
+    };
+  });
   const short = monthLabel(addMonths(month, 1)).split(" ")[0];
-  const deadlines =
+  const deadlineEntries: CalEntry[] =
     show === "internal"
       ? []
       : milestones(cycleTimeline(addMonths(month, 1), days), now).map((m) => ({
-          ...m,
+          key: `d-${m.id}`,
           day: berlinDate(m.at),
-          text: m.id === "ideas" ? `Ideas for ${short} due` : m.id === "formOpens" ? `Volunteer form for ${short} opens` : m.id === "formCloses" ? `Sign-up for ${short} closes` : `${short} descriptions due`,
+          time: berlinTime(m.at),
+          at: m.at,
+          title: m.id === "ideas" ? `Ideas for ${short} due` : m.id === "formOpens" ? `Volunteer form for ${short} opens` : m.id === "formCloses" ? `Sign-up for ${short} closes` : `${short} descriptions due`,
+          href: null,
+          category: "deadline",
+          typeLabel: null,
+          cancelled: false,
+          past: m.state === "passed",
+          you: null,
+          needs: [],
+          place: null,
+          testId: `cal-deadline-${m.id}`,
         }));
-  const deadlineStrip = deadlines.length > 0 && (
-    <p className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-900" data-testid="calendar-deadlines">
-      {deadlines.map((d) => (
-        <span key={d.id} className={cn(d.state === "passed" && "text-gray-400 line-through")}>
-          ⏰ {formatDate(d.at).slice(0, -5)} · {d.text}
-        </span>
-      ))}
-    </p>
-  );
-  const query = (o: { view?: string; show?: Show }) => {
+  const entries = [...esnEntries, ...internalEntries].filter((e) => show !== "mine" || e.you).concat(deadlineEntries);
+  const hasEvents = entries.some((e) => e.category !== "deadline");
+
+  const groups = hasEvents ? withToday(groupByDay(entries), today, month) : groupByDay(entries);
+  const { earlier, rest } = splitEarlier(groups, today, month === thisMonth);
+  const weeks = calendarWeeks(month).map(fillWeek);
+  const dots: Record<string, string[]> = {};
+  for (const g of groups) {
+    const cats = new Set<Category>(g.entries.filter((e) => !e.cancelled).map((e) => e.category));
+    dots[g.day] = CATEGORY_ORDER.filter((c) => cats.has(c))
+      .sort((a, b) => Number(b === "deadline") - Number(a === "deadline"))
+      .slice(0, 3)
+      .map((c) => CATEGORY_STYLE[c].dot);
+  }
+  const startWeek = Math.max(0, weeks.findIndex((w) => w.some((d) => d.inMonth && d.day === today)));
+
+  const query = (o: { view?: string; show?: Show; month?: string }) => {
     const v = o.view ?? view;
     const s = o.show ?? show;
-    return `/calendar?month=${monthParam(month)}${v === "list" ? "&view=list" : ""}${s !== "all" ? `&show=${s}` : ""}`;
+    return `/calendar?month=${monthParam(o.month ?? month)}${v === "list" ? "&view=list" : ""}${s !== "all" ? `&show=${s}` : ""}`;
   };
-  // ESN events and internal ones in one list, by time.
-  const rows = [
-    ...list.map((e) => ({ at: e.starts_at, key: `e-${e.id}`, event: e, internal: null })),
-    ...inner.map((i) => ({ at: i.starts_at, key: `i-${i.id}`, event: null, internal: i })),
-  ].sort((a, b) => a.at.localeCompare(b.at));
-
-  const chipsFor = (e: (typeof list)[number], small = false) => {
-    const slot = openSlots.get(e.id);
-    const role = myRole.get(e.id);
-    return (
-      <>
-        {role && <Badge tone="blue">{small ? (role === "oc" ? "OC" : "helper") : `You: ${role === "oc" ? "OC" : "helper"}`}</Badge>}
-        {slot && (slot.open_oc || slot.open_helpers > 0) && <Badge tone="amber">{slot.open_oc ? "OC needed" : small ? "slot open" : `${plural(slot.open_helpers, "helper slot")} open`}</Badge>}
-      </>
-    );
-  };
-  const internalRole = (id: string) => {
-    const r = myInternal.get(id);
-    return r ? <Badge tone="blue">{r === "oc" ? "OC" : r === "helper" ? "helper" : "signed up"}</Badge> : null;
-  };
+  const segment = (active: boolean) =>
+    cn("flex-1 px-2.5 py-1.5 text-center whitespace-nowrap first:rounded-l-md last:rounded-r-md md:flex-none md:px-3", active ? "bg-esn text-white" : "bg-white text-gray-700 hover:text-esn");
+  const empty = show === "mine" ? `You're not part of anything in ${monthLabel(month)}.` : `Nothing in ${monthLabel(month)}.`;
+  const subscribe = <CalendarSubscribe feed={feed ? { since: formatDate(feed.created_at), lastUsed: feed.last_used_at ? formatDateTime(feed.last_used_at) : null } : null} />;
 
   return (
     <>
-      <PageHeader title="Calendar" description="All scheduled MESA events, and the internal events, meetings and office hours. Open slots can be claimed by any member.">
-        <div className="flex flex-wrap items-center gap-3">
-          <nav aria-label="Show" className="flex rounded-md border border-gray-300 text-sm" data-testid="calendar-show">
-            {(Object.keys(SHOW) as Show[]).map((s) => (
-              <Link key={s} href={query({ show: s })} aria-current={show === s ? "page" : undefined} className={cn("px-3 py-1.5 first:rounded-l-md last:rounded-r-md", show === s ? "bg-esn text-white" : "bg-white text-gray-700 hover:text-esn")}>
-                {SHOW[s]}
-              </Link>
-            ))}
-          </nav>
-          <nav aria-label="View" className="flex rounded-md border border-gray-300 text-sm">
-            {(["calendar", "list"] as const).map((v) => (
-              <Link key={v} href={query({ view: v })} aria-current={view === v ? "page" : undefined} className={cn("px-3 py-1.5 first:rounded-l-md last:rounded-r-md", view === v ? "bg-esn text-white" : "bg-white text-gray-700 hover:text-esn")}>
-                {v === "calendar" ? "Calendar" : "List"}
-              </Link>
-            ))}
-          </nav>
+      <PageHeader title="Calendar" description={<span className="hidden sm:inline">ESN events, internal events, meetings and office hours. Any member can claim an open slot.</span>} />
+
+      <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="flex w-full min-w-0 items-center gap-2 md:w-auto">
+          <h2 className="sr-only">{monthLabel(month)}</h2>
           <MonthSelector
-            options={[...months].sort().map((m) => ({ value: monthParam(m), label: monthLabel(m), href: `/calendar?month=${monthParam(m)}${view === "list" ? "&view=list" : ""}${show !== "all" ? `&show=${show}` : ""}` }))}
+            title
+            options={[...months].sort().map((m) => ({ value: monthParam(m), label: monthLabel(m), href: query({ month: m }) }))}
             current={monthParam(month)}
             path="/calendar"
             storageKey="mesa:month:calendar"
             explicit={!!parseMonthParam(sp.month)}
           />
-          <CalendarSubscribe feed={feed ? { since: formatDate(feed.created_at), lastUsed: feed.last_used_at ? formatDateTime(feed.last_used_at) : null } : null} />
+          <Link href={`${query({ month: thisMonth })}#day-${today}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto md:ml-1")} data-testid="calendar-today">
+            Today
+          </Link>
         </div>
-      </PageHeader>
+        <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
+          <nav aria-label="Show" className="flex w-full rounded-md border border-gray-300 text-sm md:w-auto" data-testid="calendar-show">
+            {(Object.keys(SHOW) as Show[]).map((s) => (
+              <Link key={s} href={query({ show: s })} aria-current={show === s ? "page" : undefined} className={segment(show === s)}>
+                {SHOW[s]}
+              </Link>
+            ))}
+          </nav>
+          <nav aria-label="View" className="hidden rounded-md border border-gray-300 text-sm md:flex">
+            {(["calendar", "list"] as const).map((v) => (
+              <Link key={v} href={query({ view: v })} aria-current={view === v ? "page" : undefined} className={segment(view === v)}>
+                {v === "calendar" ? "Month" : "List"}
+              </Link>
+            ))}
+          </nav>
+          <div className="hidden md:block">{subscribe}</div>
+        </div>
+      </div>
 
-      {view === "calendar" ? (
-        <Card>
-          <CardContent className="pt-4">
-            <h2 className="sr-only">{cycleLabel(month)}</h2>
-            <div className="hidden sm:block" data-testid="calendar-grid">
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
-                {WEEKDAYS.map((d) => (
-                  <span key={d}>{d}</span>
-                ))}
-              </div>
-              <div className="mt-1 grid grid-cols-7 gap-1">
-                {calendarWeeks(month)
-                  .flat()
-                  .map((day, i) =>
-                    day ? (
-                      <div key={day} className={cn("min-h-24 rounded-md border p-1 space-y-1", day < today ? "border-gray-100 bg-gray-50 opacity-60" : day === today ? "border-esn/40 bg-white" : "border-gray-200 bg-white")}>
-                        <p className={cn("text-[11px] font-semibold tabular-nums", day === today ? "text-esn" : "text-gray-500")}>{Number(day.slice(8))}</p>
-                        {deadlines
-                          .filter((d) => d.day === day)
-                          .map((d) => (
-                            <p key={d.id} className="rounded border border-dashed border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[11px] leading-tight text-amber-900" data-testid={`cal-deadline-${d.id}`}>
-                              ⏰ {d.text}
-                            </p>
-                          ))}
-                        {list
-                          .filter((e) => berlinDate(e.starts_at) === day)
-                          .map((e) => (
-                            <Link
-                              key={e.id}
-                              href={`/events/${e.id}?from=calendar`}
-                              className={cn(
-                                "block rounded border px-1.5 py-1 text-[11px] leading-tight",
-                                e.status === "cancelled" ? "border-gray-200 bg-gray-100 text-gray-500 line-through" : "border-esn/30 bg-esn/10 text-esn-dark hover:bg-esn/20"
-                              )}
-                            >
-                              <span className="font-semibold tabular-nums">{berlinTime(e.starts_at)}</span> {e.title}
-                              <span className="mt-0.5 flex flex-wrap gap-0.5">{chipsFor(e, true)}</span>
-                            </Link>
-                          ))}
-                        {inner
-                          .filter((e) => berlinDate(e.starts_at) === day)
-                          .map((e) => (
-                            <Link
-                              key={e.id}
-                              href={internalPath(e.kind, e.id)}
-                              data-testid={`cal-internal-${e.kind}`}
-                              className={cn("block rounded border px-1.5 py-1 text-[11px] leading-tight", e.status === "cancelled" ? "border-gray-200 bg-gray-100 text-gray-500 line-through" : INTERNAL_KIND_CHIPS[e.kind])}
-                            >
-                              <span className="font-semibold tabular-nums">{berlinTime(e.starts_at)}</span> {e.title}
-                              <span className="mt-0.5 flex flex-wrap gap-0.5">{internalRole(e.id)}</span>
-                            </Link>
-                          ))}
-                      </div>
-                    ) : (
-                      <div key={`blank-${i}`} aria-hidden="true" />
-                    )
-                  )}
-              </div>
-              {show !== "events" && (
-                <p className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
-                  <span className="rounded border border-esn/30 bg-esn/10 px-1.5 text-esn-dark">ESN event</span>
-                  {(Object.keys(INTERNAL_KIND_LABELS) as InternalKind[])
-                    .filter((k) => inner.some((e) => e.kind === k))
-                    .map((k) => (
-                      <span key={k} className={cn("rounded border px-1.5", INTERNAL_KIND_CHIPS[k])}>
-                        {INTERNAL_KIND_LABELS[k]}
-                      </span>
-                    ))}
-                </p>
-              )}
-            </div>
-            {/* Phones: the deadlines, then the days with events as a list. */}
-            <div className="sm:hidden">{deadlineStrip}</div>
-            <ol className="sm:hidden divide-y divide-gray-100">
-              {!rows.length && <EmptyState>Nothing in {monthLabel(month)}.</EmptyState>}
-              {rows.map((r) =>
-                r.event ? (
-                  <li key={r.key}>
-                    <Link href={`/events/${r.event.id}?from=calendar`} className="flex flex-wrap items-center gap-2 py-2">
-                      <span className="w-24 text-sm tabular-nums text-gray-600">{formatDateTime(r.event.starts_at).slice(0, 10)}</span>
-                      <span className="font-medium">{r.event.title}</span>
-                      {chipsFor(r.event, true)}
-                    </Link>
-                  </li>
-                ) : (
-                  <li key={r.key}>
-                    <Link href={internalPath(r.internal!.kind, r.internal!.id)} className="flex flex-wrap items-center gap-2 py-2">
-                      <span className="w-24 text-sm tabular-nums text-gray-600">{formatDateTime(r.internal!.starts_at).slice(0, 10)}</span>
-                      <span className="font-medium">{r.internal!.title}</span>
-                      <Badge tone={INTERNAL_KIND_TONES[r.internal!.kind]}>{INTERNAL_KIND_LABELS[r.internal!.kind]}</Badge>
-                      {internalRole(r.internal!.id)}
-                    </Link>
-                  </li>
-                )
-              )}
-            </ol>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            {deadlineStrip && <div className="px-4 pt-3">{deadlineStrip}</div>}
-            {!rows.length ? (
-              <EmptyState>Nothing in {monthLabel(month)}.</EmptyState>
-            ) : (
-              // One grid for all rows: date, title, type, status/role/slot and place line up in columns.
-              <ul className="divide-y divide-gray-100" data-testid="calendar-list">
-                {rows.map((r) => {
-                  const e = r.event;
-                  const i = r.internal;
-                  return (
-                    <li key={r.key}>
-                      <Link
-                        href={e ? `/events/${e.id}?from=calendar` : internalPath(i!.kind, i!.id)}
-                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-gray-50 md:grid-cols-[11rem_minmax(0,1fr)_7.5rem_13rem_12rem]"
-                      >
-                        <span className="col-span-2 text-sm tabular-nums text-gray-600 md:col-span-1">{formatDateTime(r.at)}</span>
-                        <span className="min-w-0 truncate font-medium text-gray-900">{e?.title ?? i!.title}</span>
-                        <span>{e ? <Badge>{EVENT_TYPE_LABELS[e.type]}</Badge> : <Badge tone={INTERNAL_KIND_TONES[i!.kind]}>{INTERNAL_KIND_LABELS[i!.kind]}</Badge>}</span>
-                        <span className="col-span-2 flex flex-wrap gap-1 md:col-span-1">
-                          {e ? (
-                            <>
-                              {e.status !== "confirmed" && e.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[e.status]}>{EVENT_STATUS_LABELS[e.status]}</Badge>}
-                              {chipsFor(e, false)}
-                            </>
-                          ) : (
-                            <>
-                              {i!.status === "cancelled" && <Badge tone="red">Cancelled</Badge>}
-                              {internalRole(i!.id)}
-                            </>
-                          )}
-                        </span>
-                        <span className="col-span-2 truncate text-xs text-gray-500 md:col-span-1">{e?.location ?? i!.location}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <MiniMonth weeks={weeks} today={today} dots={dots} startWeek={startWeek} />
 
+      <Card>
+        {view === "calendar" && (
+          <CardContent className="hidden pt-4 md:block">
+            <MonthGrid month={month} today={today} entries={entries} moreHref={(day) => `${query({ view: "list" })}#day-${day}`} />
+          </CardContent>
+        )}
+        <div className={cn(view === "calendar" && "md:hidden")}>
+          <DayList groups={rest} earlier={earlier} today={today} empty={empty} />
+        </div>
+      </Card>
+      <RevealOnHash page={query({})} />
+
+      {/* Phones: subscribing sits under the list, not in the crowded top rows. Left-aligned so its panel fits. */}
+      <div className="mt-6 space-y-2 md:hidden">
+        <p className="text-sm text-gray-500">Want these in your phone&apos;s calendar app?</p>
+        {subscribe}
+      </div>
     </>
   );
 }

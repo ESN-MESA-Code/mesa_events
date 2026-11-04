@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Select, buttonVariants } from "@/components/ui";
 import { neighbours } from "@/lib/month";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function MonthSelector({
   storageKey,
   explicit,
   extra,
+  title = false,
 }: {
   options: MonthChoice[];
   current: string | null;
@@ -54,6 +56,8 @@ export function MonthSelector({
   explicit: boolean;
   /** An extra entry at the end, e.g. "+ Plan a new month". */
   extra?: { label: string; href: string };
+  /** The month as the page's heading (the Calendar): quiet arrows, a large month name. */
+  title?: boolean;
 }) {
   const router = useRouter();
   const values = options.map((o) => o.value);
@@ -71,23 +75,30 @@ export function MonthSelector({
   }, [explicit, current, storageKey]);
 
   const { prev, next } = current ? neighbours(values, current) : { prev: null, next: null };
-  const arrow = (target: string | null, label: string, text: string) =>
-    target ? (
-      <Link href={href(target)} aria-label={label} className={buttonVariants({ variant: "outline", size: "sm" })} data-testid={`month-arrow-${text === "←" ? "prev" : "next"}`}>
-        {text}
+  const arrowClass = title ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-gray-700 hover:bg-gray-100 hover:text-esn" : buttonVariants({ variant: "outline", size: "sm" });
+  const arrow = (target: string | null, label: string, text: string) => {
+    const shown = title ? text === "←" ? <ChevronLeft className="h-5 w-5" aria-hidden="true" /> : <ChevronRight className="h-5 w-5" aria-hidden="true" /> : text;
+    return target ? (
+      <Link href={href(target)} aria-label={label} className={arrowClass} data-testid={`month-arrow-${text === "←" ? "prev" : "next"}`}>
+        {shown}
       </Link>
     ) : (
-      <span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "opacity-40")}>
-        {text}
+      <span aria-hidden="true" className={cn(arrowClass, "opacity-40")}>
+        {shown}
       </span>
     );
+  };
 
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2" data-testid="month-selector">
+    <div className={cn("flex min-w-0 max-w-full items-center", title ? "gap-0.5" : "gap-2")} data-testid="month-selector">
       {arrow(prev, "Previous month", "←")}
       <Select
         aria-label="Month"
-        className="w-auto min-w-0 flex-1 sm:max-w-[22rem] sm:flex-none"
+        className={
+          title
+            ? "w-auto min-w-0 cursor-pointer border-transparent bg-transparent px-1.5 py-1 pr-7 text-lg font-bold text-gray-900 hover:border-gray-200 sm:text-xl"
+            : "w-auto min-w-0 flex-1 sm:max-w-[22rem] sm:flex-none"
+        }
         value={current ?? ""}
         onChange={(e) => {
           const v = e.target.value;
