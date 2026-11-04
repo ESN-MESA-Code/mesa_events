@@ -1295,4 +1295,7 @@ Decisions:
   events"; today always has a heading ("Nothing planned today" when empty). `#day-YYYY-MM-DD`
   links (Today, "+N more", mini-month taps) open the fold when needed (`reveal.ts`).
 - **"Mine" filter** (`?show=mine`): only what the member is OC, helper or signed up for.
+- **Office hours are ESN events** (asked by the user): the "ESN events" filter shows them, the
+  "Internal" one doesn't, and old `/office-hours` links open "ESN events". They keep their own
+  grey colour, next to ESN events in the legend. (They are still stored as an internal kind.)
 - **Phones:** Subscribe moves under the list (left-aligned so its panel fits the screen).

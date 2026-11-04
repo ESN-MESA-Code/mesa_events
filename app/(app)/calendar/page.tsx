@@ -28,8 +28,8 @@ type Show = keyof typeof SHOW;
 // screens a month grid or a day list (?view=list); on phones a mini month
 // over the day list. Every scheduled event (RLS decides what a member sees)
 // with the member's own part and the open slots anyone can claim; the
-// internal events, meetings and office hours (board meetings only for the
-// executive board); next month's cycle deadlines on their days; "Mine" for
+// office hours (ESN events, under "ESN events"), the internal events and
+// meetings (board meetings only for the executive board); next month's cycle deadlines on their days; "Mine" for
 // what the member is part of; and the calendar subscription.
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; view?: string; show?: string }> }) {
   const sp = await searchParams;
@@ -56,9 +56,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           // History imported from the bot is for "Get inspired" on /ideas, not the calendar.
           .eq("source", "platform")
           .order("starts_at"),
-    show === "events"
-      ? Promise.resolve({ data: [] })
-      : supabase.from("internal_events").select("id, kind, title, starts_at, location, status").gte("starts_at", monthStartIso(month)).lt("starts_at", nextMonthStartIso(month)).order("starts_at"),
+    // Office hours are ESN events (the office is open to students), not internal ones (2026-11-04).
+    (() => {
+      const q = supabase.from("internal_events").select("id, kind, title, starts_at, location, status").gte("starts_at", monthStartIso(month)).lt("starts_at", nextMonthStartIso(month));
+      return (show === "events" ? q.eq("kind", "office_hour") : show === "internal" ? q.neq("kind", "office_hour") : q).order("starts_at");
+    })(),
     supabase.from("assignments").select("event_id, role").eq("profile_id", viewer.id).eq("status", "active"),
     supabase.from("internal_event_people").select("internal_event_id, role").eq("profile_id", viewer.id),
     supabase.rpc("open_slots"),
@@ -174,7 +176,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Calendar" description={<span className="hidden sm:inline">ESN events, internal events, meetings and office hours. Any member can claim an open slot.</span>} />
+      <PageHeader title="Calendar" description={<span className="hidden sm:inline">ESN events and office hours, internal events and meetings. Any member can claim an open slot.</span>} />
 
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex w-full min-w-0 items-center gap-2 md:w-auto">

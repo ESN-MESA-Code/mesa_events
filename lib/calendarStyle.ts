@@ -14,5 +14,5 @@ export const CATEGORY_STYLE: Record<Category, { label: string; bar: string; chip
   deadline: { label: "Deadline", bar: "border-red-400", chip: "border border-dashed border-red-300 bg-red-50/60 text-red-800", dot: "bg-red-500" },
 };
 
-/** Legend and dot order. */
-export const CATEGORY_ORDER: Category[] = ["esn", "internal", "stammtisch", "tuesday_talk", "board_meeting", "office_hour", "deadline"];
+/** Legend and dot order: the ESN side (events, office hours) first. */
+export const CATEGORY_ORDER: Category[] = ["esn", "office_hour", "internal", "stammtisch", "tuesday_talk", "board_meeting", "deadline"];
