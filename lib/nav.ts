@@ -29,11 +29,11 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
     { href: "/", label: "Home" },
     { href: "/me", label: "My events" },
     // Claims follow the money, not the events.
-    { href: "/me/reimbursements", label: "Reimbursements" },
+    { href: "/me/reimbursements", label: "Expenses" },
     ...(volunteer.open ? [{ href: "/volunteer", label: "Volunteer", badge: volunteer.submitted ? undefined : "1" }] : []),
     { href: "/ideas", label: "Ideas" },
     { href: "/calendar", label: "Calendar" },
-    { href: "/leaderboard", label: "Leaderboard" },
+    { href: "/leaderboard", label: "Ranking" },
   ];
   const exec = roles.includes("executive");
   const team: NavItem[] = [];
@@ -48,7 +48,7 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
   return { personal, team };
 }
 
-/** Whether `href` is the current section ("/" and My events only on the page itself – Reimbursements sits under /me). */
+/** Whether `href` is the current section ("/" and My events only on the page itself – Expenses sits under /me). */
 export function isActive(pathname: string, href: string): boolean {
   return href === "/" || href === "/me" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }

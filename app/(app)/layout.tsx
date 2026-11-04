@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import Nav from "@/components/Nav";
+import Nav, { BottomTabs } from "@/components/Nav";
 import { BrandMark } from "@/components/BrandMark";
 import { getViewer } from "@/lib/supabase/session";
 import { ProfileMenu } from "@/components/ProfileMenu";
@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!viewer) redirect("/login");
   if (!viewer.accepted) redirect("/confidentiality");
   const forms = await volunteerForms(viewer.id);
+  const nav = navItems(viewer.roles, { open: forms.length > 0, submitted: forms.every((f) => f.submittedAt) });
 
   const initials = viewer.name
     .split(/[\s.]+/)
@@ -25,13 +26,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
+      {/* One bar (shell redesign 2026-11-04): brand, the navigation on wide screens, the profile. Phones get the tab bar at the bottom. */}
       <header className="bg-esn text-white shadow-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-4 h-14 lg:h-16 flex items-center gap-4 xl:gap-6">
           <Link href="/" className="shrink-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white" aria-label="ESN MESA Events – home">
             <BrandMark product="Events" />
           </Link>
+          <Nav nav={nav} />
           {/* No Google profile picture: loading it would show Google the member's IP address. */}
-          <div className="ml-auto flex items-center gap-3 min-w-0" title={`Signed in as ${viewer.email}`}>
+          <div className="ml-auto flex shrink-0 items-center gap-3" title={`Signed in as ${viewer.email}`}>
             <ProfileMenu
               name={viewer.name}
               email={viewer.email}
@@ -40,9 +43,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
           </div>
         </div>
-        <Nav nav={navItems(viewer.roles, { open: forms.length > 0, submitted: forms.every((f) => f.submittedAt) })} />
       </header>
       <main className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8">{children}</main>
+      <BottomTabs nav={nav} />
     </>
   );
 }

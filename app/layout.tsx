@@ -4,6 +4,7 @@ import "./globals.css";
 import LegalFooter from "@/components/LegalFooter";
 import { StagingBanner } from "@/components/StagingBanner";
 import { FeedbackProvider } from "@/components/Feedback";
+import { figtree } from "@/components/fonts";
 import { isStaging, isStagingBuild, stagingSignInEnabled } from "@/lib/staging";
 
 // A staging build says so in every tab title.
@@ -19,8 +20,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // can put the CSP nonce (proxy.ts) on its scripts.
   await headers();
   return (
-    <html lang="en">
-      <body className="antialiased bg-gray-50 min-h-screen font-sans flex flex-col">
+    <html lang="en" className={figtree.variable}>
+      <body className="antialiased min-h-screen font-sans flex flex-col">
         {isStaging() && <StagingBanner signIn={stagingSignInEnabled()} />}
         <FeedbackProvider>
           <div className="flex-1">{children}</div>

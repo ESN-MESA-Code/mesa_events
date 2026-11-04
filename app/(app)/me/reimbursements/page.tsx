@@ -10,7 +10,7 @@ import { ClaimItem } from "@/components/ClaimItem";
 import { MyPayoutForm } from "./MyPayoutForm";
 import { PayoutDetailsForm } from "./PayoutDetailsForm";
 
-export const metadata: Metadata = { title: "Reimbursements" };
+export const metadata: Metadata = { title: "Expenses" };
 
 type Ev = { id: string; title: string; starts_at: string };
 type Receipt = { expense_kind: ExpenseKind; vendor: string; amount_cents: number; purchased_on: string; beleg_received_at: string | null };
@@ -51,7 +51,7 @@ export default async function ReimbursementsPage() {
 
   return (
     <>
-      <PageHeader title="Reimbursements" description="What you paid for MESA events, and where Finance pays you back. Register receipts on the event's Hand-in tab." />
+      <PageHeader title="Expenses" description="What you paid for MESA events, and where Finance pays you back. Register receipts on the event's Hand-in tab." />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6">
           <Card data-testid="my-reimbursements">

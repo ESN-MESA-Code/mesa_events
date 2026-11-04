@@ -15,17 +15,26 @@
   --color-esn-orange: #F47920;
   --color-esn-green: #7AC143;
   --color-esn-magenta: #EC008C;
+  /* Figtree everywhere (shell redesign 2026-11-04); --font-figtree is set on <html> by next/font. */
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
-  --background: #ffffff;
+  /* A light grey page, so white cards stand apart (shell redesign 2026-11-04). */
+  --background: #f4f5fa;
   --foreground: #171717;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Room for the phone tab bar (components/Nav.tsx), so it never covers the footer. */
+@media (width < 64rem) {
+  body:has(#bottom-tabs) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* ── Legal texts rendered from legal/*.md ──────────────────────────────── */

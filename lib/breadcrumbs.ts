@@ -4,7 +4,7 @@
 const PLACES: Record<string, { label: string; href: string }> = {
   home: { label: "Home", href: "/" },
   me: { label: "My events", href: "/me" },
-  reimbursements: { label: "Reimbursements", href: "/me/reimbursements" },
+  reimbursements: { label: "Expenses", href: "/me/reimbursements" },
   calendar: { label: "Calendar", href: "/calendar" },
   events: { label: "Events team", href: "/team/events" },
   comms: { label: "Comms", href: "/team/comms" },

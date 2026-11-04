@@ -171,6 +171,8 @@ test("executives read Finance without acting; bank details stay with Finance", a
   try {
     await signInAs(context, baseURL!, USERS.executive);
     await page.goto("/");
+    // The team pages sit behind the header's Team menu (shell redesign 2026-11-04).
+    await page.getByTestId("nav-team").getByRole("button", { name: "Team" }).click();
     await page.getByTestId("nav-team").getByRole("link", { name: "Finance" }).click();
     await expect(page).toHaveURL(/\/team\/finance$/);
     await expect(page.getByTestId("read-only")).toBeVisible();

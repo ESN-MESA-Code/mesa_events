@@ -11,6 +11,8 @@ import { Badge, buttonVariants } from "@/components/ui";
 import { DueLabel, EventStatusBadge } from "@/components/status";
 import { StepIcon } from "@/components/StepIcon";
 import { cn } from "@/lib/utils";
+import { EVENT_STATUS_LABELS } from "@/lib/labels";
+import { Ban } from "lucide-react";
 
 export const STEP_TONE: Record<NextStep["kind"], string> = {
   action: "border-esn/30 bg-esn/5 text-esn-dark",
@@ -25,14 +27,20 @@ export function stepHref(eventId: string, step: Pick<NextStep, "tab">, from: str
   return `/events/${eventId}${step.tab ? `/${step.tab}` : ""}?from=${from}`;
 }
 
+const TILE_TONE = {
+  default: "bg-esn/5 text-esn-dark",
+  live: "bg-esn-orange/10 text-esn-orange",
+  /** An open slot to claim (Home). */
+  open: "bg-sky-50 text-sky-800",
+  /** Cancelled or dropped. */
+  muted: "bg-gray-100 text-gray-500",
+};
+
 /** An event's day as a small calendar leaf ("Nov / 3 / Tue"). */
-export function DateTile({ iso, live }: { iso: string; live: boolean }) {
+export function DateTile({ iso, live, tone = "default" }: { iso: string; live?: boolean; tone?: keyof typeof TILE_TONE }) {
   const [weekday, day, month] = formatShortDate(iso).split(" ");
   return (
-    <div
-      className={cn("flex w-12 shrink-0 flex-col items-center self-start rounded-lg py-1.5 leading-tight", live ? "bg-esn-orange/10 text-esn-orange" : "bg-esn/5 text-esn-dark")}
-      aria-hidden="true"
-    >
+    <div className={cn("flex w-12 shrink-0 flex-col items-center self-start rounded-lg py-1.5 leading-tight", TILE_TONE[live ? "live" : tone])} aria-hidden="true">
       <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{month}</span>
       <span className="text-lg font-bold tabular-nums">{day}</span>
       <span className="text-[10px] text-gray-500">{weekday}</span>
@@ -41,7 +49,7 @@ export function DateTile({ iso, live }: { iso: string; live: boolean }) {
 }
 
 /** A helper's way in before the event (usability review #9): when, where, the Chat space. */
-function HelperInfo({ event }: { event: MyEvent["event"] }) {
+export function HelperInfo({ event }: { event: MyEvent["event"] }) {
   const meeting = eventMeeting(event);
   return (
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600" data-testid="helper-info">
@@ -99,29 +107,54 @@ export function MyEventCard({ item, now, from }: { item: MyEvent; now: number; f
   );
 }
 
-/** Home's short row: day, title, the next step in one line. */
-export function MyEventRow({ item, now }: { item: MyEvent; now: number }) {
+/** Statuses Home names next to the time, in their colour. */
+const STATUS_TEXT: Partial<Record<MyEvent["event"]["status"], string>> = { understaffed: "text-amber-700", cancelled: "text-red-700", dropped: "text-red-700" };
+
+/** The status box at the foot of a Home card: always two lines high, so the boxes line up across a row. */
+const HOME_STATUS = "mt-auto flex h-[3.25rem] items-center gap-2 rounded-lg border px-3 text-[13px] leading-snug";
+
+/** One of the member's next events as a Home card (redesign 2026-11-04): time and role above the title, the next step at the foot. */
+export function HomeEventCard({ item, now }: { item: MyEvent; now: number }) {
   const { event, role, step } = item;
+  const off = event.status === "cancelled" || event.status === "dropped";
+  const statusText = STATUS_TEXT[event.status];
   return (
-    <li className="flex gap-3 py-2.5">
-      <span className="w-20 shrink-0 text-xs tabular-nums text-gray-500">
-        {formatShortDate(event.starts_at)}
-        <span className="block">{berlinTime(event.starts_at)}</span>
-      </span>
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="flex flex-wrap items-center gap-2">
-          <Link href={`/events/${event.id}?from=home`} className="min-w-0 truncate font-medium text-gray-900 hover:text-esn">
-            {event.title}
-          </Link>
-          <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
-          {NOTEWORTHY.includes(event.status) && <EventStatusBadge status={event.status} />}
-        </p>
-        <Link href={stepHref(event.id, step, "home")} className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-600 hover:text-esn hover:underline" data-testid="next-step">
-          <StepIcon kind={step.kind} className="h-3.5 w-3.5" />
-          {step.label}
-          {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} />}
-        </Link>
+    <li className="flex" data-testid="home-event">
+      <div className={cn("flex w-full flex-col gap-3 rounded-xl border p-4", off ? "border-dashed border-gray-300 bg-gray-50" : "border-gray-200 bg-white")}>
+        <div className="flex gap-3">
+          <DateTile iso={event.starts_at} tone={off ? "muted" : "default"} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium tabular-nums text-gray-600">
+              {berlinTime(event.starts_at)} · <span className="font-semibold text-esn">{role === "oc" ? "OC" : "Helper"}</span>
+              {statusText && <span className={cn("font-semibold", statusText)}> · {EVENT_STATUS_LABELS[event.status]}</span>}
+            </p>
+            <Link
+              href={`/events/${event.id}?from=home`}
+              className={cn("mt-0.5 line-clamp-2 min-h-[2lh] break-words font-semibold leading-snug hover:text-esn", off ? "text-gray-500 line-through" : "text-gray-900")}
+              title={event.title}
+            >
+              {event.title}
+            </Link>
+          </div>
+        </div>
         {showsHelperInfo(item) && <HelperInfo event={event} />}
+        <Link
+          href={stepHref(event.id, step, "home")}
+          className={cn(HOME_STATUS, "hover:underline", off ? "border-red-200 bg-red-50 text-red-800" : STEP_TONE[step.kind])}
+          title={step.label}
+          data-testid="next-step"
+        >
+          {off ? <Ban className="h-4 w-4 shrink-0" aria-hidden="true" /> : <StepIcon kind={step.kind} />}
+          <span className="line-clamp-2 min-w-0">
+            <span className="font-medium">{step.label}</span>
+            {step.due && (
+              <>
+                {" · "}
+                <DueLabel iso={step.due} now={now} note={step.dueNote} />
+              </>
+            )}
+          </span>
+        </Link>
       </div>
     </li>
   );
@@ -174,28 +207,44 @@ export function MyDutyCard({ item }: { item: MyDuty }) {
   );
 }
 
-/** Home's short row for a duty. */
-export function MyDutyRow({ item }: { item: MyDuty }) {
+/** A duty as a Home card, laid out like HomeEventCard. */
+export function HomeDutyCard({ item }: { item: MyDuty }) {
   const { duty, role, step } = item;
+  const off = duty.status === "cancelled";
+  const status = (
+    <>
+      {off ? <Ban className="h-4 w-4 shrink-0" aria-hidden="true" /> : <StepIcon kind={step.kind} />}
+      <span className="line-clamp-2 min-w-0 font-medium">{off ? "Cancelled" : step.label}</span>
+    </>
+  );
+  const statusClass = cn(HOME_STATUS, off ? "border-red-200 bg-red-50 text-red-800" : STEP_TONE[step.kind]);
   return (
-    <li className="flex gap-3 py-2.5" data-testid="duty-row">
-      <span className="w-20 shrink-0 text-xs tabular-nums text-gray-500">
-        {formatShortDate(duty.starts_at)}
-        <span className="block">
-          <DutyTime duty={duty} />
-        </span>
-      </span>
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="flex flex-wrap items-center gap-2">
-          <Link href={internalPath(duty.kind, duty.id)} className="min-w-0 truncate font-medium text-gray-900 hover:text-esn">
-            {duty.title}
+    <li className="flex" data-testid="duty-row">
+      <div className={cn("flex w-full flex-col gap-3 rounded-xl border p-4", off ? "border-dashed border-gray-300 bg-gray-50" : "border-gray-200 bg-white")}>
+        <div className="flex gap-3">
+          <DateTile iso={duty.starts_at} tone={off ? "muted" : "default"} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium tabular-nums text-gray-600">
+              <DutyTime duty={duty} /> · <span className="font-semibold text-esn">{role === "oc" ? "OC" : "Helper"}</span> · {INTERNAL_KIND_LABELS[duty.kind]}
+            </p>
+            <Link
+              href={internalPath(duty.kind, duty.id)}
+              className={cn("mt-0.5 line-clamp-2 min-h-[2lh] break-words font-semibold leading-snug hover:text-esn", off ? "text-gray-500 line-through" : "text-gray-900")}
+              title={duty.title}
+            >
+              {duty.title}
+            </Link>
+          </div>
+        </div>
+        {step.cash && !off ? (
+          <Link href={dutyHref(item)} className={cn(statusClass, "hover:underline")} title={step.label} data-testid="next-step">
+            {status}
           </Link>
-          <Badge tone="blue">{role === "oc" ? "OC" : "Helper"}</Badge>
-        </p>
-        <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-600">
-          <StepIcon kind={step.kind} className="h-3.5 w-3.5" />
-          {step.label}
-        </p>
+        ) : (
+          <p className={statusClass} title={off ? "Cancelled" : step.label} data-testid="next-step">
+            {status}
+          </p>
+        )}
       </div>
     </li>
   );

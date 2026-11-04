@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 /**
  * The member's avatar opens their profile menu (round 2026-10-30): who is
- * signed in, sign out. Payout details are on the Reimbursements page, My
+ * signed in, sign out. Payout details are on the Expenses page, My
  * events in the navigation (round 2026-11-03 (2)).
  */
 export function ProfileMenu({ name, email, roles, initials }: { name: string; email: string; roles: string; initials: string }) {
@@ -37,13 +37,9 @@ export function ProfileMenu({ name, email, roles, initials }: { name: string; em
         <span aria-hidden="true" className="h-9 w-9 rounded-full bg-white/15 ring-2 ring-white/40 flex items-center justify-center text-sm font-semibold shrink-0 hover:bg-white/25">
           {initials}
         </span>
-        <span className="hidden md:block leading-tight min-w-0">
-          <span className="block text-sm font-medium truncate max-w-[14rem]" data-testid="viewer-name">
-            {name}
-          </span>
-          <span className="block text-xs text-white/70 truncate max-w-[16rem]" data-testid="viewer-roles">
-            {roles}
-          </span>
+        {/* The header bar shows the avatar only (it needs the room for the navigation); name and roles are in the menu. */}
+        <span className="sr-only">
+          <span data-testid="viewer-name">{name}</span> <span data-testid="viewer-roles">{roles}</span>
         </span>
       </button>
       {open && (
@@ -51,6 +47,7 @@ export function ProfileMenu({ name, email, roles, initials }: { name: string; em
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="font-medium text-gray-900">{name}</p>
             <p className="truncate text-xs text-gray-500">{email}</p>
+            <p className="mt-1.5 text-xs font-medium text-esn">{roles}</p>
           </div>
           <form action="/auth/signout" method="post" className="border-t border-gray-100">
             <button role="menuitem" className="block w-full px-4 py-2.5 text-left hover:bg-gray-50">

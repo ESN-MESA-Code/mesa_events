@@ -5,7 +5,7 @@ describe("event breadcrumbs", () => {
   it("lead back to where the event was opened", () => {
     expect(backLink("me")).toEqual({ label: "My events", href: "/me" });
     expect(backLink("home")).toEqual({ label: "Home", href: "/" });
-    expect(backLink("reimbursements")).toEqual({ label: "Reimbursements", href: "/me/reimbursements" });
+    expect(backLink("reimbursements")).toEqual({ label: "Expenses", href: "/me/reimbursements" });
     expect(backLink("cycle:0b4a3c2e-1111-4222-8333-444455556666")).toEqual({ label: "The month", href: "/team/events/cycles/0b4a3c2e-1111-4222-8333-444455556666" });
   });
 

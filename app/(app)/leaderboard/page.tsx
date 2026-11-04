@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/componen
 import { CATEGORY_STYLE, Podium, RankList } from "@/components/Leaderboard";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Leaderboard" };
+export const metadata: Metadata = { title: "Ranking" };
 
 const GROUPS = { active: "Active members", newbies: "Newbies" } as const;
 type Group = keyof typeof GROUPS;
@@ -49,7 +49,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Leaderboard" description="Who organised, helped and staffed office hours the most. Events and office hours count once they have taken place.">
+      <PageHeader title="Ranking" description="Who organised, helped and staffed office hours the most. Events and office hours count once they have taken place.">
         <nav aria-label="Semester" className="flex items-center gap-1 text-sm">
           <Link href={query({ semester: prev.key })} className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-gray-700 hover:text-esn" aria-label={`Previous semester: ${prev.name}`}>
             ←

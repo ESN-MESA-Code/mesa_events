@@ -5,10 +5,8 @@
 // "MESA" so the lettering has a hierarchy without competing with the pretzel's
 // colours. Other options: design/README.md.
 import Image from "next/image";
-import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
-
-const figtree = localFont({ src: "./fonts/figtree-var-latin.woff2", weight: "400 800", display: "swap" });
+import { figtree } from "@/components/fonts";
 
 /** Pretzel + "ESN MESA" (+ an optional product name after a divider). */
 export function BrandMark({ product, tone = "light", size = "md", className }: { product?: string; tone?: "light" | "dark"; size?: "md" | "lg"; className?: string }) {
@@ -39,7 +37,8 @@ export function BrandMark({ product, tone = "light", size = "md", className }: {
         <span
           className={cn(
             "font-medium leading-none whitespace-nowrap border-l pl-3 ml-0.5 py-0.5 self-center",
-            size === "lg" ? "text-xl" : "hidden md:inline text-lg",
+            // In the header only where the navigation leaves room for it.
+            size === "lg" ? "text-xl" : "hidden xl:inline text-lg",
             light ? "text-white/75 border-white/30" : "text-gray-500 border-gray-300"
           )}
         >

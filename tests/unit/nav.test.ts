@@ -5,11 +5,11 @@ const labels = (items: { label: string }[]) => items.map((i) => i.label);
 
 describe("navigation", () => {
   it("members: personal pages only, Volunteer only while a form is open", () => {
-    expect(labels(navItems([]).personal)).toEqual(["Home", "My events", "Reimbursements", "Ideas", "Calendar", "Leaderboard"]);
+    expect(labels(navItems([]).personal)).toEqual(["Home", "My events", "Expenses", "Ideas", "Calendar", "Ranking"]);
     expect(navItems([]).team).toEqual([]);
     // While a form is open Volunteer follows Reimbursements (round 2026-11-03 (2)).
     const open = navItems([], { open: true, submitted: false }).personal;
-    expect(labels(open)).toEqual(["Home", "My events", "Reimbursements", "Volunteer", "Ideas", "Calendar", "Leaderboard"]);
+    expect(labels(open)).toEqual(["Home", "My events", "Expenses", "Volunteer", "Ideas", "Calendar", "Ranking"]);
     expect(open[3]).toEqual({ href: "/volunteer", label: "Volunteer", badge: "1" });
     expect(navItems([], { open: true, submitted: true }).personal[3]).toEqual({ href: "/volunteer", label: "Volunteer", badge: undefined });
   });
