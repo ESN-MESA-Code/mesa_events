@@ -14,7 +14,7 @@ const pick = (profileId: string, eventId: string, ocRank: Rank | null, helperRan
 const run = (events: AllocationEvent[], choices: AllocationChoice[], people: AllocationPerson[] = [], seed = "cycle-1") => allocate(events, choices, { seed, people });
 
 const rolesOf = (r: ReturnType<typeof allocate>, eventId: string) => ({
-  oc: r.events[eventId].ocId,
+  oc: r.events[eventId].ocIds[0] ?? null,
   helpers: r.events[eventId].helperIds,
 });
 const eventsOf = (r: ReturnType<typeof allocate>, profileId: string) => r.assignments.filter((a) => a.profileId === profileId).map((a) => a.eventId);
@@ -53,23 +53,53 @@ describe("allocate: priorities", () => {
 
 describe("allocate: the idea's proposer", () => {
   it("is OC by default, ahead of everyone, and not also its helper", () => {
-    const r = run([ev("e1", 1, undefined, { defaultOcId: "pia" })], [pick("ana", "e1", 1, 3), pick("ben", "e1", null, 1), pick("pia", "e1", null, 1)]);
+    const r = run([ev("e1", 1, undefined, { fixed: [{ profileId: "pia", role: "oc" }] })], [pick("ana", "e1", 1, 3), pick("ben", "e1", null, 1), pick("pia", "e1", null, 1)]);
     expect(rolesOf(r, "e1")).toEqual({ oc: "pia", helpers: ["ben"] });
     expect(r.assignments.find((a) => a.role === "oc")).toMatchObject({ profileId: "pia", source: "proposer" });
   });
 
   it("counts towards the proposer's limits", () => {
-    const r = run([day("e1", 1, 1, { defaultOcId: "pia" }), day("e2", 2)], [pick("pia", "e2", null, 1)], [{ profileId: "pia", maxEvents: 1 }]);
+    const r = run([day("e1", 1, 1, { fixed: [{ profileId: "pia", role: "oc" }] }), day("e2", 2)], [pick("pia", "e2", null, 1)], [{ profileId: "pia", maxEvents: 1 }]);
     expect(eventsOf(r, "pia")).toEqual(["e1"]);
     expect(r.events.e2.status).toBe("dropped");
   });
 
   it("keeps the earlier of two overlapping ideas and reports the other", () => {
-    const r = run([ev("e1", 1, "2026-11-05T18:00:00Z", { defaultOcId: "pia" }), ev("e2", 1, "2026-11-05T19:00:00Z", { defaultOcId: "pia" })], [pick("ben", "e2", null, 1)]);
+    const r = run([ev("e1", 1, "2026-11-05T18:00:00Z", { fixed: [{ profileId: "pia", role: "oc" }] }), ev("e2", 1, "2026-11-05T19:00:00Z", { fixed: [{ profileId: "pia", role: "oc" }] })], [pick("ben", "e2", null, 1)]);
     expect(rolesOf(r, "e1").oc).toBe("pia");
-    expect(r.events.e2).toMatchObject({ status: "no_oc", ocId: null, helperIds: ["ben"] });
-    expect(r.issues).toEqual([{ kind: "proposer_clash", eventId: "e2", profileId: "pia", otherEventId: "e1" }]);
+    expect(r.events.e2).toMatchObject({ status: "no_oc", ocIds: [], helperIds: ["ben"] });
+    expect(r.issues).toEqual([{ kind: "fixed_clash", eventId: "e2", profileId: "pia", role: "oc", otherEventId: "e1" }]);
     expect(r.conflicts).toEqual([]);
+  });
+});
+
+describe("allocate: partners and several OCs", () => {
+  it("places the partners who said yes: a co-OC and a helper", () => {
+    const r = run([ev("e1", 2, undefined, { ocsNeeded: 2, fixed: [{ profileId: "pia", role: "oc" }, { profileId: "max", role: "oc" }, { profileId: "hal", role: "helper" }] })], [
+      pick("ana", "e1", null, 1),
+      pick("ben", "e1", null, 3),
+    ]);
+    expect(r.events.e1).toMatchObject({ status: "staffed", ocIds: ["max", "pia"], ocsNeeded: 2 });
+    expect(r.events.e1.helperIds).toEqual(["hal", "ana"]);
+    expect(r.assignments.filter((a) => a.source === "proposer").map((a) => a.profileId)).toEqual(["max", "pia", "hal"]);
+  });
+
+  it("fills open OC slots from the form, next to the fixed OC", () => {
+    const r = run([ev("e1", 0, undefined, { ocsNeeded: 2, fixed: [{ profileId: "pia", role: "oc" }] })], [pick("ana", "e1", 1, null), pick("ben", "e1", 5, null)]);
+    expect(r.events.e1.ocIds).toEqual(["pia", "ana"]);
+  });
+
+  it("fills several OC slots without a proposer; too few OCs is under-staffed", () => {
+    const r = run([ev("e1", 0, undefined, { ocsNeeded: 3 })], [pick("ana", "e1", 1, null), pick("ben", "e1", 3, null)]);
+    expect(r.events.e1).toMatchObject({ status: "understaffed", ocIds: expect.arrayContaining(["ana", "ben"]) });
+    expect(r.events.e1.ocIds).toHaveLength(2);
+  });
+
+  it("the event short of most OCs per slot gets its OC first", () => {
+    // ana is the only OC candidate for e2 (2 slots) and one of two for e1: she goes to e2.
+    const r = run([day("e1", 1, 0), day("e2", 2, 0, { ocsNeeded: 2 })], [pick("ana", "e1", 1, null), pick("ben", "e1", 1, null), pick("ana", "e2", 1, null)], [{ profileId: "ana", maxOc: 1 }]);
+    expect(r.events.e2.ocIds).toEqual(["ana"]);
+    expect(r.events.e1.ocIds).toEqual(["ben"]);
   });
 });
 
@@ -94,20 +124,20 @@ describe("allocate: limits and overlaps", () => {
 
   it("without limits, one person may OC several events and help others", () => {
     const r = run([day("e1", 1, 0), day("e2", 2, 0), day("e3", 3, 1)], [pick("ana", "e1", 1, null), pick("ana", "e2", 1, null), pick("ana", "e3", null, 1), pick("ben", "e3", 1, null)]);
-    expect(r.events.e1.ocId).toBe("ana");
-    expect(r.events.e2.ocId).toBe("ana");
+    expect(r.events.e1.ocIds[0]).toBe("ana");
+    expect(r.events.e2.ocIds[0]).toBe("ana");
     expect(rolesOf(r, "e3")).toEqual({ oc: "ben", helpers: ["ana"] });
   });
 
   it("maxOc 1: a second OC role goes to the next candidate", () => {
     const r = run([day("e1", 1, 0), day("e2", 2, 0)], [pick("ana", "e1", 1, null), pick("ana", "e2", 1, null), pick("ben", "e2", 5, null)], [{ profileId: "ana", maxOc: 1 }]);
-    expect([r.events.e1.ocId, r.events.e2.ocId]).toEqual(["ana", "ben"]);
+    expect([r.events.e1.ocIds[0], r.events.e2.ocIds[0]]).toEqual(["ana", "ben"]);
   });
 
   it("nobody OCs a second event while someone without an OC role can take it", () => {
     // ana is the only OC for e1 and the keener one for e2: e1 goes to her, e2 to ben.
     const r = run([day("e1", 1, 0), day("e2", 2, 0)], [pick("ana", "e1", 1, null), pick("ana", "e2", 1, null), pick("ben", "e2", 3, null)]);
-    expect([r.events.e1.ocId, r.events.e2.ocId]).toEqual(["ana", "ben"]);
+    expect([r.events.e1.ocIds[0], r.events.e2.ocIds[0]]).toEqual(["ana", "ben"]);
   });
 });
 
@@ -163,7 +193,7 @@ describe("allocate: ties", () => {
 describe("allocate: dropping and under-staffing", () => {
   it("drops events nobody signed up for", () => {
     const r = run([ev("e1"), ev("e2", 2, "2026-11-06T18:00:00Z")], [pick("ana", "e2", 1, null)]);
-    expect(r.events.e1).toMatchObject({ status: "dropped", ocId: null, helperIds: [], signups: 0 });
+    expect(r.events.e1).toMatchObject({ status: "dropped", ocIds: [], helperIds: [], signups: 0 });
     expect(r.assignments.every((a) => a.eventId === "e2")).toBe(true);
   });
 
@@ -181,13 +211,15 @@ describe("allocate: dropping and under-staffing", () => {
   });
 
   it.each([
-    [false, 0, 2, "dropped"],
-    [false, 1, 2, "no_oc"],
-    [true, 1, 2, "understaffed"],
-    [true, 2, 2, "staffed"],
-    [true, 3, 2, "staffed"],
-  ] as const)("staffingStatus(oc=%s, helpers=%s, needed=%s) = %s", (oc, helpers, needed, status) => {
-    expect(staffingStatus(oc, helpers, needed)).toBe(status);
+    [0, 1, 0, 2, "dropped"],
+    [0, 1, 1, 2, "no_oc"],
+    [1, 1, 1, 2, "understaffed"],
+    [1, 1, 2, 2, "staffed"],
+    [1, 1, 3, 2, "staffed"],
+    [1, 2, 2, 2, "understaffed"],
+    [2, 2, 2, 2, "staffed"],
+  ] as const)("staffingStatus(ocs=%s of %s, helpers=%s of %s) = %s", (ocs, ocsNeeded, helpers, needed, status) => {
+    expect(staffingStatus(ocs, ocsNeeded, helpers, needed)).toBe(status);
   });
 });
 
@@ -201,7 +233,7 @@ describe("allocate: summary", () => {
 
 describe("allocate: determinism", () => {
   it("gives the same roster for any order of events, choices and people", () => {
-    const events = [ev("e1", 2, "2026-11-01T18:00:00Z"), ev("e2", 1, "2026-11-01T19:00:00Z"), ev("e3", 3, "2026-11-03T18:00:00Z", { defaultOcId: "p6" })];
+    const events = [ev("e1", 2, "2026-11-01T18:00:00Z"), ev("e2", 1, "2026-11-01T19:00:00Z"), ev("e3", 3, "2026-11-03T18:00:00Z", { fixed: [{ profileId: "p6", role: "oc" }] })];
     const ids = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const choices: AllocationChoice[] = [];
     for (const [i, p] of ids.entries()) {

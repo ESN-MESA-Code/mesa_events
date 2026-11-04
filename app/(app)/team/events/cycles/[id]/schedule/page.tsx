@@ -32,7 +32,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const [{ data: events }, { data: ideaRows }, { data: signups }, { categories, formats }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, type, starts_at, ends_at, location, meeting_point, helpers_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name), assignments(role, status)")
+      .select("id, title, type, starts_at, ends_at, location, meeting_point, helpers_needed, ocs_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name), assignments(role, status)")
       .eq("cycle_id", id)
       .order("starts_at"),
     supabase
@@ -65,7 +65,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
     planned.map((ev) => {
       if (cycle.status !== "confirmed") return [ev.id, ev.status];
       const active = (ev.assignments ?? []).filter((a) => a.status === "active");
-      const short = !active.some((a) => a.role === "oc") || active.filter((a) => a.role === "helper").length < ev.helpers_needed;
+      const short = active.filter((a) => a.role === "oc").length < ev.ocs_needed || active.filter((a) => a.role === "helper").length < ev.helpers_needed;
       return [ev.id, shownStatus({ status: ev.status, startsAt: ev.starts_at, endsAt: ev.ends_at, short }, now)];
     })
   );
@@ -120,6 +120,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                       location: e.location ?? "",
                       meetingPoint: e.meeting_point ?? "",
                       helpersNeeded: e.helpers_needed,
+                      ocsNeeded: e.ocs_needed,
                       status: statusOf.get(e.id) ?? e.status,
                       proposer: (e.profiles as { full_name: string } | null)?.full_name ?? null,
                       signups: signupCount.get(e.id) ?? 0,

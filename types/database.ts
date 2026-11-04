@@ -373,14 +373,14 @@ isOneToOne: false
                   ]
                 },"event_ideas": {
                   Row: {
-                    "category_id": string | null,"created_at": string,"decided_by": string | null,"decision_note": string | null,"event_id": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"pitch": string,"proposed_date": string,"proposer_id": string,"status": string,"title": string,"type_suggestion": Database["public"]['Enums']["event_type"] | null,"updated_at": string,"wants_to_oc": boolean
+                    "category_id": string | null,"created_at": string,"decided_by": string | null,"decision_note": string | null,"event_id": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"ocs_needed": number,"pitch": string,"proposed_date": string,"proposer_id": string,"status": string,"title": string,"type_suggestion": Database["public"]['Enums']["event_type"] | null,"updated_at": string,"wants_to_oc": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "category_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"pitch"?: string,"proposed_date": string,"proposer_id"?: string,"status"?: string,"title": string,"type_suggestion"?: Database["public"]['Enums']["event_type"] | null,"updated_at"?: string,"wants_to_oc"?: boolean
+                    "category_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"ocs_needed"?: number,"pitch"?: string,"proposed_date": string,"proposer_id"?: string,"status"?: string,"title": string,"type_suggestion"?: Database["public"]['Enums']["event_type"] | null,"updated_at"?: string,"wants_to_oc"?: boolean
                   }
                   Update: {
-                    "category_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"pitch"?: string,"proposed_date"?: string,"proposer_id"?: string,"status"?: string,"title"?: string,"type_suggestion"?: Database["public"]['Enums']["event_type"] | null,"updated_at"?: string,"wants_to_oc"?: boolean
+                    "category_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"decision_note"?: string | null,"event_id"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"ocs_needed"?: number,"pitch"?: string,"proposed_date"?: string,"proposer_id"?: string,"status"?: string,"title"?: string,"type_suggestion"?: Database["public"]['Enums']["event_type"] | null,"updated_at"?: string,"wants_to_oc"?: boolean
                   }
                   Relationships: [
                     {
@@ -485,14 +485,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
+                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"ocs_needed": number,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -686,6 +686,32 @@ isOneToOne: false
       columns: ["internal_event_id"]
 isOneToOne: false
       referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"idea_partners": {
+                  Row: {
+                    "created_at": string,"idea_id": string,"profile_id": string,"responded_at": string | null,"role": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"idea_id": string,"profile_id": string,"responded_at"?: string | null,"role": string,"status"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"idea_id"?: string,"profile_id"?: string,"responded_at"?: string | null,"role"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "idea_partners_idea_id_fkey"
+      columns: ["idea_id"]
+isOneToOne: false
+      referencedRelation: "event_ideas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "idea_partners_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
       referencedColumns: ["id"]
     }
                   ]
@@ -1436,6 +1462,11 @@ isOneToOne: false
 "event_claims_summary":
 { Args: { "event": string }; Returns: Json
                            },
+"event_fixed_people":
+{ Args: { "cycle": string }; Returns: {
+              "event_id": string,"full_name": string,"profile_id": string,"role": string,"source": string
+            }[]
+                           },
 "event_list_open":
 { Args: { "event": string }; Returns: boolean
                            },
@@ -1479,6 +1510,12 @@ isOneToOne: false
                            },
 "is_executive":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"is_idea_partner":
+{ Args: { "idea": string }; Returns: boolean
+                           },
+"is_idea_proposer":
+{ Args: { "idea": string }; Returns: boolean
                            },
 "is_internal_oc":
 { Args: { "internal_event": string }; Returns: boolean
@@ -1623,6 +1660,9 @@ isOneToOne: false
 "request_preapproval":
 { Args: { "description": string,"estimated": number,"event": string }; Returns: string
                            },
+"respond_idea_partner":
+{ Args: { "accept": boolean,"idea": string }; Returns: undefined
+                           },
 "retry_job":
 { Args: { "job_id": number }; Returns: undefined
                            },
@@ -1678,6 +1718,9 @@ isOneToOne: false
                            },
 "set_group_role":
 { Args: { "member": boolean,"member_email": string,"member_role": Database["public"]['Enums']["app_role"] }; Returns: undefined
+                           },
+"set_idea_partners":
+{ Args: { "idea": string,"partners": Json }; Returns: undefined
                            },
 "set_my_payout_details":
 { Args: { "account_holder"?: string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: number

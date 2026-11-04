@@ -32,7 +32,8 @@ const OPEN_SLOTS = 3;
 // "What's next for me" (round 2026-11-03 (2)): one "Waiting for you" with
 // everything that needs the member – an event happening now, a next step
 // overdue or due within a week, an open volunteer form, payout details,
-// paper receipts, open slots to claim, a duty at an office hour on now or its
+// paper receipts, ideas others asked the member to join (round 2026-11-04),
+// open slots to claim, a duty at an office hour on now or its
 // cash box to sign off – then two panels, the member's next events and
 // duties and what comes up in MESA, and the team queues for team members.
 // Everything about the member's own events is on My events; the cycle dates
@@ -46,7 +47,7 @@ export default async function HomePage() {
   const isFinance = hasRole(viewer.roles, "finance");
   const isExec = viewer.roles.includes("executive");
 
-  const [forms, events, duties, { data: slots }, { data: claims }, { count: everAssigned }, { data: payout }] = await Promise.all([
+  const [forms, events, duties, { data: slots }, { data: claims }, { count: everAssigned }, { data: payout }, { data: asked }] = await Promise.all([
     volunteerForms(viewer.id),
     loadMyEvents(supabase, viewer.id, now, { since: now - 45 * DAY }),
     loadMyDuties(supabase, viewer.id, now),
@@ -59,7 +60,12 @@ export default async function HomePage() {
     // A member who never had an event gets the orientation (usability review #14).
     supabase.from("assignments").select("id", { count: "exact", head: true }).eq("profile_id", viewer.id),
     supabase.from("profile_payout_details").select("profile_id").eq("profile_id", viewer.id).maybeSingle(),
+    supabase.from("idea_partners").select("role, event_ideas(id, title, status, profiles:proposer_id(full_name))").eq("profile_id", viewer.id).eq("status", "invited"),
   ]);
+  // Ideas still open (or accepted, before the roster) where someone named the member as partner.
+  const partnerRequests = (asked ?? [])
+    .map((a) => ({ role: a.role, idea: a.event_ideas as unknown as { id: string; title: string; status: string; profiles: { full_name: string } | null } | null }))
+    .filter((r) => r.idea && ["proposed", "accepted"].includes(r.idea.status));
 
   const mine = events.filter((a) => a.event.status !== "dropped");
   const needed = byUrgency(
@@ -92,7 +98,7 @@ export default async function HomePage() {
   // Paper receipts not handed in, unless their event's step already says so.
   const receipts = (claims ?? []).filter((c) => c.status === "not_submitted" && !neededIds.has(c.event_id));
   // Open slots are one offer at the end of the list.
-  const waiting = needed.length + neededDuties.length + openForms.length + (noPayout ? 1 : 0) + receipts.length + (claimable.length ? 1 : 0);
+  const waiting = needed.length + neededDuties.length + openForms.length + partnerRequests.length + (noPayout ? 1 : 0) + receipts.length + (claimable.length ? 1 : 0);
 
   return (
     <>
@@ -164,6 +170,19 @@ export default async function HomePage() {
                 >
                   <Link href="/volunteer" className={buttonVariants({ size: "sm" })}>
                     Fill in the form
+                  </Link>
+                </NeedItem>
+              ))}
+              {partnerRequests.map(({ role, idea }) => (
+                <NeedItem
+                  key={idea!.id}
+                  icon="💡"
+                  title={`${idea!.profiles?.full_name ?? "Someone"} asks you to run ${idea!.title} with them`}
+                  detail={`As ${role === "oc" ? "co-OC" : "helper"} – say yes or no on the Ideas page`}
+                  testId="home-partner-request"
+                >
+                  <Link href="/ideas" className={buttonVariants({ size: "sm" })}>
+                    Answer
                   </Link>
                 </NeedItem>
               ))}

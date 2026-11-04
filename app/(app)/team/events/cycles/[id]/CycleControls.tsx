@@ -95,7 +95,7 @@ export function AllocationControls({ cycleId, month, status }: { cycleId: string
                   `${st.filter((s) => s === "dropped").length} dropped`,
                   r.topChoices.wished > 0 && `${r.topChoices.met} of ${r.topChoices.wished} top choices met`,
                   `${plural(r.unplaced, "volunteer")} without an event`,
-                  r.issues.length > 0 && `${plural(r.issues.length, "proposer")} with two overlapping events – the later one needs an OC from you`,
+                  r.issues.length > 0 && `${plural(r.issues.length, "person", "people")} from an idea on two overlapping events – place them by hand`,
                 ]
                   .filter(Boolean)
                   .join(" · ")

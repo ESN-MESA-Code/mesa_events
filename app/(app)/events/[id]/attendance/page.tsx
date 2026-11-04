@@ -24,7 +24,8 @@ export default async function AttendanceTabPage({ params }: { params: Promise<{ 
 
   const [{ data: list }, { data: oc }] = await Promise.all([
     supabase.from("attendance_lists").select("*").eq("event_id", id).maybeSingle(),
-    supabase.from("assignments").select("profiles(email)").eq("event_id", id).eq("role", "oc").eq("status", "active").maybeSingle(),
+    // Several OCs since 2026-11-04: any of them signs off.
+    supabase.from("assignments").select("profiles(email)").eq("event_id", id).eq("role", "oc").eq("status", "active"),
   ]);
   if (!list) {
     return (
@@ -44,7 +45,7 @@ export default async function AttendanceTabPage({ params }: { params: Promise<{ 
     signed_off_by: list.signed_off_by,
     headcount: list.headcount,
   };
-  const ocEmail = (oc?.profiles as { email: string } | null)?.email ?? null;
+  const ocEmail = (oc ?? []).map((o) => (o.profiles as { email: string } | null)?.email).filter(Boolean).join(", ") || null;
   // The sign-in link as participants open it: the configured base URL, else this request's own (local runs).
   const h = await headers();
   const base = process.env.APP_BASE_URL ? appBaseUrl() : `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;

@@ -666,7 +666,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
     for (const [who, oc, helper] of (b.spec as FutureSpec).answers ?? []) answer(next, who, [{ event: b.id, oc, helper }]);
   }
   const allocation = allocate(
-    nextBuilt.map((b) => ({ id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, helpersNeeded: EVENTS[b.spec.plan].helpers, defaultOcId: b.spec.idea?.wantsOc ? pid(b.spec.idea.proposer) : null })),
+    nextBuilt.map((b) => ({ id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, helpersNeeded: EVENTS[b.spec.plan].helpers, fixed: b.spec.idea?.wantsOc ? [{ profileId: pid(b.spec.idea.proposer), role: "oc" as const }] : [] })),
     responses
       .filter((r) => r.cycle_id === next.id)
       .flatMap((r) =>

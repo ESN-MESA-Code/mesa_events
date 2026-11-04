@@ -16,6 +16,13 @@ export const localDateTime = z
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date (YYYY-MM-DD)").refine((d) => !Number.isNaN(Date.parse(d)), "Not a date");
 const title = z.string().trim().min(1, "Required").max(200);
 const helpers = z.number().int().min(0).max(50);
+const ocsNeeded = z.number().int().min(1).max(10);
+/** Partners named on an idea (round 2026-11-04): each asked as co-OC or helper, at most five. */
+const partners = z
+  .array(z.object({ profile_id: uuid, role: z.enum(["oc", "helper"]) }))
+  .max(5, "At most five partners")
+  .refine((ps) => new Set(ps.map((x) => x.profile_id)).size === ps.length, "Each person once")
+  .default([]);
 const eventType = z.enum(EVENT_TYPES as [string, ...string[]]).transform((t) => t as (typeof EVENT_TYPES)[number]);
 const rank = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.null()]);
 /** Category and format (round 2026-11-01); a format brings its category (trigger). */
@@ -29,17 +36,21 @@ export const proposeIdea = defineAction(
     proposed_date: isoDate,
     pitch: z.string().trim().max(2000).default(""),
     helpers_needed: helpers.default(2),
+    ocs_needed: ocsNeeded.default(1),
     wants_to_oc: z.boolean().default(true),
     type_suggestion: z.enum(["standard", "special", "day_trip", "weekend_trip"]).nullable().optional(),
+    partners,
     ...sorting,
   }),
-  async (ctx, input) => {
+  async (ctx, { partners: named, ...input }) => {
+    if (named.some((x) => x.profile_id === ctx.viewer.id)) throw new ActionError("failed", "You are the proposer already.");
     const { data, error } = await ctx.supabase
       .from("event_ideas")
       .insert({ ...input, proposer_id: ctx.viewer.id })
       .select("id")
       .single();
     dbError(error);
+    if (named.length) dbError((await ctx.supabase.rpc("set_idea_partners", { idea: data!.id, partners: named })).error);
     return data!;
   },
   { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] }
@@ -49,6 +60,16 @@ export const withdrawIdea = defineAction(z.object({ id: uuid }), async (ctx, { i
   const { error, count } = await ctx.supabase.from("event_ideas").delete({ count: "exact" }).eq("id", id).eq("proposer_id", ctx.viewer.id);
   dbError(error);
   if (!count) throw notFound("This idea cannot be withdrawn any more.");
+}, { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] });
+
+/** The proposer changes an open idea's partners; unchanged ones keep their answer. */
+export const setIdeaPartners = defineAction(z.object({ idea_id: uuid, partners }), async (ctx, i) => {
+  dbError((await ctx.supabase.rpc("set_idea_partners", { idea: i.idea_id, partners: i.partners })).error);
+}, { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] });
+
+/** A partner named on an idea says yes or no (until the month's roster is made). */
+export const respondIdeaPartner = defineAction(z.object({ idea_id: uuid, accept: z.boolean() }), async (ctx, i) => {
+  dbError((await ctx.supabase.rpc("respond_idea_partner", { idea: i.idea_id, accept: i.accept })).error);
 }, { revalidate: [PAGES.ideas, PAGES.home, PAGES.eventsTeam] });
 
 export const acceptIdea = defineAction(
@@ -123,6 +144,7 @@ const eventFields = {
   // Where people meet, when not at the location (round 2026-11-02): the name only here; address and time on the event page.
   meeting_point: z.string().trim().max(300).nullable().optional(),
   helpers_needed: helpers,
+  ocs_needed: ocsNeeded.default(1),
   price_cents: z.number().int().min(0).max(1_000_000).nullable().optional(),
   capacity: z.number().int().min(1).max(100_000).nullable().optional(),
   ...sorting,
@@ -172,6 +194,7 @@ export const updateEvent = defineAction(
     title: title.optional(),
     type: eventType.optional(),
     helpers_needed: helpers.optional(),
+    ocs_needed: ocsNeeded.optional(),
     starts_at: localDateTime.optional(),
     ends_at: localDateTime.nullable().optional(),
     location: z.string().trim().max(300).nullable().optional(),
@@ -292,12 +315,13 @@ export const clearVolunteerResponse = defineAction(
 /** Runs the automatic allocation on the form's answers and saves it (replacing any earlier run). */
 export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (ctx, { cycle_id }) => {
   requireRole(ctx, "events");
-  const [{ data: events, error: e1 }, { data: signups, error: e2 }, { data: history, error: e3 }] = await Promise.all([
-    ctx.supabase.from("events").select("id, starts_at, ends_at, helpers_needed, proposed_by").eq("cycle_id", cycle_id).eq("status", "scheduled"),
+  const [{ data: events, error: e1 }, { data: signups, error: e2 }, { data: history, error: e3 }, { data: fixed, error: e4 }] = await Promise.all([
+    ctx.supabase.from("events").select("id, starts_at, ends_at, helpers_needed, ocs_needed").eq("cycle_id", cycle_id).eq("status", "scheduled"),
     ctx.supabase.rpc("cycle_signups", { cycle: cycle_id }),
     ctx.supabase.rpc("allocation_history", { cycle: cycle_id }),
+    ctx.supabase.rpc("event_fixed_people", { cycle: cycle_id }),
   ]);
-  dbError(e1 ?? e2 ?? e3);
+  dbError(e1 ?? e2 ?? e3 ?? e4);
   const choices: AllocationChoice[] = (signups ?? []).map((s) => ({
     profileId: s.profile_id,
     eventId: s.event_id,
@@ -313,7 +337,14 @@ export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (c
     unplacedLastCycle: h.unplaced_last_cycle,
   }));
   const result = allocate(
-    (events ?? []).map((e) => ({ id: e.id, startsAt: e.starts_at, endsAt: e.ends_at, helpersNeeded: e.helpers_needed, defaultOcId: e.proposed_by })),
+    (events ?? []).map((e) => ({
+      id: e.id,
+      startsAt: e.starts_at,
+      endsAt: e.ends_at,
+      helpersNeeded: e.helpers_needed,
+      ocsNeeded: e.ocs_needed,
+      fixed: (fixed ?? []).filter((f) => f.event_id === e.id).map((f) => ({ profileId: f.profile_id, role: f.role as "oc" | "helper" })),
+    })),
     choices,
     { seed: cycle_id, people }
   );
@@ -321,6 +352,22 @@ export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (c
   dbError((await ctx.supabase.rpc("save_allocation", { cycle: cycle_id, rows })).error);
   return { assignments: rows.length, events: result.events, conflicts: result.conflicts, issues: result.issues, unplaced: result.unplaced.length, topChoices: result.topChoices };
 }, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
+
+/**
+ * Someone becomes OC: when the event's OC slots (ocs_needed) are full, the
+ * OC who has been on it longest becomes a helper – with one OC, the previous
+ * OC, as before (round 2026-11-04).
+ */
+async function makeRoomForOc(ctx: ActionContext, eventId: string, incoming: { profileId?: string; assignmentId?: string }) {
+  const [{ data: ev }, { data: current }] = await Promise.all([
+    ctx.supabase.from("events").select("ocs_needed").eq("id", eventId).single(),
+    ctx.supabase.from("assignments").select("id, profile_id").eq("event_id", eventId).eq("role", "oc").eq("status", "active").order("created_at"),
+  ]);
+  const others = (current ?? []).filter((x) => x.profile_id !== incoming.profileId && x.id !== incoming.assignmentId);
+  const surplus = others.length + 1 - (ev?.ocs_needed ?? 1);
+  if (surplus <= 0) return;
+  dbError((await ctx.supabase.from("assignments").update({ role: "helper" }).in("id", others.slice(0, surplus).map((x) => x.id))).error);
+}
 
 async function requireAdjustable(ctx: ActionContext, eventId: string) {
   const { data } = await ctx.supabase.from("events").select("cycle_id, planning_cycles(status)").eq("id", eventId).single();
@@ -336,10 +383,7 @@ export const assign = defineAction(z.object({ event_id: uuid, profile_id: uuid, 
   await requireAdjustable(ctx, i.event_id);
   // A person already active on the event changes role instead.
   const { data: existing } = await ctx.supabase.from("assignments").select("id").eq("event_id", i.event_id).eq("profile_id", i.profile_id).eq("status", "active").maybeSingle();
-  if (i.role === "oc") {
-    // The previous OC becomes a helper.
-    dbError((await ctx.supabase.from("assignments").update({ role: "helper" }).eq("event_id", i.event_id).eq("role", "oc").eq("status", "active").neq("profile_id", i.profile_id)).error);
-  }
+  if (i.role === "oc") await makeRoomForOc(ctx, i.event_id, { profileId: i.profile_id });
   if (existing) {
     dbError((await ctx.supabase.from("assignments").update({ role: i.role }).eq("id", existing.id)).error);
     return;
@@ -354,9 +398,7 @@ export const moveAssignment = defineAction(z.object({ assignment_id: uuid, event
   if (!a || a.status !== "active") throw notFound();
   await requireAdjustable(ctx, i.event_id);
   if (a.event_id === i.event_id && a.role === i.role) return;
-  if (i.role === "oc") {
-    dbError((await ctx.supabase.from("assignments").update({ role: "helper" }).eq("event_id", i.event_id).eq("role", "oc").eq("status", "active").neq("id", a.id)).error);
-  }
+  if (i.role === "oc") await makeRoomForOc(ctx, i.event_id, { assignmentId: a.id });
   if (a.event_id === i.event_id) {
     dbError((await ctx.supabase.from("assignments").update({ role: i.role }).eq("id", a.id)).error);
     return;

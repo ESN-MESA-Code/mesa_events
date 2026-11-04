@@ -13,12 +13,14 @@ import { suggestCategory, type Category, type Format } from "@/lib/formats";
 import type { IdeaPrefill } from "@/lib/inspiration";
 import { cycleTimeline, type TimelineDays } from "@/lib/timeline";
 import { formatDate, formatDateTime, monthLabel } from "@/lib/dates";
+import { PartnerPicker, type Member, type Partner } from "./PartnerPicker";
 
 const schema = z.object({
   title: z.string().trim().min(1, "Give it a name").max(200),
   proposed_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
   pitch: z.string().max(2000),
   helpers_needed: z.coerce.number().int().min(0).max(50),
+  ocs_needed: z.coerce.number().int().min(1).max(10),
   wants_to_oc: z.boolean(),
   type_suggestion: z.enum(["", ...EVENT_TYPES]),
   category_id: z.string(),
@@ -26,7 +28,7 @@ const schema = z.object({
 });
 type Values = z.input<typeof schema>;
 
-const EMPTY: Values = { title: "", proposed_date: "", pitch: "", helpers_needed: 2, wants_to_oc: true, type_suggestion: "", category_id: "", format_id: "" };
+const EMPTY: Values = { title: "", proposed_date: "", pitch: "", helpers_needed: 2, ocs_needed: 1, wants_to_oc: true, type_suggestion: "", category_id: "", format_id: "" };
 
 /**
  * `prefill` ("Propose this again" from Get inspired) fills the form (the
@@ -42,12 +44,15 @@ export function IdeaForm({
   formats,
   earliest,
   days,
+  members,
 }: {
   prefill?: (IdeaPrefill & { nonce: number }) | null;
   categories: Category[];
   formats: Format[];
   earliest: string;
   days: TimelineDays;
+  /** Everyone who can be named as partner (not the viewer). */
+  members: Member[];
 }) {
   const { run, pending, error } = useAction();
   const checked = useMemo(
@@ -66,6 +71,13 @@ export function IdeaForm({
     : `From ${formatDate(`${earliest}T12:00:00Z`)} on – any later month is fine, next year too.`;
   // The member chose the category (or it came with "Propose this again"): no more suggestions.
   const [picked, setPicked] = useState(!!prefill?.category_id);
+  // Partners (round 2026-11-04): asked as co-OC or helper; co-OCs raise the OCs needed.
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const wantsOc = useWatch({ control, name: "wants_to_oc" });
+  const minOcs = Math.max(1, (wantsOc ? 1 : 0) + partners.filter((p) => p.role === "oc").length);
+  useEffect(() => {
+    if (Number(getValues("ocs_needed")) < minOcs) setValue("ocs_needed", minOcs);
+  }, [minOcs, getValues, setValue]);
 
   const suggested = useMemo(() => suggestCategory({ title: title ?? "" }, categories)?.id ?? "", [title, categories]);
   useEffect(() => {
@@ -91,8 +103,9 @@ export function IdeaForm({
       className="space-y-4"
       onSubmit={handleSubmit((v) => {
         const p = checked.parse(v);
-        run(proposeIdea, { ...p, type_suggestion: p.type_suggestion || null, category_id: p.category_id || null, format_id: p.format_id || null }, () => {
+        run(proposeIdea, { ...p, type_suggestion: p.type_suggestion || null, category_id: p.category_id || null, format_id: p.format_id || null, partners }, () => {
           setPicked(false);
+          setPartners([]);
           reset(EMPTY);
         });
       })}
@@ -107,9 +120,12 @@ export function IdeaForm({
           <FormatSelect id="idea-format" formats={formats} categories={categories} value={formatId ?? ""} onChange={pickFormat} />
         </Field>
       )}
+      <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message} hint={e.proposed_date ? undefined : dateHint}>
+        <Input id="idea-date" type="date" min={earliest} {...register("proposed_date")} />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message} hint={e.proposed_date ? undefined : dateHint}>
-          <Input id="idea-date" type="date" min={earliest} {...register("proposed_date")} />
+        <Field label="OCs needed" htmlFor="idea-ocs" error={e.ocs_needed?.message} hint={minOcs > 1 ? `At least ${minOcs}: you and your co-OCs` : undefined}>
+          <Input id="idea-ocs" type="number" min={minOcs} max={10} {...register("ocs_needed")} />
         </Field>
         <Field label="Helpers needed" htmlFor="idea-helpers" error={e.helpers_needed?.message}>
           <Input id="idea-helpers" type="number" min={0} max={50} {...register("helpers_needed")} />
@@ -145,6 +161,9 @@ export function IdeaForm({
       <label className="flex items-center gap-2 text-sm text-gray-700">
         <input type="checkbox" {...register("wants_to_oc")} /> I want to be the OC of this event
       </label>
+      <Field label="Run it with someone? (optional)" hint="They are asked first and count once they say yes – as co-OC or helper. Nobody else is asked for the slots they take.">
+        <PartnerPicker members={members} value={partners} onChange={setPartners} />
+      </Field>
       {error && <Alert tone="error">{error}</Alert>}
       <Button disabled={pending}>{pending ? "Sending…" : "Propose idea"}</Button>
     </form>

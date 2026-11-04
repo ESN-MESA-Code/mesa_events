@@ -2,16 +2,17 @@
 // "Monthly workflow" 4). A pure, deterministic function: the same input
 // always gives the same roster (tests/unit/allocation.test.ts).
 //
-// * One OC per event, `helpersNeeded` helpers.
+// * `ocsNeeded` OCs (default 1) and `helpersNeeded` helpers per event.
 // * Hard rules: nobody is on two overlapping events, nobody gets more events
 //   than they said they can do (`maxEvents`) or more OC roles than `maxOc`.
-// * 0. Proposers first: the proposer of an idea who wants to OC it is its OC.
-//   Their role counts towards their limits. The form takes no OC answers for
-//   such an event, and the proposer cannot be its helper. A proposer whose two
-//   events overlap keeps the earlier one; the other is reported (`issues`) and
-//   needs an OC from the Events team.
-// * 1. OCs: the event with the fewest possible OCs first. Nobody gets a second
-//   OC role while someone without one can take it.
+// * 0. People fixed on the event first (`fixed`): the idea's proposer who OCs
+//   it and the partners who accepted, as co-OC or helper. Their roles count
+//   towards their limits; the form takes nothing from them for that event,
+//   and no OC answers once they fill the OC slots. Someone fixed on two
+//   overlapping events keeps the earlier one; the other is reported
+//   (`issues`) for the Events team.
+// * 1. OCs: the event with the fewest possible OCs per open OC slot first.
+//   Nobody gets a second OC role while someone without one can take it.
 // * 2. Helpers in rounds: in round 1 nobody gets more than one event (an OC
 //   already has one), in round 2 nobody more than two, and so on. Within a
 //   round the scarcest event (fewest willing people per open slot) is filled
@@ -23,9 +24,9 @@
 //   first-time OC, a bonus for experience. Ties: a lottery seeded with the
 //   cycle (not the submission time), then the id.
 // * Someone who only ranked OC is not made a helper. Nobody signed up (no
-//   OC, no helper) → dropped. An OC with too few helpers → under-staffed (the
-//   OC decides whether it runs). Helpers but no OC → no_oc (Events assigns
-//   one or drops it).
+//   OC, no helper) → dropped. An OC with too few co-OCs or helpers →
+//   under-staffed (the OC decides whether it runs). Helpers but no OC → no_oc
+//   (Events assigns one or drops it).
 
 export type Rank = 1 | 2 | 3 | 4 | 5;
 
@@ -34,8 +35,10 @@ export interface AllocationEvent {
   startsAt: string;
   endsAt?: string | null;
   helpersNeeded: number;
-  /** The idea's proposer, OC by default. */
-  defaultOcId?: string | null;
+  /** How many OCs; default 1. */
+  ocsNeeded?: number;
+  /** Already on the event: the idea's proposer (OC) and its accepted partners. */
+  fixed?: Array<{ profileId: string; role: "oc" | "helper" }>;
 }
 
 export interface AllocationChoice {
@@ -77,10 +80,10 @@ export interface AllocatedAssignment {
 
 export interface AllocationResult {
   assignments: AllocatedAssignment[];
-  events: Record<string, { status: StaffingStatus; ocId: string | null; helperIds: string[]; helpersNeeded: number; signups: number }>;
+  events: Record<string, { status: StaffingStatus; ocIds: string[]; helperIds: string[]; ocsNeeded: number; helpersNeeded: number; signups: number }>;
   conflicts: Array<{ profileId: string; eventIds: [string, string] }>;
-  /** Proposers whose two events overlap: they OC `otherEventId`, not `eventId`. */
-  issues: Array<{ kind: "proposer_clash"; eventId: string; profileId: string; otherEventId: string }>;
+  /** Someone fixed on two overlapping events: they are on `otherEventId`, not on `eventId`. */
+  issues: Array<{ kind: "fixed_clash"; eventId: string; profileId: string; role: "oc" | "helper"; otherEventId: string }>;
   /** Volunteers who signed up for something and got nothing. */
   unplaced: string[];
   /** Top-choice wishes in all, and how many of them were met. */
@@ -125,10 +128,10 @@ interface Volunteer {
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-export function staffingStatus(hasOc: boolean, helpers: number, helpersNeeded: number): StaffingStatus {
-  if (!hasOc && helpers === 0) return "dropped";
-  if (!hasOc) return "no_oc";
-  return helpers < helpersNeeded ? "understaffed" : "staffed";
+export function staffingStatus(ocs: number, ocsNeeded: number, helpers: number, helpersNeeded: number): StaffingStatus {
+  if (ocs === 0 && helpers === 0) return "dropped";
+  if (ocs === 0) return "no_oc";
+  return ocs < ocsNeeded || helpers < helpersNeeded ? "understaffed" : "staffed";
 }
 
 export function allocate(events: AllocationEvent[], choices: AllocationChoice[], options: AllocationOptions): AllocationResult {
@@ -138,9 +141,9 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
   const mine = choices.filter((c) => eventIds.has(c.eventId)).sort((a, b) => byId(a.profileId, b.profileId) || byId(a.eventId, b.eventId));
   const wish = new Map(mine.map((c) => [`${c.profileId}|${c.eventId}`, c]));
 
-  // Everyone with an answer or a proposer role, with their limits and history.
+  // Everyone with an answer or fixed on an event, with their limits and history.
   const info = new Map((options.people ?? []).map((p) => [p.profileId, p]));
-  const ids = [...new Set([...mine.map((c) => c.profileId), ...sortedEvents.flatMap((e) => (e.defaultOcId ? [e.defaultOcId] : []))])].sort(byId);
+  const ids = [...new Set([...mine.map((c) => c.profileId), ...sortedEvents.flatMap((e) => (e.fixed ?? []).map((f) => f.profileId))])].sort(byId);
   const person = new Map(
     ids.map((id): [string, Volunteer] => {
       const answers = mine.filter((c) => c.profileId === id).flatMap((c) => [c.ocRank, c.helperRank].filter((r): r is Rank => r !== null));
@@ -163,7 +166,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
     })
   );
 
-  const oc = new Map<string, string>();
+  const ocs = new Map(sortedEvents.map((e) => [e.id, [] as string[]]));
   const helpers = new Map(sortedEvents.map((e) => [e.id, [] as string[]]));
   const assignments: AllocatedAssignment[] = [];
   const issues: AllocationResult["issues"] = [];
@@ -183,7 +186,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
     p.events.push(eventId);
     if (role === "oc") {
       p.oc++;
-      oc.set(eventId, profileId);
+      ocs.get(eventId)!.push(profileId);
     } else helpers.get(eventId)!.push(profileId);
     assignments.push({ eventId, profileId, role, source });
   };
@@ -193,8 +196,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
     const relative = Math.min((points(rank) * p.count) / p.sum, RELATIVE_CAP);
     let s = (points(rank) / MID_POINTS + relative) / 2 + p.bonus;
     if (p.experienced) {
-      const ocId = oc.get(eventId);
-      const team = [...(ocId ? [ocId] : []), ...helpers.get(eventId)!];
+      const team = [...ocs.get(eventId)!, ...helpers.get(eventId)!];
       if (role === "oc" || !team.some((id) => person.get(id)!.experienced)) s += EXPERIENCE_BONUS;
     }
     return s;
@@ -205,21 +207,35 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
       .map((id) => ({ id, score: score(id, eventId, role), ticket: person.get(id)!.ticket }))
       .sort((a, b) => (first?.(a.id, b.id) ?? 0) || b.score - a.score || a.ticket - b.ticket || byId(a.id, b.id))[0].id;
 
-  // 0. Proposers.
+  // 0. People fixed on the event (proposer, partners): OCs first.
   for (const e of sortedEvents) {
-    if (!e.defaultOcId) continue;
-    const other = person.get(e.defaultOcId)!.events.find((o) => clash(o, e.id));
-    if (other) issues.push({ kind: "proposer_clash", eventId: e.id, profileId: e.defaultOcId, otherEventId: other });
-    else place(e.id, e.defaultOcId, "oc", "proposer");
+    const fixed = [...(e.fixed ?? [])].sort((a, b) => (a.role === b.role ? byId(a.profileId, b.profileId) : a.role === "oc" ? -1 : 1));
+    for (const f of fixed) {
+      if (person.get(f.profileId)!.events.includes(e.id)) continue;
+      const other = person.get(f.profileId)!.events.find((o) => clash(o, e.id));
+      if (other) issues.push({ kind: "fixed_clash", eventId: e.id, profileId: f.profileId, role: f.role, otherEventId: other });
+      else place(e.id, f.profileId, f.role, "proposer");
+    }
   }
 
+  /** Fewest candidates per open slot (cross-multiplied, exact), then fewest candidates; the earlier event on a tie. */
+  const scarcest = <T extends { slots: number; candidates: string[] }>(open: T[]) =>
+    open.reduce((a, b) => {
+      const d = b.candidates.length * a.slots - a.candidates.length * b.slots;
+      return d < 0 || (d === 0 && b.candidates.length < a.candidates.length) ? b : a;
+    });
+
   // 1. OCs, the scarcest event first.
+  const openOc = (e: AllocationEvent) => Math.max(1, e.ocsNeeded ?? 1) - ocs.get(e.id)!.length;
   const ocCandidates = (eventId: string) =>
     mine.filter((c) => c.eventId === eventId && c.ocRank !== null && person.get(c.profileId)!.oc < person.get(c.profileId)!.maxOc && free(c.profileId, eventId)).map((c) => c.profileId);
   for (;;) {
-    const open = sortedEvents.filter((e) => !oc.has(e.id)).map((e) => ({ e, candidates: ocCandidates(e.id) })).filter((x) => x.candidates.length);
+    const open = sortedEvents
+      .filter((ev) => openOc(ev) > 0)
+      .map((ev) => ({ e: ev, slots: openOc(ev), candidates: ocCandidates(ev.id) }))
+      .filter((x) => x.candidates.length);
     if (!open.length) break;
-    const { e, candidates } = open.reduce((a, b) => (b.candidates.length < a.candidates.length ? b : a));
+    const { e, candidates } = scarcest(open);
     place(e.id, best(e.id, "oc", candidates, (a, b) => person.get(a)!.oc - person.get(b)!.oc || person.get(a)!.events.length - person.get(b)!.events.length), "oc", "auto");
   }
 
@@ -234,21 +250,24 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
         .map((ev) => ({ e: ev, slots: missing(ev), candidates: helperCandidates(ev.id, round) }))
         .filter((x) => x.candidates.length);
       if (!open.length) break;
-      // Fewest candidates per open slot (cross-multiplied, exact), then fewest candidates; the earlier event on a tie.
-      const { e, candidates } = open.reduce((a, b) => {
-        const d = b.candidates.length * a.slots - a.candidates.length * b.slots;
-        return d < 0 || (d === 0 && b.candidates.length < a.candidates.length) ? b : a;
-      });
+      const { e, candidates } = scarcest(open);
       place(e.id, best(e.id, "helper", candidates), "helper", "auto");
     }
   }
 
   const result: AllocationResult = { assignments, events: {}, conflicts: findConflicts(sortedEvents, assignments), issues, unplaced: [], topChoices: { wished: 0, met: 0 } };
   for (const e of sortedEvents) {
-    const ocId = oc.get(e.id) ?? null;
-    const signups = new Set(mine.filter((c) => c.eventId === e.id).map((c) => c.profileId));
-    if (e.defaultOcId) signups.add(e.defaultOcId);
-    result.events[e.id] = { status: staffingStatus(ocId !== null, helpers.get(e.id)!.length, e.helpersNeeded), ocId, helperIds: helpers.get(e.id)!, helpersNeeded: e.helpersNeeded, signups: signups.size };
+    const ocIds = ocs.get(e.id)!;
+    const ocsNeeded = Math.max(1, e.ocsNeeded ?? 1);
+    const signups = new Set([...mine.filter((c) => c.eventId === e.id).map((c) => c.profileId), ...(e.fixed ?? []).map((f) => f.profileId)]);
+    result.events[e.id] = {
+      status: staffingStatus(ocIds.length, ocsNeeded, helpers.get(e.id)!.length, e.helpersNeeded),
+      ocIds,
+      helperIds: helpers.get(e.id)!,
+      ocsNeeded,
+      helpersNeeded: e.helpersNeeded,
+      signups: signups.size,
+    };
   }
   result.unplaced = ids.filter((id) => !person.get(id)!.events.length);
   for (const c of mine) {

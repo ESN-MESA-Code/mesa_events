@@ -20,6 +20,8 @@ interface RowEvent {
   location: string;
   meetingPoint: string;
   helpersNeeded: number;
+  /** OCs needed (round 2026-11-04). */
+  ocsNeeded: number;
   status: EventStatus;
   proposer: string | null;
   signups: number;
@@ -52,6 +54,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
                 // Only when changed: clearing it clears the whole meeting point (address and time too).
                 ...(v.meetingPoint.trim() !== event.meetingPoint ? { meeting_point: v.meetingPoint.trim() || null } : {}),
                 helpers_needed: Number(v.helpersNeeded),
+                ocs_needed: Number(v.ocsNeeded),
                 category_id: v.categoryId || null,
                 format_id: v.formatId || null,
               },
@@ -82,6 +85,9 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
           </Field>
           <Field label="Meeting point (if not there)" htmlFor={`m-${event.id}`} hint="Address and time on the event page; empty: they meet at the location">
             <Input id={`m-${event.id}`} value={v.meetingPoint} onChange={(e) => setV({ ...v, meetingPoint: e.target.value })} placeholder="e.g. München Hauptbahnhof" />
+          </Field>
+          <Field label="OCs needed" htmlFor={`o-${event.id}`}>
+            <Input id={`o-${event.id}`} type="number" min={1} max={10} value={v.ocsNeeded} onChange={(e) => setV({ ...v, ocsNeeded: Number(e.target.value) })} />
           </Field>
           <Field label="Helpers needed" htmlFor={`h-${event.id}`}>
             <Input id={`h-${event.id}`} type="number" min={0} max={50} value={v.helpersNeeded} onChange={(e) => setV({ ...v, helpersNeeded: Number(e.target.value) })} />
@@ -134,6 +140,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
         <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
       </span>
       <span className="col-span-2 text-xs text-gray-500 sm:col-span-1" title={event.proposer ? `idea by ${event.proposer}` : undefined}>
+        {event.ocsNeeded > 1 && `${event.ocsNeeded} OCs · `}
         {plural(event.helpersNeeded, "helper")} · {event.signups} volunteered
       </span>
       {canEdit ? (
@@ -161,7 +168,7 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
 /** A format fills title, type, helpers, place and category; the category is suggested from the title until picked. */
 export function AddEventForm({ cycleId, defaultStart, categories, formats }: { cycleId: string; defaultStart: string; categories: Category[]; formats: Format[] }) {
   const { run, pending, error } = useAction();
-  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", meeting_point: "", helpers_needed: 2, category_id: "", format_id: "" };
+  const blank = { title: "", type: "standard" as EventType, starts_at: defaultStart, location: "", meeting_point: "", helpers_needed: 2, ocs_needed: 1, category_id: "", format_id: "" };
   const [v, setV] = useState(blank);
   const [pickedCategory, setPickedCategory] = useState(false);
   const [open, setOpen] = useState(false);
@@ -178,7 +185,7 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
       className="grid gap-3 sm:grid-cols-2 rounded-lg border border-dashed border-gray-300 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, meeting_point: v.meeting_point || null, helpers_needed: Number(v.helpers_needed), category_id: categoryId || null, format_id: v.format_id || null }, () => {
+        run(createEvent, { cycle_id: cycleId, ...v, location: v.location || null, meeting_point: v.meeting_point || null, helpers_needed: Number(v.helpers_needed), ocs_needed: Number(v.ocs_needed), category_id: categoryId || null, format_id: v.format_id || null }, () => {
           setV(blank);
           setPickedCategory(false);
           setOpen(false);
@@ -226,6 +233,9 @@ export function AddEventForm({ cycleId, defaultStart, categories, formats }: { c
       <Field label="Starts" htmlFor="new-start">
         <Input id="new-start" type="datetime-local" value={v.starts_at} onChange={(e) => setV({ ...v, starts_at: e.target.value })} required />
       </Field>
+      <Field label="OCs needed" htmlFor="new-ocs">
+        <Input id="new-ocs" type="number" min={1} max={10} value={v.ocs_needed} onChange={(e) => setV({ ...v, ocs_needed: Number(e.target.value) })} />
+      </Field>
       <Field label="Helpers needed" htmlFor="new-helpers">
         <Input id="new-helpers" type="number" min={0} max={50} value={v.helpers_needed} onChange={(e) => setV({ ...v, helpers_needed: Number(e.target.value) })} />
       </Field>
@@ -255,7 +265,17 @@ export function IdeaCard({
   formats,
   sameFormatIdeas = 0,
 }: {
-  idea: { id: string; title: string; date: string; pitch: string; helpers: number; wantsToOc: boolean; proposer: string; typeSuggestion?: EventType | null; categoryId?: string | null; formatId?: string | null };
+  idea: {
+    id: string;
+    title: string;
+    date: string;
+    pitch: string;
+    helpers: number;
+    /** OCs needed and the partners asked (round 2026-11-04). */
+    ocs?: number;
+    partners?: Array<{ name: string; role: "oc" | "helper"; status: string }>;
+    wantsToOc: boolean;
+    proposer: string; typeSuggestion?: EventType | null; categoryId?: string | null; formatId?: string | null };
   cycleId: string;
   events: Array<{ id: string; title: string; formatId?: string | null; when?: string }>;
   canEdit: boolean;
@@ -285,8 +305,15 @@ export function IdeaCard({
         <span className="text-xs text-gray-500 ml-auto">{idea.date}</span>
       </div>
       <p className="text-xs text-gray-500">
-        by {idea.proposer} · {plural(idea.helpers, "helper")} · {idea.wantsToOc ? "wants to OC" : "not OC"}
+        by {idea.proposer} · {(idea.ocs ?? 1) > 1 && `${idea.ocs} OCs · `}
+        {plural(idea.helpers, "helper")} · {idea.wantsToOc ? "wants to OC" : "not OC"}
       </p>
+      {!!idea.partners?.length && (
+        <p className="text-xs text-gray-600">
+          With:{" "}
+          {idea.partners.map((p) => `${p.name} (${p.role === "oc" ? "co-OC" : "helper"}${p.status === "accepted" ? "" : p.status === "declined" ? ", said no" : ", not answered yet"})`).join(", ")}
+        </p>
+      )}
       {(idea.categoryId || format) && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
           <CategoryBadge category={categories.find((c) => c.id === idea.categoryId)} />

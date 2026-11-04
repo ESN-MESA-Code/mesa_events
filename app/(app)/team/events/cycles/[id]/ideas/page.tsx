@@ -35,7 +35,7 @@ export default async function CycleIdeasPage({ params }: { params: Promise<{ id:
   const [{ data: rows }, { data: events }, { categories, formats }] = await Promise.all([
     supabase
       .from("event_ideas")
-      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, type_suggestion, category_id, format_id, status, decision_note, event_id, profiles:proposer_id(full_name)")
+      .select("id, title, proposed_date, pitch, helpers_needed, ocs_needed, wants_to_oc, type_suggestion, category_id, format_id, status, decision_note, event_id, profiles:proposer_id(full_name), idea_partners(role, status, profiles(full_name))")
       .gte("proposed_date", cycle.month)
       .lte("proposed_date", monthEnd)
       .order("proposed_date"),
@@ -82,6 +82,8 @@ export default async function CycleIdeasPage({ params }: { params: Promise<{ id:
                 date: i.proposed_date,
                 pitch: i.pitch,
                 helpers: i.helpers_needed,
+                ocs: i.ocs_needed,
+                partners: (i.idea_partners ?? []).map((p) => ({ name: (p.profiles as { full_name: string } | null)?.full_name ?? "?", role: p.role as "oc" | "helper", status: p.status })),
                 wantsToOc: i.wants_to_oc,
                 typeSuggestion: i.type_suggestion,
                 categoryId: i.category_id,

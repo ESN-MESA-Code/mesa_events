@@ -203,11 +203,11 @@ describe("planning cycle end to end", () => {
 
     const r = await P.runAllocation(await ctx(USERS.events), { cycle_id: cycleId });
     expect(r.ok).toBe(true);
-    const res = (r as { data: { events: Record<string, { status: string; ocId: string | null; helperIds: string[] }> } }).data;
+    const res = (r as { data: { events: Record<string, { status: string; ocIds: string[]; helperIds: string[] }> } }).data;
     // Quiz: proposer (member) is OC by default. Helpers in rounds: volunteer1 in round 1, oc@ (already the hike's OC) in round 2.
-    expect(res.events[quizId]).toMatchObject({ status: "staffed", ocId: USERS.member.id, helperIds: [USERS.volunteer1.id, USERS.oc.id] });
+    expect(res.events[quizId]).toMatchObject({ status: "staffed", ocIds: [USERS.member.id], helperIds: [USERS.volunteer1.id, USERS.oc.id] });
     // Hike: oc@ wanted OC (2), helper@ helper (1).
-    expect(res.events[hikeId]).toMatchObject({ status: "staffed", ocId: USERS.oc.id, helperIds: [USERS.helper.id] });
+    expect(res.events[hikeId]).toMatchObject({ status: "staffed", ocIds: [USERS.oc.id], helperIds: [USERS.helper.id] });
     expect(res.events[ghostId]).toMatchObject({ status: "dropped" });
 
     // Until confirmation, members do not see the roster (but see their own assignment).

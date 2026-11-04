@@ -34,9 +34,11 @@ export function VolunteerForm({
     when: string;
     location: string;
     helpers: number;
-    /** The OC is set already: the idea's proposer ("you" for the viewer) – no OC answers. */
-    fixedOc: string | null;
-    /** The viewer proposed the idea. */
+    /** OCs needed (round 2026-11-04: several per event). */
+    ocs: number;
+    /** On the event already: the idea's proposer (OC) and the partners who accepted. Once they fill the OC slots, no OC answers. */
+    fixed: Array<{ name: string; role: "oc" | "helper"; me: boolean; proposer: boolean }>;
+    /** The viewer proposed the idea or joined it as partner. */
     mine: boolean;
   }>;
 }) {
@@ -107,40 +109,53 @@ export function VolunteerForm({
       className="space-y-4"
     >
       <ul className="divide-y divide-gray-100">
-        {events.map((e) => (
-          <li key={e.id} data-testid={`volunteer-${e.title}`} className="grid gap-2 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div className="min-w-0">
-              <p className="font-medium text-gray-900 break-words">
-                {e.title}
-                {e.mine && (
-                  <Badge tone="blue" className="ml-2 align-middle">
-                    Your idea
-                  </Badge>
-                )}
-              </p>
-              <p className="text-xs text-gray-500">
-                {e.when} · {e.type}
-                {e.location && ` · ${e.location}`} · {plural(e.helpers, "helper")}
-              </p>
-            </div>
-            {e.fixedOc === "you" ? (
-              // Their own event: they are the OC, so neither OC nor helper answers.
-              <p className="text-xs text-gray-600 lg:max-w-xs">You are the OC – you proposed it. Nothing to answer here.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {e.fixedOc ? (
-                  <p className="flex items-center gap-2 text-xs text-gray-600">
-                    <span className="w-12 shrink-0 font-medium text-gray-500">OC</span>
-                    {e.fixedOc} (proposed the idea)
-                  </p>
-                ) : (
-                  <Segmented label={`OC for ${e.title}`} short="OC" options={RANKS} value={wishes[e.id]?.oc ?? null} onChange={(v) => set(e.id, "oc", v)} />
-                )}
-                <Segmented label={`Helper for ${e.title}`} short="Helper" options={RANKS} value={wishes[e.id]?.helper ?? null} onChange={(v) => set(e.id, "helper", v)} />
+        {events.map((e) => {
+          const me = e.fixed.find((f) => f.me);
+          const fixedOcs = e.fixed.filter((f) => f.role === "oc");
+          const fixedHelpers = e.fixed.filter((f) => f.role === "helper");
+          const names = (fs: typeof e.fixed) => fs.map((f) => `${f.name} (${f.proposer ? "proposed the idea" : "from the idea"})`).join(", ");
+          return (
+            <li key={e.id} data-testid={`volunteer-${e.title}`} className="grid gap-2 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 break-words">
+                  {e.title}
+                  {e.mine && (
+                    <Badge tone="blue" className="ml-2 align-middle">
+                      Your idea
+                    </Badge>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {e.when} · {e.type}
+                  {e.location && ` · ${e.location}`} · {e.ocs > 1 && `${e.ocs} OCs · `}
+                  {plural(e.helpers, "helper")}
+                </p>
               </div>
-            )}
-          </li>
-        ))}
+              {me ? (
+                // Their own event (proposer or partner): they are on it already, so nothing to answer.
+                <p className="text-xs text-gray-600 lg:max-w-xs">
+                  You are {me.role === "oc" ? "an OC" : "a helper"} – {me.proposer ? "you proposed it" : "you joined the idea"}. Nothing to answer here.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {fixedOcs.length >= e.ocs ? (
+                    <p className="flex items-center gap-2 text-xs text-gray-600">
+                      <span className="w-12 shrink-0 font-medium text-gray-500">OC</span>
+                      {names(fixedOcs)}
+                    </p>
+                  ) : (
+                    <>
+                      <Segmented label={`OC for ${e.title}`} short="OC" options={RANKS} value={wishes[e.id]?.oc ?? null} onChange={(v) => set(e.id, "oc", v)} />
+                      {fixedOcs.length > 0 && <p className="pl-14 text-xs text-gray-500">With {names(fixedOcs)}</p>}
+                    </>
+                  )}
+                  <Segmented label={`Helper for ${e.title}`} short="Helper" options={RANKS} value={wishes[e.id]?.helper ?? null} onChange={(v) => set(e.id, "helper", v)} />
+                  {fixedHelpers.length > 0 && <p className="pl-14 text-xs text-gray-500">Helping already: {names(fixedHelpers)}</p>}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {/* Always shown, so the question is not missed (required once an event is picked). */}
       <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-3">
@@ -181,7 +196,7 @@ function HowItWorks() {
         How the roster is made
       </h3>
       <ul className="list-disc space-y-1 pl-4">
-        <li>If you proposed the idea and want to OC it, you are its OC – nobody else is asked for OC there, and you are not its helper.</li>
+        <li>If you proposed the idea and want to OC it, you are its OC; partners who accepted your idea are its co-OCs or helpers. Nobody is asked for the OC slots they fill.</li>
         <li>Every event gets an OC first; nobody OCs a second event while someone else who wants to can take it.</li>
         <li>Helpers are placed in rounds: everyone gets one event before anyone gets a second, and never more than you said you can do.</li>
         <li>

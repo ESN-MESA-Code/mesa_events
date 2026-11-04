@@ -94,15 +94,16 @@ export const rosterChange: JobHandler = async (job, deps) => {
     roster(deps, event.id),
     deps.admin.from("app_settings").select("value").eq("key", "chat_notifications").maybeSingle(),
   ]);
-  const oc = people.find((x) => x.kind === "oc" && x.email !== person?.email) ?? null;
-  const text = rosterMessage(p.kind, person?.full_name ?? "Someone", p.role, oc?.email ?? null, eventUrl(deps, event.id), event.title);
+  const ocs = people.filter((x) => x.kind === "oc" && x.email !== person?.email).map((x) => x.email);
+  const text = rosterMessage(p.kind, person?.full_name ?? "Someone", p.role, ocs, eventUrl(deps, event.id), event.title);
   const out: Record<string, boolean> = { posted: false, notified: false };
   if (event.chat_space_name) {
     await deps.google.chat.postMessage(event.chat_space_name, text, `roster-${p.kind}-${p.assignment_id}`);
     out.posted = true;
   }
-  if (oc && setting?.value !== false) {
-    await deps.google.chat.notify(oc.email, text, `roster-dm-${p.kind}-${p.assignment_id}`);
+  if (ocs.length && setting?.value !== false) {
+    // Every OC (several per event since 2026-11-04); the first keeps the old message id.
+    for (const [i, email] of ocs.entries()) await deps.google.chat.notify(email, text, `roster-dm-${p.kind}-${p.assignment_id}${i ? `-${email}` : ""}`);
     out.notified = true;
   }
   return out;
@@ -154,7 +155,7 @@ export const remindOc: JobHandler = async (job, deps) => {
     missing = [!list?.signed_off_at && "the signed-off attendance list", !photosIn(folder) && "the photos", !report && "the event report"].filter(Boolean) as string[];
     if (!missing.length) return { skipped: "handed in" };
   }
-  const oc = (await roster(deps, event.id)).find((x) => x.kind === "oc") ?? null;
+  const ocs = (await roster(deps, event.id)).filter((x) => x.kind === "oc").map((x) => x.email);
   const deadline = (event.planning_cycles as { description_deadline: string | null } | null)?.description_deadline ?? null;
   // A description Comms sent back has its own due date (round 2026-11-03).
   let due = deadline;
@@ -169,15 +170,15 @@ export const remindOc: JobHandler = async (job, deps) => {
     due = descriptionDueAt({ deadline, status: d?.status ?? "missing", submittedAt: d?.submitted_at ?? null, sentBackAt: review?.created_at ?? null, startsAt: event.starts_at, fixDays: typeof fix?.value === "number" ? fix.value : 4 });
     if (!due) return { skipped: "description in" };
   }
-  const text = remindOcMessage(p.about, event.title, oc?.email ?? null, eventUrl(deps, event.id), due, missing, sentBack);
+  const text = remindOcMessage(p.about, event.title, ocs, eventUrl(deps, event.id), due, missing, sentBack);
   const id = `remind-${p.about}-${createHash("sha256").update(job.idempotency_key).digest("hex").slice(0, 32)}`;
   if (event.chat_space_name) {
     await deps.google.chat.postMessage(event.chat_space_name, text, id);
     return { posted: true };
   }
-  if (!oc) return { skipped: "no space and no OC" };
-  await deps.google.chat.notify(oc.email, text, id);
-  return { notified: oc.email };
+  if (!ocs.length) return { skipped: "no space and no OC" };
+  for (const [i, email] of ocs.entries()) await deps.google.chat.notify(email, text, i ? `${id}-${email}` : id);
+  return { notified: ocs.join(", ") };
 };
 
 /**
@@ -194,17 +195,17 @@ export const cancellation: JobHandler = async (job, deps) => {
   const event = await loadEvent(deps, r.event_id);
   if (!event) return { skipped: "event gone" };
   const people = await roster(deps, event.id);
-  const oc = people.find((x) => x.kind === "oc") ?? null;
+  const ocs = people.filter((x) => x.kind === "oc");
   const { data: team, error: e2 } = await deps.admin.from("role_members").select("email").eq("role", "events");
   if (e2) throw new Error(e2.message);
   const events = [...new Set((team ?? []).map((t) => t.email))].sort();
-  const text = cancellationMessage(p.kind, event, { oc: oc?.name ?? null, ocEmail: oc?.email ?? null, events }, p.kind === "requested" ? r.reason : (r.decision_note ?? ""), eventUrl(deps, event.id));
+  const text = cancellationMessage(p.kind, event, { oc: ocs.map((x) => x.name).join(" and ") || null, ocEmail: ocs.map((x) => x.email), events }, p.kind === "requested" ? r.reason : (r.decision_note ?? ""), eventUrl(deps, event.id));
   const id = `cancel-${p.kind}-${createHash("sha256").update(r.id).digest("hex").slice(0, 32)}`;
   if (event.chat_space_name) {
     await deps.google.chat.postMessage(event.chat_space_name, text, id);
     return { posted: true };
   }
-  const to = p.kind === "requested" ? events : oc ? [oc.email] : [];
+  const to = p.kind === "requested" ? events : ocs.map((x) => x.email);
   for (const email of to) await deps.google.chat.notify(email, text, `${id}-${email}`);
   return { posted: false, notified: to.length };
 };

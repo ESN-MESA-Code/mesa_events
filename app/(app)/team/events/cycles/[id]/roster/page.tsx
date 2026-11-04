@@ -26,7 +26,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
   const [{ data: events }, { data: signups }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, type, starts_at, ends_at, helpers_needed, status, assignments(id, profile_id, role, source, status, profiles(full_name, email))")
+      .select("id, title, type, starts_at, ends_at, helpers_needed, ocs_needed, status, assignments(id, profile_id, role, source, status, profiles(full_name, email))")
       .eq("cycle_id", id)
       .neq("status", "draft")
       .order("starts_at"),
@@ -52,6 +52,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
       startsAt: e.starts_at,
       when: formatDateTime(e.starts_at),
       helpersNeeded: e.helpers_needed,
+      ocsNeeded: e.ocs_needed,
       status: e.status,
       assignments: active.map((a) => ({ id: a.id, profileId: a.profile_id, role: a.role as "oc" | "helper", source: a.source })),
     };

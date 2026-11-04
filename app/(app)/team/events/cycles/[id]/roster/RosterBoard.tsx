@@ -30,6 +30,8 @@ export interface BoardEvent {
   startsAt: string;
   when: string;
   helpersNeeded: number;
+  /** How many OCs (round 2026-11-04: an event can have several). */
+  ocsNeeded: number;
   status: EventStatus;
   assignments: Array<{ id: string; profileId: string; role: "oc" | "helper"; source: string }>;
 }
@@ -234,7 +236,8 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
           {[...events].sort((a, b) => a.startsAt.localeCompare(b.startsAt)).map((ev) => {
             const oc = ev.assignments.filter((a) => a.role === "oc");
             const helpers = ev.assignments.filter((a) => a.role === "helper");
-            const staffing = STAFFING[staffingStatus(oc.length > 0, helpers.length, ev.helpersNeeded)];
+            const staffing = STAFFING[staffingStatus(oc.length, ev.ocsNeeded, helpers.length, ev.helpersNeeded)];
+            const shortOfOcs = oc.length > 0 && oc.length < ev.ocsNeeded;
             const wishers = people.filter((p) => p.wishes[ev.id] && !ev.assignments.some((a) => a.profileId === p.id));
             return (
               <Card key={ev.id} className="p-3 space-y-2" data-testid={`roster-${ev.title}`}>
@@ -244,10 +247,10 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                     {ev.title}
                   </a>
                   {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}
-                  <Badge tone={staffing.tone}>{staffing.label}</Badge>
+                  <Badge tone={staffing.tone}>{shortOfOcs ? "Short of OCs" : staffing.label}</Badge>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase text-gray-500 mb-1">OC</p>
+                  <p className="text-xs font-semibold uppercase text-gray-500 mb-1">{ev.ocsNeeded > 1 ? `OCs ${oc.length}/${ev.ocsNeeded}` : "OC"}</p>
                   <Slot id={`${ev.id}:oc`} label={`${ev.title} OC`} disabled={!editable}>
                     {oc.map((a) => (
                       <Chip key={a.id} id={`a:${a.id}`} data={{ kind: "assignment", assignmentId: a.id }} disabled={!editable}>

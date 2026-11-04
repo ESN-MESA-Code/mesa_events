@@ -1242,3 +1242,31 @@ Decisions:
   the roster board shows each person's maximum and flags anyone over it.
 - **Explained under the form** in seven short points (`HowItWorks` in `VolunteerForm.tsx`) –
   keep it in step with `lib/allocation.ts`.
+
+## 2026-11-04 – Partners on ideas, several OCs per event
+
+- **Several OCs:** ideas and events have "OCs needed" (`ocs_needed`, 1–10, default 1) next to
+  helpers needed. The one-OC-per-event index is gone. Staffing counts OCs like helpers: no OC →
+  under-staffed; fewer OCs or helpers than needed → under-staffed unless the OC decided to run it
+  (`refresh_staffing`, `confirm_allocation`, `reopen_event`); `open_slots()` offers an OC slot
+  while OCs are below `ocs_needed`.
+- **Partners on ideas** (`idea_partners`): the proposer names up to five members, each as co-OC
+  or helper – in the propose form or later on their open idea. **They confirm first** (asked by
+  the user): "Asked to join" on Ideas and a row in Home's "Waiting for you"; yes / no / step back
+  until the month is allocated. Changing partners keeps the answers of the unchanged ones; a new
+  role asks again. Only the proposer (or Events) names partners, only the partner answers
+  (`set_idea_partners`, `respond_idea_partner`, definer functions; RLS: teams, the proposer and
+  the partner read them). The two read policies use definer helpers (`is_idea_proposer`,
+  `is_idea_partner`): policies that query each other's tables recurse.
+- **Accepting an idea** sets the event's OCs needed to at least the proposer (if they OC) plus
+  the co-OCs not declined.
+- **Fixed people:** `event_fixed_people(cycle)` – the proposer who OCs the event and the partners
+  who said yes. The allocation places them first (`fixed` on `AllocationEvent`, replacing
+  `defaultOcId`; source `proposer`), the form shows them ("OC: Léa (proposed the idea)", "With
+  …", "Helping already: …") and asks them nothing for that event; `submit_volunteer_form()`
+  refuses OC answers once they fill the OC slots and any answer from them.
+- **Roster board:** "OCs 1/2" and "Short of OCs". Making someone OC on a full OC team moves the
+  OC who has been on it longest to helper – with one OC, the previous OC, as before.
+- **Chat:** mentions, reminders and direct messages go to every OC; the space description lists
+  all OC names. The attendance list names every OC who may sign off.
+

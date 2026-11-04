@@ -76,7 +76,8 @@ export async function loadMonthEvents(
 
   return (events ?? []).map((e) => {
     const active = (e.assignments ?? []).filter((a) => a.status === "active");
-    const oc = (active.find((a) => a.role === "oc")?.profiles as { full_name: string } | null)?.full_name ?? null;
+    // Several OCs since 2026-11-04: their names together.
+    const oc = active.filter((a) => a.role === "oc").map((a) => (a.profiles as { full_name: string } | null)?.full_name).filter(Boolean).join(", ") || null;
     const helpers = active.filter((a) => a.role === "helper").length;
     const d = e.descriptions as { status: string; submitted_at: string | null } | null;
     const description = d?.status ?? "missing";

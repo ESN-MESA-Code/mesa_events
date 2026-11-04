@@ -12,6 +12,14 @@ export async function withdrawIdea(input: unknown) {
   return run(A.withdrawIdea, input);
 }
 
+export async function setIdeaPartners(input: unknown) {
+  return run(A.setIdeaPartners, input);
+}
+
+export async function respondIdeaPartner(input: unknown) {
+  return run(A.respondIdeaPartner, input);
+}
+
 export async function acceptIdea(input: unknown) {
   return run(A.acceptIdea, input);
 }

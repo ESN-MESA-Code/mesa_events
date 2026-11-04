@@ -19,10 +19,15 @@ export function spaceDisplayName(e: SpaceEvent): string {
   return truncate(`${e.title} · ${formatDateTime(e.starts_at)}`, 128);
 }
 
-/** The space description: date and OC (Chat allows 150 characters, plain text). */
+/** The space description: date and OCs (Chat allows 150 characters, plain text). */
 export function spaceDescription(e: SpaceEvent, people: SpacePerson[]): string {
-  const oc = people.find((p) => p.kind === "oc");
-  return truncate(`📅 ${formatDateTime(e.starts_at)} · OC: ${oc?.name ?? "open"}`, SPACE_DESCRIPTION_MAX);
+  const oc = people.filter((p) => p.kind === "oc").map((p) => p.name);
+  return truncate(`📅 ${formatDateTime(e.starts_at)} · OC: ${oc.join(", ") || "open"}`, SPACE_DESCRIPTION_MAX);
+}
+
+/** One or several OCs (round 2026-11-04: an event can have several) as @-mentions, or "". */
+function mentionOcs(ocEmail: string | string[] | null): string {
+  return [ocEmail ?? []].flat().map(mention).join(" ");
 }
 
 export function spaceGuidelines(e: SpaceEvent, people: SpacePerson[], eventUrl: string): string {
@@ -48,9 +53,9 @@ export function welcomeMessage(e: SpaceEvent, people: SpacePerson[], eventUrl: s
   ].join("\n");
 }
 
-export function rosterMessage(kind: "dropout" | "claim", person: string, role: "oc" | "helper", ocEmail: string | null, eventUrl: string, title: string): string {
+export function rosterMessage(kind: "dropout" | "claim", person: string, role: "oc" | "helper", ocEmail: string | string[] | null, eventUrl: string, title: string): string {
   const roleName = role === "oc" ? "OC" : "helper";
-  const tellOc = ocEmail ? ` ${mention(ocEmail)}` : "";
+  const tellOc = mentionOcs(ocEmail) ? ` ${mentionOcs(ocEmail)}` : "";
   if (kind === "dropout") {
     return `⚠️ ${person} dropped out as ${roleName} of *${title}*. The ${roleName} slot is open – anyone can claim it on the event page: ${eventUrl}${tellOc}`;
   }
@@ -84,7 +89,7 @@ export function eventStatusMessage(kind: "cancelled" | "reopened", e: SpaceEvent
 export function cancellationMessage(
   kind: "requested" | "declined",
   e: SpaceEvent,
-  who: { oc: string | null; ocEmail: string | null; events: string[] },
+  who: { oc: string | null; ocEmail: string | string[] | null; events: string[] },
   text: string,
   eventUrl: string
 ): string {
@@ -94,7 +99,7 @@ export function cancellationMessage(
       `It stays on until the Events team cancels it or keeps it on: ${eventUrl}`,
     ].join("\n");
   }
-  return `✅ ${who.ocEmail ? `${mention(who.ocEmail)} ` : ""}The Events team keeps *${e.title}* on ${formatDateTime(e.starts_at)}: “${text}” – ${eventUrl}`;
+  return `✅ ${mentionOcs(who.ocEmail) ? `${mentionOcs(who.ocEmail)} ` : ""}The Events team keeps *${e.title}* on ${formatDateTime(e.starts_at)}: “${text}” – ${eventUrl}`;
 }
 
 /** At the event's start (the bot's photo reminder). */
@@ -127,13 +132,13 @@ export function esnUploadedMessage(title: string, url: string): string {
 export function remindOcMessage(
   about: "description" | "handin" | "report",
   title: string,
-  ocEmail: string | null,
+  ocEmail: string | string[] | null,
   eventUrl: string,
   deadline: string | null,
   missing: string[] = [],
   sentBack = false
 ): string {
-  const who = ocEmail ? `${mention(ocEmail)} ` : "";
+  const who = mentionOcs(ocEmail) ? `${mentionOcs(ocEmail)} ` : "";
   const due = deadline ? ` – due ${formatDateTime(deadline)}, otherwise the event is cancelled` : "";
   if (about === "description" && sentBack) {
     return `✍️ ${who}A reminder: Comms asked for changes to the description of *${title}* – please send it again${due}: ${eventUrl}/description`;

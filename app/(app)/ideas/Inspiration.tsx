@@ -9,6 +9,7 @@ import { plural } from "@/lib/plural";
 import { formatStats, type Category, type Format } from "@/lib/formats";
 import { CategoryBadge, CategorySelect } from "@/components/Sorting";
 import { IdeaForm } from "./IdeaForm";
+import type { Member } from "./PartnerPicker";
 import type { TimelineDays } from "@/lib/timeline";
 import { RevealOnHash } from "@/components/Fold";
 
@@ -29,10 +30,13 @@ export function IdeasWorkspace({
   days,
   categories,
   formats,
+  members,
   proposeOpen,
   children,
 }: {
   pool: PastEvent[];
+  /** Who can be named as partner on an idea. */
+  members: Member[];
   /** The first day a new idea may be dated (round 2026-11-02). */
   earliest: string;
   days: TimelineDays;
@@ -86,7 +90,7 @@ export function IdeasWorkspace({
           </summary>
           <CardContent>
             {prefill && <p className="mb-3 text-xs text-esn-dark">Filled in from “{prefill.title}” – change anything you like.</p>}
-            <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} earliest={earliest} days={days} />
+            <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} earliest={earliest} days={days} members={members} />
           </CardContent>
         </details>
       </Card>

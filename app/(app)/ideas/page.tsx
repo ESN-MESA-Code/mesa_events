@@ -5,7 +5,8 @@ import { cycleTimeline, firstOpenIdeaMonth, relativeDue } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
-import { withdrawIdea } from "@/app/actions/planning";
+import { respondIdeaPartner, withdrawIdea } from "@/app/actions/planning";
+import { IdeaPartnersEditor } from "./PartnerPicker";
 import { IdeasWorkspace } from "./Inspiration";
 import type { PastEvent } from "@/lib/inspiration";
 import { plural } from "@/lib/plural";
@@ -24,17 +25,29 @@ const STATUS: Record<string, { label: string; tone: "gray" | "green" | "red" | "
 export default async function IdeasPage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
-  const [{ data: ideas }, { data: past }, { categories, formats }, days] = await Promise.all([
+  const [{ data: ideas }, { data: past }, { categories, formats }, days, { data: profiles }, { data: asked }] = await Promise.all([
     supabase
       .from("event_ideas")
-      .select("id, title, proposed_date, pitch, helpers_needed, wants_to_oc, status, decision_note, event_id, category_id")
+      .select("id, title, proposed_date, pitch, helpers_needed, ocs_needed, wants_to_oc, status, decision_note, event_id, category_id, idea_partners(profile_id, role, status)")
       .eq("proposer_id", viewer.id)
       .order("created_at", { ascending: false }),
     // Previous events for "Get inspired": only what members may read (published descriptions, headcounts, photo folders).
     supabase.rpc("inspiration_events"),
     loadSorting(supabase),
     loadTimelineDays(supabase),
+    supabase.from("profiles").select("id, full_name").order("full_name"),
+    // Ideas others asked the viewer to join (round 2026-11-04).
+    supabase
+      .from("idea_partners")
+      .select("role, status, event_ideas(id, title, proposed_date, status, event_id, profiles:proposer_id(full_name))")
+      .eq("profile_id", viewer.id)
+      .order("created_at", { ascending: false }),
   ]);
+  const members = (profiles ?? []).filter((p) => p.id !== viewer.id).map((p) => ({ id: p.id, name: p.full_name }));
+  const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+  const requests = (asked ?? [])
+    .map((a) => ({ role: a.role as "oc" | "helper", status: a.status as "invited" | "accepted" | "declined", idea: a.event_ideas as unknown as { id: string; title: string; proposed_date: string; status: string; event_id: string | null; profiles: { full_name: string } | null } | null }))
+    .filter((r) => r.idea && ["proposed", "accepted"].includes(r.idea.status));
   // The ideas window (round 2026-11-02): the next month until its deadline, every later month always.
   const now = nowMs();
   const open = firstOpenIdeaMonth(now, days);
@@ -54,7 +67,39 @@ export default async function IdeasPage() {
         </span>
         <span className="text-gray-600">After that they go into {monthLabel(addMonths(open, 1))} or later – ideas for next year are welcome any time.</span>
       </div>
-      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats} proposeOpen={!ideas?.length}>
+      {requests.length > 0 && (
+        <Card className="mb-6" data-testid="idea-requests">
+          <CardHeader>
+            <CardTitle>Asked to join</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-gray-100">
+              {requests.map(({ idea, role, status }) => (
+                <li key={idea!.id} className="flex flex-wrap items-center gap-2 py-3">
+                  <span className="text-sm text-gray-900">
+                    <strong>{idea!.profiles?.full_name ?? "Someone"}</strong> asks you to run <strong>{idea!.title}</strong> ({formatDate(`${idea!.proposed_date}T12:00:00Z`)}) as{" "}
+                    {role === "oc" ? "co-OC" : "helper"}.
+                  </span>
+                  {status !== "invited" && <Badge tone={status === "accepted" ? "green" : "red"}>{status === "accepted" ? "You said yes" : "You said no"}</Badge>}
+                  <span className="ml-auto flex gap-2">
+                    {status !== "accepted" && (
+                      <ActionButton action={respondIdeaPartner} input={{ idea_id: idea!.id, accept: true }} size="sm" done={`You're on ${idea!.title} as ${role === "oc" ? "co-OC" : "helper"}.`}>
+                        Yes, I&apos;m in
+                      </ActionButton>
+                    )}
+                    {status !== "declined" && (
+                      <ActionButton action={respondIdeaPartner} input={{ idea_id: idea!.id, accept: false }} size="sm" variant="outline" done="Answer sent.">
+                        {status === "accepted" ? "Step back" : "No, thanks"}
+                      </ActionButton>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats} members={members} proposeOpen={!ideas?.length}>
         <Card>
           <CardHeader>
             <CardTitle>Your ideas</CardTitle>
@@ -72,6 +117,7 @@ export default async function IdeasPage() {
                   </div>
                   {i.pitch && <p className="text-sm text-gray-600 whitespace-pre-line">{i.pitch}</p>}
                   <p className="text-xs text-gray-500">
+                    {i.ocs_needed > 1 && `${i.ocs_needed} OCs · `}
                     {plural(i.helpers_needed, "helper")} · {i.wants_to_oc ? "you OC it" : "someone else OCs"}
                     {i.event_id && (
                       <>
@@ -83,6 +129,22 @@ export default async function IdeasPage() {
                     )}
                   </p>
                   {i.decision_note && <p className="text-xs text-gray-600">Events: {i.decision_note}</p>}
+                  {i.status === "proposed" ? (
+                    <IdeaPartnersEditor
+                      ideaId={i.id}
+                      members={members}
+                      partners={(i.idea_partners ?? []).map((p) => ({ profile_id: p.profile_id, role: p.role as "oc" | "helper", status: p.status as "invited" | "accepted" | "declined" }))}
+                    />
+                  ) : (
+                    (i.idea_partners ?? []).length > 0 && (
+                      <p className="text-xs text-gray-500">
+                        With:{" "}
+                        {(i.idea_partners ?? [])
+                          .map((p) => `${nameOf.get(p.profile_id) ?? "?"} (${p.role === "oc" ? "co-OC" : "helper"}, ${p.status === "accepted" ? "yes" : p.status === "declined" ? "no" : "asked"})`)
+                          .join(", ")}
+                      </p>
+                    )
+                  )}
                   {i.status === "proposed" && (
                     // A real button that asks first (usability review #31).
                     <ActionButton
