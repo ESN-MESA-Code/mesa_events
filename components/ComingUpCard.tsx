@@ -8,10 +8,11 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/c
 const DAY = 86_400_000;
 
 /**
- * What comes up in MESA (round 2026-11-02): the internal events, meetings
- * and office hours of the next weeks – the member's own ESN events are under
- * "My events", the month at a glance is the Calendar. RLS shows executive
- * board meetings to the executive board only.
+ * What comes up in MESA (round 2026-11-02): the internal events and
+ * meetings of the next weeks – not office hours, which are ESN events
+ * (2026-11-04); the member's own ESN events are under "My events", the month
+ * at a glance is the Calendar. RLS shows executive board meetings to the
+ * executive board only.
  */
 export async function ComingUpCard({ viewerId, now }: { viewerId: string; now: number }) {
   const supabase = await createSessionClient();
@@ -22,6 +23,7 @@ export async function ComingUpCard({ viewerId, now }: { viewerId: string; now: n
       .gte("starts_at", new Date(now).toISOString())
       .lte("starts_at", new Date(now + 30 * DAY).toISOString())
       .eq("status", "scheduled")
+      .neq("kind", "office_hour")
       .order("starts_at")
       .limit(18),
     supabase.from("internal_event_people").select("internal_event_id, role").eq("profile_id", viewerId),

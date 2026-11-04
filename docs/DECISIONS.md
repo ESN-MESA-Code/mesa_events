@@ -1298,4 +1298,6 @@ Decisions:
 - **Office hours are ESN events** (asked by the user): the "ESN events" filter shows them, the
   "Internal" one doesn't, and old `/office-hours` links open "ESN events". They keep their own
   grey colour, next to ESN events in the legend. (They are still stored as an internal kind.)
+  Home's "Coming up in MESA" leaves them out too (a member's own office-hour duties stay in My
+  events and "Waiting for you").
 - **Phones:** Subscribe moves under the list (left-aligned so its panel fits the screen).
