@@ -16,6 +16,8 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
   const vendor = `Box office ${tag}`;
   const as = (u: (typeof USERS)[keyof typeof USERS]) => signInAs(context, baseURL!, u);
   const eventId = async (title: string) => (await admin.from("events").select("id").eq("title", title).single()).data!.id;
+  // The receipt step saves Vera's IBAN on her profile: start without one, so the form asks for it.
+  await admin.from("profile_payout_details").delete().eq("profile_id", USERS.volunteer1.id);
 
   await test.step("a member proposes an idea (and will OC it)", async () => {
     await as(USERS.member);
@@ -214,7 +216,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await expect(page.getByTestId("list-state")).toHaveText("✓ Signed off");
   });
 
-  await test.step("a helper registers a receipt with bank details", async () => {
+  await test.step("a helper registers a receipt with bank details, saved once for all claims", async () => {
     await as(USERS.volunteer1);
     await page.goto(`/events/${quizId}/hand-in#register-receipt`);
     await page.locator("#r-kind").selectOption({ label: "Ticket / entry fee" });
@@ -227,6 +229,11 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.getByRole("button", { name: "Register receipt" }).click();
     await expect(page.getByText("Registered. Now hand the paper receipt to Finance.")).toBeVisible();
     await expect(page.getByTestId("my-claims")).toContainText("Hand the paper receipt to Finance");
+    // Saved on her profile (round 2026-11-07): the next receipt does not ask again.
+    await expect(page.getByTestId("receipt-payout")).toContainText("bank account DE89");
+    await page.goto("/me/reimbursements");
+    await expect(page.getByTestId("saved-payout")).toContainText("Vera Volunteer");
+    await expect(page.getByTestId("payout-line")).toHaveCount(0);
   });
 
   await test.step("Finance receives the Beleg, checks the claim and pays the month's batch", async () => {

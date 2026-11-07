@@ -3,7 +3,11 @@ import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatDateTime, formatShortDate, isoToBerlinInput, nowMs } from "@/lib/dates";
 import { describeActivity } from "@/lib/activity";
 import { understaffedNote } from "@/lib/checklist";
-import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { Clock, MapPin, MessageSquare, Navigation, Ticket, UserPlus, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Alert, buttonVariants, EmptyState } from "@/components/ui";
+import { Panel } from "@/components/Panel";
+import { cn } from "@/lib/utils";
 import { ActionButton } from "@/components/ActionButton";
 import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/app/actions/roster";
 import { CancelEventForm, CancellationDecision, DropOutButton, EventDetailsForm, RequestCancellationForm } from "./EventClient";
@@ -40,6 +44,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const dropped = (roster ?? []).filter((a) => a.status === "dropped_out");
   const slot = (slots ?? []).find((s) => s.event_id === id);
   const hasOc = active.some((a) => a.role === "oc");
+  const helpers = active.filter((a) => a.role === "helper").length;
   const lastRequest = (requests ?? [])[0] ?? null;
   const openRequest = lastRequest && !lastRequest.decision ? lastRequest : null;
   const requester = openRequest ? ((roster ?? []).find((a) => (a.profiles as { email: string } | null)?.email === openRequest.requested_by)?.profiles as { full_name: string } | null)?.full_name ?? openRequest.requested_by : null;
@@ -133,32 +138,31 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
           </Alert>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
-              <dt className="text-gray-500">Starts</dt>
-              <dd>{formatDateTime(event.starts_at)}</dd>
-              <dt className="text-gray-500">Ends</dt>
-              <dd>{event.ends_at ? formatDateTime(event.ends_at) : "–"}</dd>
-              <dt className="text-gray-500">Location</dt>
-              <dd data-testid="event-location">{formatVenue(event.location, eventAddress(event)) || "–"}</dd>
-              {meeting && (
-                <>
-                  <dt className="text-gray-500">Meeting point</dt>
-                  <dd data-testid="event-meeting">{meetingLine(meeting)}</dd>
-                </>
-              )}
-              <dt className="text-gray-500">Price</dt>
-              <dd>{event.price_cents === null ? "TBA" : event.price_cents === 0 ? "Free" : formatCents(event.price_cents)}</dd>
-              <dt className="text-gray-500">Capacity</dt>
-              <dd>{event.capacity ?? "–"}</dd>
-              <dt className="text-gray-500">Helpers needed</dt>
-              <dd>{event.helpers_needed}</dd>
-            </dl>
-            {canManage && !["dropped", "cancelled"].includes(event.status) && (
+        <Panel title="Details">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:gap-x-6">
+            <Fact icon={Clock} label="Starts">
+              {formatDateTime(event.starts_at)}
+            </Fact>
+            <Fact icon={Clock} label="Ends">
+              {event.ends_at ? formatDateTime(event.ends_at) : "–"}
+            </Fact>
+            <Fact icon={MapPin} label="Location" testId="event-location" wide>
+              {formatVenue(event.location, eventAddress(event)) || "–"}
+            </Fact>
+            {meeting && (
+              <Fact icon={Navigation} label="Meeting point" testId="event-meeting" wide>
+                {meetingLine(meeting)}
+              </Fact>
+            )}
+            <Fact icon={Ticket} label="Price">
+              {event.price_cents === null ? "TBA" : event.price_cents === 0 ? "Free" : formatCents(event.price_cents)}
+            </Fact>
+            <Fact icon={Users} label="Capacity">
+              {event.capacity ?? "–"}
+            </Fact>
+          </dl>
+          {canManage && !["dropped", "cancelled"].includes(event.status) && (
+            <div className="mt-5 border-t border-gray-100 pt-4">
               <EventDetailsForm
                 eventsTeam={isEvents}
                 event={{
@@ -172,96 +176,116 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                   capacity: event.capacity ? String(event.capacity) : "",
                 }}
               />
-            )}
-            {isEvents && upcoming && ["confirmed", "understaffed"].includes(event.status) && (
-              <div className="mt-4 border-t border-gray-100 pt-4">
-                <CancelEventForm eventId={id} title={event.title} when={when} />
-              </div>
-            )}
-            {mayAsk && upcoming && event.status === "confirmed" && (
-              <div className="mt-4 border-t border-gray-100 pt-4">
-                <RequestCancellationForm eventId={id} title={event.title} when={when} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+          {isEvents && upcoming && ["confirmed", "understaffed"].includes(event.status) && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <CancelEventForm eventId={id} title={event.title} when={when} />
+            </div>
+          )}
+          {mayAsk && upcoming && event.status === "confirmed" && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <RequestCancellationForm eventId={id} title={event.title} when={when} />
+            </div>
+          )}
+        </Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Team</CardTitle>
-            <span className="text-sm text-gray-500">
-              {active.filter((a) => a.role === "helper").length}/{event.helpers_needed} helpers
+        <Panel
+          title="Team"
+          aside={
+            <span className="text-sm text-gray-600">
+              <span className="font-semibold tabular-nums text-gray-900">
+                {helpers}/{event.helpers_needed}
+              </span>{" "}
+              helpers
             </span>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {!roster?.length && <EmptyState>The roster is not published yet.</EmptyState>}
-            {event.understaffed_decision === "run" && active.filter((a) => a.role === "helper").length < event.helpers_needed && (
-              <p className="text-xs text-gray-600" data-testid="runs-short">
-                Runs with fewer helpers – decided {event.understaffed_decided_at ? formatShortDate(event.understaffed_decided_at) : ""}. Open slots can still be claimed.
+          }
+        >
+          {event.helpers_needed > 0 && (
+            <div className="-mt-1 mb-4 h-1.5 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`${helpers} of ${event.helpers_needed} helpers`}>
+              <div className={cn("h-full rounded-full", helpers >= event.helpers_needed ? "bg-emerald-500" : "bg-esn")} style={{ width: `${Math.min(100, (helpers / event.helpers_needed) * 100)}%` }} />
+            </div>
+          )}
+          {!roster?.length && <EmptyState>The roster is not published yet.</EmptyState>}
+          {event.understaffed_decision === "run" && helpers < event.helpers_needed && (
+            <p className="mb-3 text-xs text-gray-600" data-testid="runs-short">
+              Runs with fewer helpers – decided {event.understaffed_decided_at ? formatShortDate(event.understaffed_decided_at) : ""}. Open slots can still be claimed.
+            </p>
+          )}
+          <ul className="divide-y divide-gray-100" data-testid="roster">
+            {active
+              .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))
+              .map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <span
+                    className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", a.role === "oc" ? "bg-esn text-white" : "bg-esn/10 text-esn-dark")}
+                    aria-hidden="true"
+                  >
+                    {initials(name(a))}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="block font-medium text-gray-900">
+                      {name(a)}
+                      {a.profile_id === viewer.id && <span className="ml-1.5 text-xs font-semibold text-esn">(you)</span>}
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      {a.role === "oc" ? "OC" : "Helper"}
+                      {a.source === "replacement" && " · took an open slot"}
+                    </span>
+                  </span>
+                  {a.profile_id === viewer.id && upcoming && <DropOutButton assignmentId={a.id} role={a.role as "oc" | "helper"} title={event.title} />}
+                </li>
+              ))}
+          </ul>
+          {slot && upcoming && (
+            <div className="mt-4 space-y-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-3 text-sm" data-testid="open-slots">
+              <p className="flex flex-wrap items-center gap-x-2 font-semibold text-amber-900">
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Open slots
+                <span className="font-normal text-amber-800">
+                  {[slot.open_oc && "the OC", slot.open_helpers > 0 && plural(slot.open_helpers, "helper")].filter(Boolean).join(" and ")}
+                </span>
               </p>
-            )}
-            <ul className="space-y-1.5 text-sm" data-testid="roster">
-              {active
-                .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))
-                .map((a) => (
-                  <li key={a.id} className="flex items-center gap-2">
-                    <Badge tone={a.role === "oc" ? "blue" : "gray"}>{a.role === "oc" ? "OC" : "Helper"}</Badge>
-                    <span className="font-medium text-gray-900">{name(a)}</span>
-                    {a.source === "replacement" && <span className="text-xs text-gray-500">(took an open slot)</span>}
-                    {a.profile_id === viewer.id && upcoming && (
-                      <span className="ml-auto">
-                        <DropOutButton assignmentId={a.id} role={a.role as "oc" | "helper"} title={event.title} />
-                      </span>
-                    )}
-                  </li>
-                ))}
-            </ul>
-            {slot && upcoming && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm space-y-2" data-testid="open-slots">
-                <p className="font-medium text-amber-900">Open slots</p>
-                <div className="flex flex-wrap gap-2">
-                  {slot.open_oc && !isStaff && (
-                    <ActionButton
-                      action={claimSlot}
-                      input={{ event_id: id, role: "oc" }}
-                      confirm={{ title: `Become the OC of ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. You own the event from now on: details, description, attendance and hand-in. You are added to its Chat space.`, confirmLabel: "Become the OC" }}
-                      done={`You're now the OC of ${event.title} – the description is your next step.`}
-                    >
-                      Claim the OC slot
-                    </ActionButton>
-                  )}
-                  {slot.open_helpers > 0 && !isStaff && (
-                    <ActionButton
-                      action={claimSlot}
-                      input={{ event_id: id, role: "helper" }}
-                      confirm={{ title: `Help at ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. The OC is told, and you are added to the event's Chat space.`, confirmLabel: "Yes, I'll help" }}
-                      done={`You're now a helper at ${event.title} – see you on ${formatShortDate(event.starts_at)}.`}
-                    >
-                      Claim a helper slot ({slot.open_helpers} open)
-                    </ActionButton>
-                  )}
-                  {isStaff && <span className="text-amber-900">{slot.open_oc ? "The OC slot" : plural(slot.open_helpers, "helper slot")} open – find a replacement in the Chat space.</span>}
-                </div>
+              <div className="flex flex-wrap gap-2">
+                {slot.open_oc && !isStaff && (
+                  <ActionButton
+                    action={claimSlot}
+                    input={{ event_id: id, role: "oc" }}
+                    confirm={{ title: `Become the OC of ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. You own the event from now on: details, description, attendance and hand-in. You are added to its Chat space.`, confirmLabel: "Become the OC" }}
+                    done={`You're now the OC of ${event.title} – the description is your next step.`}
+                  >
+                    Claim the OC slot
+                  </ActionButton>
+                )}
+                {slot.open_helpers > 0 && !isStaff && (
+                  <ActionButton
+                    action={claimSlot}
+                    input={{ event_id: id, role: "helper" }}
+                    confirm={{ title: `Help at ${event.title}?`, body: `${when}${venue ? ` · ${venue}` : ""}. The OC is told, and you are added to the event's Chat space.`, confirmLabel: "Yes, I'll help" }}
+                    done={`You're now a helper at ${event.title} – see you on ${formatShortDate(event.starts_at)}.`}
+                  >
+                    Claim a helper slot ({slot.open_helpers} open)
+                  </ActionButton>
+                )}
+                {isStaff && <span className="text-amber-900">{slot.open_oc ? "The OC slot" : plural(slot.open_helpers, "helper slot")} open – find a replacement in the Chat space.</span>}
               </div>
-            )}
-            {dropped.length > 0 && (isTeam || isOc) && (
-              <p className="text-xs text-gray-500" data-testid="dropped-out">
-                Dropped out: {dropped.map((a) => `${name(a)} (${a.role}${reasonOf.get(a.id) ? `: ${reasonOf.get(a.id)}` : ""})`).join("; ")}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+          {dropped.length > 0 && (isTeam || isOc) && (
+            <p className="mt-3 text-xs text-gray-500" data-testid="dropped-out">
+              Dropped out: {dropped.map((a) => `${name(a)} (${a.role}${reasonOf.get(a.id) ? `: ${reasonOf.get(a.id)}` : ""})`).join("; ")}
+            </p>
+          )}
+        </Panel>
       </div>
 
       <div className="space-y-6">
         <EventChecklist eventId={id} />
-        <Card id="chat-space" className="scroll-mt-4">
-          <CardHeader>
-            <CardTitle>Chat space</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-2" data-testid="chat-space">
+        <Panel title="Chat space" id="chat-space">
+          <div className="space-y-3 text-sm" data-testid="chat-space">
             {event.chat_space_url ? (
-              <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className="text-esn font-medium hover:underline">
+              <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline" }), "w-full")}>
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 Open the event&apos;s Chat space ↗
               </a>
             ) : event.chat_space_requested_at ? (
@@ -277,66 +301,79 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                 Create Chat space now
               </ActionButton>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
         {(published ?? []).length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Chat space and advertising</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-1 text-sm" data-testid="published-on">
-                {(published ?? []).map((p) => {
-                  const state = p.state as ChannelState;
-                  return (
-                    <li key={p.channel} className="flex flex-wrap items-center gap-2">
-                      <span className="w-28 text-gray-600">{channelName.get(p.channel) ?? p.channel}</span>
-                      <span className={state === "published" ? "text-emerald-700" : state === "planned" ? "text-esn" : "text-gray-500"}>
-                        {STATE_MARK[state]} {stateLabel(p.channel, state)}
-                        {p.at && state !== "not_planned" ? ` ${formatShortDate(p.at)}` : ""}
-                      </span>
-                      {state === "published" && p.link && (
-                        <a href={p.link} target="_blank" rel="noopener noreferrer" className="text-xs text-esn hover:underline">
-                          Open
-                        </a>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
+          <Panel title="Chat space and advertising">
+            <ul className="divide-y divide-gray-100 text-sm" data-testid="published-on">
+              {(published ?? []).map((p) => {
+                const state = p.state as ChannelState;
+                return (
+                  <li key={p.channel} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 first:pt-0 last:pb-0">
+                    <span className="w-28 font-medium text-gray-700">{channelName.get(p.channel) ?? p.channel}</span>
+                    <span className={state === "published" ? "text-emerald-700" : state === "planned" ? "text-esn" : "text-gray-500"}>
+                      {STATE_MARK[state]} {stateLabel(p.channel, state)}
+                      {p.at && state !== "not_planned" ? ` ${formatShortDate(p.at)}` : ""}
+                    </span>
+                    {state === "published" && p.link && (
+                      <a href={p.link} target="_blank" rel="noopener noreferrer" className="ml-auto text-xs font-semibold text-esn hover:underline">
+                        Open
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
         )}
         {myAssignment && !upcoming && <p className="text-xs text-gray-500">The event has started; dropping out is no longer possible here.</p>}
         {(activity.length > 0 || (rawLog && (log ?? []).length > 0)) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent activity</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <ul className="text-sm text-gray-700 space-y-1" data-testid="activity">
-                {activity.map((l) => (
-                  <li key={l.id} className="flex flex-wrap gap-x-2">
-                    <span>{l.text}</span>
-                    <span className="ml-auto text-xs text-gray-500">{formatShortDate(l.at)}</span>
-                  </li>
-                ))}
-              </ul>
-              {rawLog && (
-                <details className="text-xs text-gray-600">
-                  <summary className="cursor-pointer text-esn">Raw log</summary>
-                  <ul className="mt-1 space-y-1 font-mono" data-testid="raw-log">
-                    {(log ?? []).map((l) => (
-                      <li key={l.id}>
-                        {formatDateTime(l.at)} · {l.actor_email ?? "system"} · {l.entity} {l.action}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </CardContent>
-          </Card>
+          <Panel title="Recent activity">
+            <ul className="space-y-3 text-sm text-gray-700" data-testid="activity">
+              {activity.map((l) => (
+                <li key={l.id} className="relative flex gap-3 pl-4 before:absolute before:left-0 before:top-1.5 before:h-2 before:w-2 before:rounded-full before:bg-esn/30">
+                  <span className="min-w-0 flex-1">{l.text}</span>
+                  <span className="shrink-0 text-xs text-gray-500">{formatShortDate(l.at)}</span>
+                </li>
+              ))}
+            </ul>
+            {rawLog && (
+              <details className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600">
+                <summary className="cursor-pointer font-medium text-esn">Raw log</summary>
+                <ul className="mt-1 space-y-1 break-all font-mono" data-testid="raw-log">
+                  {(log ?? []).map((l) => (
+                    <li key={l.id}>
+                      {formatDateTime(l.at)} · {l.actor_email ?? "system"} · {l.entity} {l.action}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </Panel>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** "Chloé Dubois" → "CD". */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+
+/** One fact of the event: an icon, a small label, the value. */
+function Fact({ icon: Icon, label, testId, wide, children }: { icon: LucideIcon; label: string; testId?: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn("flex min-w-0 gap-3", wide && "col-span-2")}>
+      <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-esn/5 text-esn sm:flex" aria-hidden="true">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-gray-500">{label}</dt>
+        <dd className="text-sm font-medium text-gray-900 break-words" data-testid={testId}>
+          {children}
+        </dd>
       </div>
     </div>
   );

@@ -25,7 +25,8 @@ export function MyPayoutForm({ saved }: { saved: boolean }) {
           </Button>
           <Button
             size="sm"
-            variant="destructive"
+            variant="ghost"
+            className="text-red-700 hover:bg-red-50 hover:text-red-800"
             disabled={pending}
             onClick={async () => {
               if (

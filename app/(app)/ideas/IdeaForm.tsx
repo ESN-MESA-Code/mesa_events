@@ -45,6 +45,7 @@ export function IdeaForm({
   earliest,
   days,
   members,
+  onDone,
 }: {
   prefill?: (IdeaPrefill & { nonce: number }) | null;
   categories: Category[];
@@ -53,6 +54,8 @@ export function IdeaForm({
   days: TimelineDays;
   /** Everyone who can be named as partner (not the viewer). */
   members: Member[];
+  /** After the idea is sent (the side panel closes). */
+  onDone?: () => void;
 }) {
   const { run, pending, error } = useAction();
   const checked = useMemo(
@@ -100,72 +103,98 @@ export function IdeaForm({
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-6"
       onSubmit={handleSubmit((v) => {
         const p = checked.parse(v);
         run(proposeIdea, { ...p, type_suggestion: p.type_suggestion || null, category_id: p.category_id || null, format_id: p.format_id || null, partners }, () => {
           setPicked(false);
           setPartners([]);
           reset(EMPTY);
-        });
+          onDone?.();
+        }, "Idea sent – the Events team sees it now.");
       })}
       noValidate
       data-testid="idea-form"
     >
-      <Field label="Title" htmlFor="idea-title" error={e.title?.message}>
-        <Input id="idea-title" {...register("title")} placeholder="e.g. Pub quiz in English" />
-      </Field>
-      {formats.length > 0 && (
-        <Field label="Is this a new run of an event we did before?" htmlFor="idea-format" hint="Then its earlier runs and descriptions stay together.">
-          <FormatSelect id="idea-format" formats={formats} categories={categories} value={formatId ?? ""} onChange={pickFormat} />
+      <Group title="What">
+        <Field label="Title" htmlFor="idea-title" error={e.title?.message}>
+          <Input id="idea-title" {...register("title")} placeholder="e.g. Pub quiz in English" />
         </Field>
-      )}
-      <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message} hint={e.proposed_date ? undefined : dateHint}>
-        <Input id="idea-date" type="date" min={earliest} {...register("proposed_date")} />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="OCs needed" htmlFor="idea-ocs" error={e.ocs_needed?.message} hint={minOcs > 1 ? `At least ${minOcs}: you and your co-OCs` : undefined}>
-          <Input id="idea-ocs" type="number" min={minOcs} max={10} {...register("ocs_needed")} />
+        {formats.length > 0 && (
+          <Field label="Is this a new run of an event we did before?" htmlFor="idea-format" hint="Then its earlier runs and descriptions stay together.">
+            <FormatSelect id="idea-format" formats={formats} categories={categories} value={formatId ?? ""} onChange={pickFormat} />
+          </Field>
+        )}
+        <Field label="Pitch" htmlFor="idea-pitch" hint="What is it, why would internationals love it, rough costs?" error={e.pitch?.message}>
+          <Textarea id="idea-pitch" rows={4} {...register("pitch")} />
         </Field>
-        <Field label="Helpers needed" htmlFor="idea-helpers" error={e.helpers_needed?.message}>
-          <Input id="idea-helpers" type="number" min={0} max={50} {...register("helpers_needed")} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Category" htmlFor="idea-category" hint={categoryId && categoryId === suggested && !formatId ? "Suggested from the title" : undefined}>
+            <CategorySelect
+              id="idea-category"
+              categories={categories}
+              value={categoryId ?? ""}
+              empty="Not sure"
+              onChange={(id) => {
+                setPicked(true);
+                setValue("category_id", id);
+              }}
+            />
+          </Field>
+          <Field label="Type" htmlFor="idea-type" hint="A suggestion – the Events team decides.">
+            <Select id="idea-type" {...register("type_suggestion")}>
+              <option value="">Not sure</option>
+              {EVENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {EVENT_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </Group>
+      <Group title="When">
+        <Field label="Date" htmlFor="idea-date" error={e.proposed_date?.message} hint={e.proposed_date ? undefined : dateHint}>
+          <Input id="idea-date" type="date" min={earliest} {...register("proposed_date")} />
         </Field>
+      </Group>
+      <Group title="Who">
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm has-[:checked]:border-esn/40 has-[:checked]:bg-esn/5">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-esn" {...register("wants_to_oc")} />
+          <span>
+            <span className="block font-medium text-gray-900">I want to be the OC of this event</span>
+            <span className="block text-xs text-gray-600">Untick it if you only bring the idea and someone else should run it.</span>
+          </span>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="OCs needed" htmlFor="idea-ocs" error={e.ocs_needed?.message} hint={minOcs > 1 ? `At least ${minOcs}: you and your co-OCs` : undefined}>
+            <Input id="idea-ocs" type="number" min={minOcs} max={10} {...register("ocs_needed")} />
+          </Field>
+          <Field label="Helpers needed" htmlFor="idea-helpers" error={e.helpers_needed?.message}>
+            <Input id="idea-helpers" type="number" min={0} max={50} {...register("helpers_needed")} />
+          </Field>
+        </div>
+        <Field label="Run it with someone? (optional)" hint="They are asked first and count once they say yes – as co-OC or helper. Nobody else is asked for the slots they take.">
+          <PartnerPicker members={members} value={partners} onChange={setPartners} />
+        </Field>
+      </Group>
+      {/* Stays in view at the bottom of the side panel. */}
+      <div className="sticky bottom-0 -mx-5 space-y-2 border-t border-gray-200 bg-white px-5 py-3">
+        {error && <Alert tone="error">{error}</Alert>}
+        <Button size="lg" className="w-full" disabled={pending}>
+          {pending ? "Sending…" : "Propose idea"}
+        </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Category" htmlFor="idea-category" hint={categoryId && categoryId === suggested && !formatId ? "Suggested from the title" : undefined}>
-          <CategorySelect
-            id="idea-category"
-            categories={categories}
-            value={categoryId ?? ""}
-            empty="Not sure"
-            onChange={(id) => {
-              setPicked(true);
-              setValue("category_id", id);
-            }}
-          />
-        </Field>
-        <Field label="Type (a suggestion – the Events team decides)" htmlFor="idea-type">
-          <Select id="idea-type" {...register("type_suggestion")}>
-            <option value="">Not sure</option>
-            {EVENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {EVENT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-      <Field label="Pitch" htmlFor="idea-pitch" hint="What is it, why would internationals love it, rough costs?" error={e.pitch?.message}>
-        <Textarea id="idea-pitch" rows={4} {...register("pitch")} />
-      </Field>
-      <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input type="checkbox" {...register("wants_to_oc")} /> I want to be the OC of this event
-      </label>
-      <Field label="Run it with someone? (optional)" hint="They are asked first and count once they say yes – as co-OC or helper. Nobody else is asked for the slots they take.">
-        <PartnerPicker members={members} value={partners} onChange={setPartners} />
-      </Field>
-      {error && <Alert tone="error">{error}</Alert>}
-      <Button disabled={pending}>{pending ? "Sending…" : "Propose idea"}</Button>
     </form>
+  );
+}
+
+/** A titled group of fields in the form. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">{title}</legend>
+      {children}
+    </fieldset>
   );
 }

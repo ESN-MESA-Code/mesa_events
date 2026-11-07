@@ -9,7 +9,7 @@ import { ChevronRight, QrCode } from "lucide-react";
 import { berlinTime, dueUrgency } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui";
-import { DateTile } from "@/components/MyEventCard";
+import { DateTile } from "@/components/DateTile";
 
 /** Colours of a deadline: red within 24 hours or past, amber within 48, else ESN blue. */
 const URGENCY_TONE = {

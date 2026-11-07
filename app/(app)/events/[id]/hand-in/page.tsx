@@ -206,9 +206,10 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                             }}
                           >
                             {/* The card's status line says where it stands; no badge or note repeating it (review 2026-10-29 B5). */}
-                            {(!c.payout_method || c.status === "not_submitted") && (
+                            {((!c.payout_method && !myPayout) || c.status === "not_submitted") && (
                               <div className="flex flex-wrap items-center gap-3 text-xs">
-                                {!c.payout_method && (
+                                {/* Saved details reach every claim; only without them is there anything to add – once, on Expenses. */}
+                                {!c.payout_method && !myPayout && (
                                   <Link href="/me/reimbursements#payout" className="text-amber-800 underline">
                                     ⚠️ Add your IBAN or PayPal
                                   </Link>

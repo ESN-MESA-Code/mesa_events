@@ -1,27 +1,31 @@
 import type { Metadata } from "next";
+import { CalendarClock, Plus } from "lucide-react";
 import { createSessionClient, getViewer } from "@/lib/supabase/session";
-import { addMonths, formatDate, formatDateTime, monthLabel, nowMs } from "@/lib/dates";
+import { addMonths, dueUrgency, formatDate, formatDateTime, monthLabel, nowMs } from "@/lib/dates";
 import { cycleTimeline, firstOpenIdeaMonth, relativeDue } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
+import { buttonVariants, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/ActionButton";
-import { respondIdeaPartner, withdrawIdea } from "@/app/actions/planning";
-import { IdeaPartnersEditor } from "./PartnerPicker";
+import { DateTile } from "@/components/DateTile";
+import { SectionHeader } from "@/components/home";
+import { respondIdeaPartner } from "@/app/actions/planning";
 import { IdeasWorkspace } from "./Inspiration";
+import { IdeaCard, type IdeaStatus } from "./IdeaCard";
 import type { PastEvent } from "@/lib/inspiration";
-import { plural } from "@/lib/plural";
 import { loadSorting } from "@/lib/sortingLoad";
-import { categoryLabel } from "@/lib/formats";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Ideas" };
 
-const STATUS: Record<string, { label: string; tone: "gray" | "green" | "red" | "blue" }> = {
-  proposed: { label: "Waiting for Events", tone: "gray" },
-  accepted: { label: "Accepted", tone: "green" },
-  merged: { label: "Merged", tone: "blue" },
-  rejected: { label: "Not this time", tone: "red" },
-};
+/** The deadline's colours: red within 24 hours, amber within 48, else ESN blue (as on Home). */
+const DUE_TONE = { urgent: "bg-red-50 text-red-700", soon: "bg-amber-50 text-amber-800", later: "bg-esn/5 text-esn" } as const;
 
+/**
+ * Ideas (redesign 2026-11-07): one clear way in ("Propose an idea" opens the
+ * form in a side panel, also from "Propose this again"), the deadline as a
+ * strip, requests to join first, the member's ideas as cards, and the past
+ * events to borrow from as a gallery below.
+ */
 export default async function IdeasPage() {
   const viewer = (await getViewer())!;
   const supabase = await createSessionClient();
@@ -48,40 +52,58 @@ export default async function IdeasPage() {
   const requests = (asked ?? [])
     .map((a) => ({ role: a.role as "oc" | "helper", status: a.status as "invited" | "accepted" | "declined", idea: a.event_ideas as unknown as { id: string; title: string; proposed_date: string; status: string; event_id: string | null; profiles: { full_name: string } | null } | null }))
     .filter((r) => r.idea && ["proposed", "accepted"].includes(r.idea.status));
+  const waiting = requests.filter((r) => r.status === "invited").length;
   // The ideas window (round 2026-11-02): the next month until its deadline, every later month always.
   const now = nowMs();
   const open = firstOpenIdeaMonth(now, days);
   const due = cycleTimeline(open, days).ideasDue;
+  const urgency = dueUrgency(due, now);
   const categoryOf = new Map(categories.map((c) => [c.id, c]));
+  const mine = ideas ?? [];
 
   return (
     <>
-      <PageHeader
-        title="Ideas"
-        description="Propose an event – or get inspired by what ran before. The Events team builds each month's schedule from the ideas; by default you become its OC."
-      />
-      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-esn/20 bg-esn/5 px-4 py-3 text-sm" data-testid="ideas-deadline">
-        <span className="text-esn-dark">
-          💡 Ideas for <strong>{monthLabel(open)}</strong> are due <strong>{formatDateTime(due)}</strong>
-          <span className="text-gray-600"> ({relativeDue(due, now)})</span>.
-        </span>
-        <span className="text-gray-600">After that they go into {monthLabel(addMonths(open, 1))} or later – ideas for next year are welcome any time.</span>
-      </div>
-      {requests.length > 0 && (
-        <Card className="mb-6" data-testid="idea-requests">
-          <CardHeader>
-            <CardTitle>Asked to join</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-gray-100">
+      <PageHeader title="Ideas" description="Propose an event for a coming month – or bring back one that worked. The Events team builds each month's schedule from the ideas.">
+        <a href="#propose" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Propose an idea
+        </a>
+      </PageHeader>
+
+      <div className="space-y-8">
+        <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="ideas-deadline">
+          <span className={cn("hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:flex", DUE_TONE[urgency])} aria-hidden="true">
+            <CalendarClock className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="text-gray-900">
+              Ideas for <strong>{monthLabel(open)}</strong> are due <strong>{formatDateTime(due)}</strong>
+              <span className="sm:hidden"> ({relativeDue(due, now)})</span>.
+            </p>
+            <p className="text-gray-600">After that they go into {monthLabel(addMonths(open, 1))} or later – ideas for next year are welcome any time.</p>
+          </div>
+          <span className={cn("hidden shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold sm:inline-flex", DUE_TONE[urgency])}>{relativeDue(due, now)}</span>
+        </div>
+
+        {requests.length > 0 && (
+          <section aria-labelledby="asked-heading" className="space-y-3" data-testid="idea-requests">
+            <SectionHeader id="asked-heading" title="Asked to join" count={waiting} note={waiting ? "Someone wants to run an idea with you." : undefined} />
+            <ul className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
               {requests.map(({ idea, role, status }) => (
-                <li key={idea!.id} className="flex flex-wrap items-center gap-2 py-3">
-                  <span className="text-sm text-gray-900">
-                    <strong>{idea!.profiles?.full_name ?? "Someone"}</strong> asks you to run <strong>{idea!.title}</strong> ({formatDate(`${idea!.proposed_date}T12:00:00Z`)}) as{" "}
-                    {role === "oc" ? "co-OC" : "helper"}.
-                  </span>
-                  {status !== "invited" && <Badge tone={status === "accepted" ? "green" : "red"}>{status === "accepted" ? "You said yes" : "You said no"}</Badge>}
-                  <span className="ml-auto flex gap-2">
+                <li key={idea!.id} className={cn("flex flex-wrap items-center gap-3 border-t border-gray-100 px-4 py-3 first:border-t-0 sm:px-5", status === "invited" && "bg-amber-50/50")}>
+                  <DateTile iso={`${idea!.proposed_date}T12:00:00Z`} />
+                  <div className="min-w-48 flex-1 text-sm">
+                    <p className="font-semibold text-gray-900 break-words">{idea!.title}</p>
+                    <p className="text-gray-600">
+                      {idea!.profiles?.full_name ?? "Someone"} asks you to run it as <strong className="font-semibold text-gray-800">{role === "oc" ? "co-OC" : "helper"}</strong>
+                      {" · "}
+                      {formatDate(`${idea!.proposed_date}T12:00:00Z`)}
+                    </p>
+                  </div>
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    {status !== "invited" && (
+                      <span className={cn("text-xs font-semibold", status === "accepted" ? "text-emerald-700" : "text-red-700")}>{status === "accepted" ? "You said yes" : "You said no"}</span>
+                    )}
                     {status !== "accepted" && (
                       <ActionButton action={respondIdeaPartner} input={{ idea_id: idea!.id, accept: true }} size="sm" done={`You're on ${idea!.title} as ${role === "oc" ? "co-OC" : "helper"}.`}>
                         Yes, I&apos;m in
@@ -92,83 +114,45 @@ export default async function IdeasPage() {
                         {status === "accepted" ? "Step back" : "No, thanks"}
                       </ActionButton>
                     )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-      <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats} members={members} proposeOpen={!ideas?.length}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Your ideas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!ideas?.length && <EmptyState>You haven&apos;t proposed anything yet.</EmptyState>}
-            <ul className="divide-y divide-gray-100" data-testid="my-ideas">
-              {(ideas ?? []).map((i) => (
-                <li key={i.id} className="py-3 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-gray-900">{i.title}</span>
-                    <Badge tone={STATUS[i.status].tone}>{STATUS[i.status].label}</Badge>
-                    {i.category_id && categoryOf.has(i.category_id) && <Badge tone="purple">{categoryLabel(categoryOf.get(i.category_id)!)}</Badge>}
-                    <span className="ml-auto text-xs text-gray-500">{formatDate(`${i.proposed_date}T12:00:00Z`)}</span>
                   </div>
-                  {i.pitch && <p className="text-sm text-gray-600 whitespace-pre-line">{i.pitch}</p>}
-                  <p className="text-xs text-gray-500">
-                    {i.ocs_needed > 1 && `${i.ocs_needed} OCs · `}
-                    {plural(i.helpers_needed, "helper")} · {i.wants_to_oc ? "you OC it" : "someone else OCs"}
-                    {i.event_id && (
-                      <>
-                        {" · "}
-                        <a className="text-esn hover:underline" href={`/events/${i.event_id}?from=me`}>
-                          event page
-                        </a>
-                      </>
-                    )}
-                  </p>
-                  {i.decision_note && <p className="text-xs text-gray-600">Events: {i.decision_note}</p>}
-                  {i.status === "proposed" ? (
-                    <IdeaPartnersEditor
-                      ideaId={i.id}
-                      members={members}
-                      partners={(i.idea_partners ?? []).map((p) => ({ profile_id: p.profile_id, role: p.role as "oc" | "helper", status: p.status as "invited" | "accepted" | "declined" }))}
-                    />
-                  ) : (
-                    (i.idea_partners ?? []).length > 0 && (
-                      <p className="text-xs text-gray-500">
-                        With:{" "}
-                        {(i.idea_partners ?? [])
-                          .map((p) => `${nameOf.get(p.profile_id) ?? "?"} (${p.role === "oc" ? "co-OC" : "helper"}, ${p.status === "accepted" ? "yes" : p.status === "declined" ? "no" : "asked"})`)
-                          .join(", ")}
-                      </p>
-                    )
-                  )}
-                  {i.status === "proposed" && (
-                    // A real button that asks first (usability review #31).
-                    <ActionButton
-                      action={withdrawIdea}
-                      input={{ id: i.id }}
-                      variant="outline"
-                      className="text-red-700 hover:border-red-400 hover:text-red-800"
-                      confirm={{
-                        title: `Withdraw “${i.title}”?`,
-                        body: "The Events team no longer sees it for the schedule. To bring it back, propose it again.",
-                        confirmLabel: "Withdraw the idea",
-                        danger: true,
-                      }}
-                      done="Idea withdrawn."
-                    >
-                      Withdraw idea
-                    </ActionButton>
-                  )}
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      </IdeasWorkspace>
+          </section>
+        )}
+
+        <IdeasWorkspace pool={(past ?? []) as PastEvent[]} earliest={open} days={days} categories={categories} formats={formats} members={members}>
+          <section aria-labelledby="mine-heading" className="space-y-3">
+            <SectionHeader id="mine-heading" title="Your ideas" count={mine.length} />
+            {!mine.length ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center" data-testid="my-ideas">
+                <p className="font-semibold text-gray-900">You haven&apos;t proposed anything yet.</p>
+                <p className="max-w-md text-sm text-gray-600">Got something you&apos;d love to do with the internationals? Propose it – or scroll down and bring back an event that worked before.</p>
+                <a href="#propose" className={buttonVariants()}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Propose your first idea
+                </a>
+              </div>
+            ) : (
+              <ul className="grid items-start gap-4 md:grid-cols-2" data-testid="my-ideas">
+                {mine.map((i) => (
+                  <IdeaCard
+                    key={i.id}
+                    idea={{
+                      ...i,
+                      status: i.status as IdeaStatus,
+                      partners: (i.idea_partners ?? []).map((p) => ({ profile_id: p.profile_id, role: p.role as "oc" | "helper", status: p.status as "invited" | "accepted" | "declined" })),
+                    }}
+                    category={i.category_id ? categoryOf.get(i.category_id) : null}
+                    members={members}
+                    nameOf={nameOf}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        </IdeasWorkspace>
+      </div>
     </>
   );
 }

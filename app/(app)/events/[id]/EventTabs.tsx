@@ -36,25 +36,28 @@ export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Reco
   return <TabBar label="Event" tabs={tabs.map((t) => ({ href: withFrom(t.href, from), label: t.label, active: pathname === t.href, note: notes[t.label] }))} />;
 }
 
-/** "Your next step": to the tab where it is done, or down to it on that tab (review 2026-10-29 B4). */
+/**
+ * "Your next step": to the tab where it is done, or down to it on that tab (review 2026-10-29 B4).
+ * The foot of the event's header (redesign 2026-11-07).
+ */
 export function NextStepBanner({ id, step, now }: { id: string; step: NextStep; now: number }) {
   const link = stepLink(id, step, usePathname());
   return (
     <Link
       href={link.href}
       className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 hover:shadow-sm",
-        step.kind === "action" ? "border-esn/30 bg-esn/5" : "border-gray-200 bg-white"
+        "flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-3 transition-colors sm:px-5",
+        step.kind === "action" ? "border-esn/20 bg-esn/5 hover:bg-esn/10" : "border-gray-100 bg-gray-50 hover:bg-gray-100"
       )}
       data-testid="next-step-banner"
     >
-      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
-      <span className="flex items-center gap-1.5 font-semibold text-esn-dark">
+      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{step.kind === "action" ? "Your next step" : "Status"}</span>
+      <span className="flex min-w-0 items-center gap-1.5 font-semibold text-esn-dark">
         <StepIcon kind={step.kind === "done" ? "done" : step.kind} />
         {step.label}
       </span>
       {step.due && <DueLabel iso={step.due} now={now} note={step.dueNote} className="text-sm" />}
-      <span className="ml-auto text-sm text-esn">{link.label}</span>
+      <span className="ml-auto text-sm font-semibold text-esn">{link.label}</span>
     </Link>
   );
 }

@@ -494,19 +494,26 @@ export async function seedInternalStaging(db: Db, ctx: InternalContext): Promise
   check(await db.from("finance_entries").insert(full), "ledger");
 
   // ── Personal settings: saved payout details, calendar links, ESN tokens ──
-  check(
-    await db.from("profile_payout_details").upsert(
-      [
-        { profile_id: pid("chloe"), account_holder: "Chloé Dubois", iban: ctx.ibans[4]!, paypal_email: null },
-        { profile_id: pid("diego"), account_holder: "Diego Fernández", iban: ctx.ibans[5]!, paypal_email: null },
-        { profile_id: pid("lea"), account_holder: "Léa Fontaine", iban: ctx.ibans[0]!, paypal_email: null },
-        { profile_id: pid("kwame"), account_holder: null, iban: null, paypal_email: "kwame.mensah@example.com" },
-        { profile_id: pid("tomasz"), account_holder: null, iban: null, paypal_email: "tomasz.nowicki@example.com" },
-      ],
-      { onConflict: "profile_id" }
-    ),
-    "saved payout details"
-  );
+  const savedPayouts = [
+    { profile_id: pid("chloe"), account_holder: "Chloé Dubois", iban: ctx.ibans[4]!, paypal_email: null },
+    { profile_id: pid("diego"), account_holder: "Diego Fernández", iban: ctx.ibans[5]!, paypal_email: null },
+    { profile_id: pid("lea"), account_holder: "Léa Fontaine", iban: ctx.ibans[0]!, paypal_email: null },
+    { profile_id: pid("kwame"), account_holder: null, iban: null, paypal_email: "kwame.mensah@example.com" },
+    { profile_id: pid("tomasz"), account_holder: null, iban: null, paypal_email: "tomasz.nowicki@example.com" },
+  ];
+  check(await db.from("profile_payout_details").upsert(savedPayouts, { onConflict: "profile_id" }), "saved payout details");
+  // As saving in the app does (set_my_payout_details): the saved details reach the member's open claims
+  // that have none yet, so no demo claim asks for an IBAN its owner has saved.
+  const { data: bare } = await db
+    .from("reimbursements")
+    .select("id, claimant_id, payout_details(reimbursement_id)")
+    .in("claimant_id", savedPayouts.map((p) => p.profile_id))
+    .not("status", "in", "(paid,rejected)");
+  for (const c of (bare ?? []).filter((x) => !(x.payout_details as unknown as { reimbursement_id: string } | null))) {
+    const p = savedPayouts.find((x) => x.profile_id === c.claimant_id)!;
+    check(await db.from("payout_details").insert({ reimbursement_id: c.id, account_holder: p.account_holder, iban: p.iban, paypal_email: p.paypal_email }), "saved payout details on claims");
+    check(await db.from("reimbursements").update({ payout_method: p.iban ? "bank" : "paypal" }).eq("id", c.id), "payout method of claims");
+  }
   const token = (prefix: string) => ({ token_hash: rng.hex(64), token_prefix: `${prefix}${rng.hex(4)}` });
   check(
     await db.from("calendar_feeds").upsert(

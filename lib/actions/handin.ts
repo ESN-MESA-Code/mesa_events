@@ -27,9 +27,25 @@ export const registerReceipt = defineAction(
     days: z.number().int().min(1).max(31).nullable().optional(),
     preapproval_id: uuid.nullable().optional(),
     payout: payout.nullable().optional(),
+    /**
+     * Also save the payout details on the member's profile (round 2026-11-07):
+     * they are then copied onto all their open claims and every later one, so
+     * nobody types their IBAN twice. The receipt form always sends it.
+     */
+    remember: z.boolean().optional(),
   }),
   async (ctx, i) => {
     await requireEventStaff(ctx, i.event_id, null);
+    if (i.remember && i.payout) {
+      // Profile first: the new claim then gets the details like every other claim.
+      const saved = await ctx.supabase.rpc("set_my_payout_details", {
+        method: i.payout.payout_method,
+        account_holder: i.payout.account_holder,
+        iban: i.payout.payout_method === "bank" ? i.payout.iban : undefined,
+        paypal_email: i.payout.payout_method === "paypal" ? i.payout.paypal_email : undefined,
+      });
+      dbError(saved.error);
+    }
     const { data, error } = await ctx.supabase.rpc("register_receipt", {
       event: i.event_id,
       kind: i.kind,
@@ -39,10 +55,15 @@ export const registerReceipt = defineAction(
       description: i.description,
       days: i.days ?? undefined,
       preapproval: i.preapproval_id ?? undefined,
-      payout_method: i.payout?.payout_method,
-      account_holder: i.payout?.account_holder,
-      iban: i.payout?.payout_method === "bank" ? i.payout.iban : undefined,
-      paypal_email: i.payout?.payout_method === "paypal" ? i.payout.paypal_email : undefined,
+      // Remembered details reach the claim from the profile (the insert trigger).
+      ...(i.remember || !i.payout
+        ? {}
+        : {
+            payout_method: i.payout.payout_method,
+            account_holder: i.payout.account_holder,
+            iban: i.payout.payout_method === "bank" ? i.payout.iban : undefined,
+            paypal_email: i.payout.payout_method === "paypal" ? i.payout.paypal_email : undefined,
+          }),
     });
     dbError(error);
     return { claim_id: data as string };

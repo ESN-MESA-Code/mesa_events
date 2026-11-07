@@ -97,8 +97,8 @@ export function IdeaPartnersEditor({ ideaId, members, partners }: { ideaId: stri
   const [value, setValue] = useState(partners);
   const changed = JSON.stringify(value.map(({ profile_id, role }) => [profile_id, role])) !== JSON.stringify(partners.map(({ profile_id, role }) => [profile_id, role]));
   return (
-    <div className="space-y-2 rounded-md border border-gray-200 p-2">
-      <p className="text-xs font-medium text-gray-700">Run it with</p>
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">They are asked first and count once they say yes. Nobody else is asked for the slots they take.</p>
       <PartnerPicker members={members} value={value} onChange={setValue} />
       {changed && (
         <Button

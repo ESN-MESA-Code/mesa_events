@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Field, Input, Select, buttonVariants } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
@@ -74,11 +75,17 @@ export function ReceiptForm({
         days: rule?.per_day ? Number(days) : null,
         preapproval_id: preapproval || null,
         payout,
+        // Saved on the profile: every open and later claim gets them (round 2026-11-07).
+        remember: !!payout,
       },
       () => {
         setAmount("");
         setVendor("");
         setDescription("");
+        setMethod("");
+        setHolder("");
+        setIban("");
+        setPaypal("");
         setDone(true);
       }
     );
@@ -124,38 +131,35 @@ export function ReceiptForm({
       <Field label="Note (optional)" htmlFor="r-desc">
         <Input id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
       </Field>
-      {profilePayout && !method ? (
-        <p className="self-end text-sm text-gray-700" data-testid="receipt-payout">
-          Paid to your {profilePayout} (profile) ·{" "}
-          <button type="button" className="text-esn hover:underline" onClick={() => setMethod("bank")}>
-            other for this receipt
-          </button>
+      {profilePayout ? (
+        // One set of details per member (round 2026-11-07): changed on Expenses, used for every claim.
+        <p className="self-end text-sm text-gray-700 sm:col-span-2" data-testid="receipt-payout">
+          Paid to your {profilePayout} ·{" "}
+          <Link href="/me/reimbursements#payout" className="font-medium text-esn hover:underline">
+            Change
+          </Link>
         </p>
       ) : (
-      <Field
-        label="Pay me by"
-        htmlFor="r-method"
-        hint={profilePayout ? undefined : "Tip: save your IBAN or PayPal once in your profile (click your initials, top right)."}
-      >
-        <Select id="r-method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
-          <option value="">{profilePayout ? "My profile's details" : "Decide later"}</option>
-          <option value="bank">Bank transfer</option>
-          <option value="paypal">PayPal</option>
-        </Select>
-      </Field>
+        <Field label="Pay me by" htmlFor="r-method" hint="Saved to your profile – Finance uses it for all your claims, so you enter it only once.">
+          <Select id="r-method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
+            <option value="">Decide later</option>
+            <option value="bank">Bank transfer</option>
+            <option value="paypal">PayPal</option>
+          </Select>
+        </Field>
       )}
       {method === "bank" && (
         <>
           <Field label="Account holder" htmlFor="r-holder">
             <Input id="r-holder" value={holder} onChange={(e) => setHolder(e.target.value)} required />
           </Field>
-          <Field label="IBAN" htmlFor="r-iban" hint="Stored only until you are paid.">
+          <Field label="IBAN" htmlFor="r-iban">
             <Input id="r-iban" value={iban} onChange={(e) => setIban(e.target.value)} required autoComplete="off" />
           </Field>
         </>
       )}
       {method === "paypal" && (
-        <Field label="PayPal email" htmlFor="r-paypal" hint="Stored only until you are paid.">
+        <Field label="PayPal email" htmlFor="r-paypal">
           <Input id="r-paypal" type="email" value={paypal} onChange={(e) => setPaypal(e.target.value)} required />
         </Field>
       )}

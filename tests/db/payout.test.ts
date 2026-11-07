@@ -66,4 +66,25 @@ describe("payout details on the profile", () => {
     expect(await method(unchecked)).toBeNull();
     expect(await details(checked)).not.toBeNull();
   });
+
+  it("details typed into the receipt form are saved once and reach every open claim (round 2026-11-07)", async () => {
+    const before = await claimOf();
+    expect(await details(before)).toBeNull();
+    const r = await H.registerReceipt(await actionContext(USERS.volunteer2), {
+      event_id: eventId,
+      kind: "ticket",
+      vendor: "Payout test (remembered)",
+      amount_cents: 1200,
+      purchased_on: today,
+      payout: { payout_method: "bank", account_holder: "Vera Volunteer", iban: "DE89 3704 0044 0532 0130 00" },
+      remember: true,
+    });
+    if (!r.ok) throw new Error(r.message);
+    const saved = { iban: "DE89370400440532013000", paypal_email: null, account_holder: "Vera Volunteer" };
+    expect(await details(r.data.claim_id)).toEqual(saved);
+    // The claim registered earlier without details got them too, and so does the next one.
+    expect(await details(before)).toEqual(saved);
+    expect(await details(await claimOf())).toEqual(saved);
+    expect((await admin.from("profile_payout_details").select("iban").eq("profile_id", USERS.volunteer2.id)).data).toEqual([{ iban: saved.iban }]);
+  });
 });
