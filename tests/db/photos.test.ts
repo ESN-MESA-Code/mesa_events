@@ -168,3 +168,40 @@ describe("the OC's tick", () => {
     }
   });
 });
+
+describe("No photos taken (round 2026-11-07)", () => {
+  it("the OC, a helper or the Events team says so; it closes the photo step, is logged and can be taken back", async () => {
+    // Not for a team that is not on the event, nor before the event, nor for a cancelled one.
+    expect((await (await as(USERS.comms)).rpc("declare_no_photos", { event: yesterday.id, declared: true })).error?.code).toBe("42501");
+    expect((await H.declareNoPhotos(await actionContext(USERS.oc), { event_id: later, declared: true })).ok).toBe(false);
+    expect((await (await as(USERS.oc)).rpc("declare_no_photos", { event: cancelled, declared: true })).error).not.toBeNull();
+
+    await H.markPhotosUploaded(await actionContext(USERS.oc), { event_id: yesterday.id, uploaded: false });
+    expect((await H.declareNoPhotos(await actionContext(USERS.helper), { event_id: yesterday.id, declared: true, reason: "  Phone battery was empty " })).ok).toBe(true);
+    expect(await folderOf(yesterday.id)).toMatchObject({ no_photos_by: USERS.helper.email, no_photos_reason: "Phone battery was empty" });
+    const { data: log } = await (await as(USERS.oc)).from("activity_log").select("details").eq("event_id", yesterday.id).eq("entity", "event_photo_folders").order("at", { ascending: false }).limit(1);
+    expect(log).toEqual([{ details: { no_photos: true, reason: "Phone battery was empty" } }]);
+
+    // Without a reason too.
+    expect((await H.declareNoPhotos(await actionContext(USERS.events), { event_id: yesterday.id, declared: true })).ok).toBe(true);
+    expect(await folderOf(yesterday.id)).toMatchObject({ no_photos_by: USERS.events.email, no_photos_reason: null });
+
+    expect((await H.declareNoPhotos(await actionContext(USERS.oc), { event_id: yesterday.id, declared: false })).ok).toBe(true);
+    expect(await folderOf(yesterday.id)).toMatchObject({ no_photos_at: null, no_photos_by: null, no_photos_reason: null });
+  });
+
+  it("the cycle's hand-in counts it as photos in", async () => {
+    const { data: cycle } = await admin.from("planning_cycles").insert({ month: "2999-11-01", created_by: "tests@mesa.invalid" }).select("id").single();
+    try {
+      await admin.from("events").update({ cycle_id: cycle!.id }).eq("id", yesterday.id);
+      await (await as(USERS.oc)).rpc("mark_photos_uploaded", { event: yesterday.id, uploaded: false });
+      const read = async () => ((await (await as(USERS.events)).rpc("cycle_hand_in", { cycles: [cycle!.id] })).data ?? [])[0]?.photos_in;
+      expect(await read()).toBe(false);
+      await (await as(USERS.helper)).rpc("declare_no_photos", { event: yesterday.id, declared: true, reason: "Forgot" });
+      expect(await read()).toBe(true);
+    } finally {
+      await admin.from("events").update({ cycle_id: null }).eq("id", yesterday.id);
+      await admin.from("planning_cycles").delete().eq("id", cycle!.id);
+    }
+  });
+});

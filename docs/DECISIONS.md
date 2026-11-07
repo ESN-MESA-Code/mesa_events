@@ -1301,3 +1301,19 @@ Decisions:
   Home's "Coming up in MESA" leaves them out too (a member's own office-hour duties stay in My
   events and "Waiting for you").
 - **Phones:** Subscribe moves under the list (left-aligned so its panel fits the screen).
+
+## 2026-11-07 – "No photos taken": photos are not a must for the hand-in
+
+- **Why:** photos counted only with a file in the Drive folder or the OC's tick "Photos are
+  uploaded", and the OC was reminded until then. When nobody took pictures there is nothing to
+  upload, so the step could never be done honestly.
+- **"Nobody took photos?"** under the photo folder on the hand-in tab, for the OC, the helpers
+  and the Events team, once the event has started. A reason is optional (up to 300 characters).
+  It closes the photo step like photos would (`private.photos_in()` / `photosIn()`), so the
+  checklist, the next step, the cycle's hand-in and the automatic hand-in reminders all treat it
+  as done. Stored on `event_photo_folders` (`no_photos_at`, `no_photos_by`, `no_photos_reason`)
+  through `declare_no_photos(event, declared, reason)`; logged with the reason.
+- **Shown as said:** the hand-in row reads "No photos taken"; the box names who said it, when, and
+  why, for everyone who sees the hand-in. "We did take photos – undo" takes it back (same people).
+  The "Photos are uploaded" tick is hidden while it is set, and the option is not offered once the
+  folder holds files (photos found later count as photos).

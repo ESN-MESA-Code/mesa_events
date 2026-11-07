@@ -34,6 +34,7 @@ describe("event folders", () => {
     expect(photosIn({ photo_count: 0, marked_uploaded_at: null })).toBe(false);
     expect(photosIn({ photo_count: 3, marked_uploaded_at: null })).toBe(true);
     expect(photosIn({ photo_count: 0, marked_uploaded_at: "2026-11-03T09:00:00Z" })).toBe(true);
+    expect(photosIn({ photo_count: 0, marked_uploaded_at: null, no_photos_at: "2026-11-07T09:00:00Z" })).toBe(true);
   });
 });
 

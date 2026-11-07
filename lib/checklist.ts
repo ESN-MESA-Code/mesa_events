@@ -25,6 +25,8 @@ export interface ChecklistInput {
   photos: number | null;
   /** At least one file in the folder, or ticked by hand (lib/photos.ts photosIn). */
   photosIn: boolean;
+  /** Nobody took photos, said so on the hand-in (round 2026-11-07). */
+  noPhotos?: boolean;
   /** The OC's event report after the event (ESN Activities) is in. */
   reportIn: boolean;
   receipts: number;
@@ -83,7 +85,7 @@ export function eventChecklist(i: ChecklistInput): ChecklistItem[] {
       key: "photos",
       label: "Photos in Drive",
       state: i.photosIn ? "done" : started ? "todo" : "later",
-      detail: i.photos ? `${i.photos} in the folder` : i.photosIn ? "ticked by hand" : started ? undefined : "after the event",
+      detail: i.photos ? `${i.photos} in the folder` : i.noPhotos ? "no photos taken" : i.photosIn ? "ticked by hand" : started ? undefined : "after the event",
       tab: "hand-in",
     },
     {

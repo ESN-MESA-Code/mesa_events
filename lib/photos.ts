@@ -49,9 +49,11 @@ export interface PhotoFolderState {
   photo_count: number | null;
   counted_at: string | null;
   marked_uploaded_at: string | null;
+  /** "No photos taken" (round 2026-11-07). */
+  no_photos_at?: string | null;
 }
 
-/** Photos count as handed in: a file in the folder, or ticked by hand (as private.photos_in()). */
-export function photosIn(f: Pick<PhotoFolderState, "photo_count" | "marked_uploaded_at"> | null | undefined): boolean {
-  return !!f && ((f.photo_count ?? 0) > 0 || !!f.marked_uploaded_at);
+/** Photos count as handed in: a file in the folder, ticked by hand, or "No photos taken" (as private.photos_in()). */
+export function photosIn(f: Pick<PhotoFolderState, "photo_count" | "marked_uploaded_at" | "no_photos_at"> | null | undefined): boolean {
+  return !!f && ((f.photo_count ?? 0) > 0 || !!f.marked_uploaded_at || !!f.no_photos_at);
 }

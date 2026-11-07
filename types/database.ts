@@ -411,14 +411,14 @@ isOneToOne: false
                   ]
                 },"event_photo_folders": {
                   Row: {
-                    "count_error": string | null,"counted_at": string | null,"created_at": string,"event_id": string,"folder_id": string | null,"folder_path": string | null,"folder_url": string | null,"marked_uploaded_at": string | null,"marked_uploaded_by": string | null,"photo_count": number | null,"updated_at": string
+                    "count_error": string | null,"counted_at": string | null,"created_at": string,"event_id": string,"folder_id": string | null,"folder_path": string | null,"folder_url": string | null,"marked_uploaded_at": string | null,"marked_uploaded_by": string | null,"no_photos_at": string | null,"no_photos_by": string | null,"no_photos_reason": string | null,"photo_count": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id": string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"photo_count"?: number | null,"updated_at"?: string
+                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id": string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"no_photos_at"?: string | null,"no_photos_by"?: string | null,"no_photos_reason"?: string | null,"photo_count"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id"?: string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"photo_count"?: number | null,"updated_at"?: string
+                    "count_error"?: string | null,"counted_at"?: string | null,"created_at"?: string,"event_id"?: string,"folder_id"?: string | null,"folder_path"?: string | null,"folder_url"?: string | null,"marked_uploaded_at"?: string | null,"marked_uploaded_by"?: string | null,"no_photos_at"?: string | null,"no_photos_by"?: string | null,"no_photos_reason"?: string | null,"photo_count"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1410,6 +1410,9 @@ isOneToOne: false
                            },
 "decide_understaffed":
 { Args: { "decision": string,"event": string }; Returns: undefined
+                           },
+"declare_no_photos":
+{ Args: { "declared": boolean,"event": string,"reason"?: string }; Returns: undefined
                            },
 "delete_expired_acknowledgements":
 { Args: Record<PropertyKey, never>; Returns: number

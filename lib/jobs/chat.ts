@@ -149,7 +149,7 @@ export const remindOc: JobHandler = async (job, deps) => {
   if (p.about === "handin") {
     const [{ data: list }, { data: folder }, { data: report }] = await Promise.all([
       deps.admin.from("attendance_lists").select("signed_off_at").eq("event_id", event.id).maybeSingle(),
-      deps.admin.from("event_photo_folders").select("photo_count, marked_uploaded_at").eq("event_id", event.id).maybeSingle(),
+      deps.admin.from("event_photo_folders").select("photo_count, marked_uploaded_at, no_photos_at").eq("event_id", event.id).maybeSingle(),
       deps.admin.from("event_reports").select("event_id").eq("event_id", event.id).maybeSingle(),
     ]);
     missing = [!list?.signed_off_at && "the signed-off attendance list", !photosIn(folder) && "the photos", !report && "the event report"].filter(Boolean) as string[];

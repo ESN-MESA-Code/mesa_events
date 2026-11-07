@@ -112,6 +112,20 @@ export const markPhotosUploaded = defineAction(z.object({ event_id: uuid, upload
   dbError((await ctx.supabase.rpc("mark_photos_uploaded", { event: i.event_id, uploaded: i.uploaded })).error);
 }, { revalidate: [PAGES.event, PAGES.home, PAGES.eventsTeam] });
 
+/**
+ * "No photos taken" (round 2026-11-07): photos are not a must – when nobody
+ * took any, the OC, a helper or the Events team says so (reason optional)
+ * and the photo step is done. `declared: false` takes it back.
+ */
+export const declareNoPhotos = defineAction(
+  z.object({ event_id: uuid, declared: z.boolean(), reason: z.string().trim().max(300, "Keep it under 300 characters").default("") }),
+  async (ctx, i) => {
+    await requireEventStaff(ctx, i.event_id);
+    dbError((await ctx.supabase.rpc("declare_no_photos", { event: i.event_id, declared: i.declared, reason: i.declared && i.reason ? i.reason : undefined })).error);
+  },
+  { revalidate: [PAGES.event, PAGES.home, PAGES.eventsTeam] }
+);
+
 /** "Check again": a job counts the folder's files now (the page refreshes until it did). */
 export const checkPhotosAgain = defineAction(z.object({ event_id: uuid }), async (ctx, i) => {
   await requireEventStaff(ctx, i.event_id, null).catch(() => {

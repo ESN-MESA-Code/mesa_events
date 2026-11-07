@@ -49,6 +49,7 @@ describe("event checklist", () => {
     expect(photos({ photos: 0 })).toMatchObject({ state: "todo", label: "Photos in Drive" });
     expect(photos({ photos: 7, photosIn: true })).toMatchObject({ state: "done", detail: "7 in the folder" });
     expect(photos({ photos: null, photosIn: true })).toMatchObject({ state: "done", detail: "ticked by hand" });
+    expect(photos({ photos: null, photosIn: true, noPhotos: true })).toMatchObject({ state: "done", detail: "no photos taken" });
   });
 
   it("cancelled events only keep open money matters", () => {

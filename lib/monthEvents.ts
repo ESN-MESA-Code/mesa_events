@@ -52,7 +52,7 @@ export async function loadMonthEvents(
   const [{ data: events }, { data: handIn }, { data: overview }, { data: log }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, starts_at, ends_at, status, helpers_needed, assignments(role, status, profiles(full_name)), descriptions(status, submitted_at), event_photo_folders(photo_count, marked_uploaded_at)")
+      .select("id, title, starts_at, ends_at, status, helpers_needed, assignments(role, status, profiles(full_name)), descriptions(status, submitted_at), event_photo_folders(photo_count, marked_uploaded_at, no_photos_at)")
       .eq("cycle_id", cycle.id)
       .neq("status", "dropped")
       .order("starts_at"),

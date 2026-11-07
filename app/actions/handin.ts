@@ -28,6 +28,10 @@ export async function markPhotosUploaded(input: unknown) {
   return run(A.markPhotosUploaded, input);
 }
 
+export async function declareNoPhotos(input: unknown) {
+  return run(A.declareNoPhotos, input);
+}
+
 export async function checkPhotosAgain(input: unknown) {
   return run(A.checkPhotosAgain, input);
 }

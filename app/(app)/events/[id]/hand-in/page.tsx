@@ -44,7 +44,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
     supabase.from("attendance_lists").select("signed_off_at, headcount").eq("event_id", id).maybeSingle(),
     supabase
       .from("event_photo_folders")
-      .select("folder_url, folder_path, photo_count, counted_at, count_error, marked_uploaded_at, marked_uploaded_by")
+      .select("folder_url, folder_path, photo_count, counted_at, count_error, marked_uploaded_at, marked_uploaded_by, no_photos_at, no_photos_by, no_photos_reason")
       .eq("event_id", id)
       .maybeSingle(),
     supabase
@@ -120,7 +120,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             title="Photos in Drive"
             state={states.photos}
             open={first === "photos"}
-            detail={photos?.photo_count ? plural(photos.photo_count, "file") : photos?.marked_uploaded_at ? "Ticked by hand" : started ? "None yet" : "After the event"}
+            detail={photos?.photo_count ? plural(photos.photo_count, "file") : photos?.no_photos_at ? "No photos taken" : photos?.marked_uploaded_at ? "Ticked by hand" : started ? "None yet" : "After the event"}
             extra={
               photos?.folder_url && (
                 <a href={photos.folder_url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-esn hover:underline">
@@ -130,7 +130,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             }
           >
             {handInOpen ? (
-              <PhotoFolder eventId={id} folder={photos ?? null} canTick={isOc || isEvents} canCheck={isStaff || isTeam} />
+              <PhotoFolder eventId={id} folder={photos ?? null} canTick={isOc || isEvents} canCheck={isStaff || isTeam} canDeclare={started && (isStaff || isEvents)} />
             ) : (
               <p className="text-sm text-gray-500">The event&apos;s photo folder in Drive opens on the day of the event.</p>
             )}
