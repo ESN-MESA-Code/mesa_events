@@ -8,6 +8,12 @@ export type AppRole = Database["public"]["Enums"]["app_role"];
 
 export const APP_ROLES: AppRole[] = ["events", "comms", "finance", "treasurer", "executive", "hr", "vice_president", "newbie", "admin"];
 
+/**
+ * Roles whose members are invited to every event's Chat space, next to its
+ * OC and helpers (public.chat_space_roster(), migration 20261107000300).
+ */
+export const CHAT_SPACE_ROLES: AppRole[] = ["events", "comms", "finance", "treasurer", "executive", "vice_president"];
+
 export const ROLE_GROUP_ENV: Record<AppRole, string> = {
   events: "GROUP_EVENTS",
   comms: "GROUP_COMMS",

@@ -14,7 +14,7 @@
 // gates (lib/staging.ts) or that the target is the local stack.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
-import type { AppRole } from "@/lib/roles";
+import { CHAT_SPACE_ROLES, type AppRole } from "@/lib/roles";
 import { addMonths, berlinDate, berlinInputToIso, monthOf } from "@/lib/dates";
 import { renderDescription, emptyFields, type DescriptionFields } from "@/lib/description/template";
 import { suggestAmount, type ClaimStatus, type ExpenseKind, type Rule } from "@/lib/reimbursement";
@@ -717,7 +717,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
 
   // 7. Chat spaces (confirmed months, events that ran or will run).
   const teamPeople = (): SpacePerson[] =>
-    DEMO_PEOPLE.filter((p) => p.roles.includes("events") || p.roles.includes("comms")).map((p) => ({ email: demoEmail(p, domain), name: p.name, kind: "team" as const }));
+    DEMO_PEOPLE.filter((p) => p.roles.some((r) => CHAT_SPACE_ROLES.includes(r))).map((p) => ({ email: demoEmail(p, domain), name: p.name, kind: "team" as const }));
   const peopleOf = (b: Built): SpacePerson[] => [
     ...(b.oc ? [{ email: email(b.oc), name: person(b.oc).name, kind: "oc" as const }] : []),
     ...b.helpers.map((h) => ({ email: email(h), name: person(h).name, kind: "helper" as const })),

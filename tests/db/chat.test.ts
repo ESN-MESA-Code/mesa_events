@@ -43,7 +43,7 @@ describe("Chat spaces and roster changes", () => {
     await admin.from("planning_cycles").delete().eq("id", cycleId);
   });
 
-  it("confirming the roster creates the space, invites OC, helpers, Comms and Events, and welcomes them", async () => {
+  it("confirming the roster creates the space, invites OC, helpers, Events, Comms, Finance, executives and the VP, and welcomes them", async () => {
     expect((await (await as(USERS.events)).rpc("confirm_allocation", { cycle: cycleId })).error).toBeNull();
     const { data: job } = await admin.from("jobs").select("status").eq("idempotency_key", `chat.create_space:${eventId}`).single();
     expect(job!.status).toBe("pending");
@@ -52,7 +52,10 @@ describe("Chat spaces and roster changes", () => {
     expect(summary.failed).toBe(0);
     const s = await space(eventId);
     expect(s.event.chat_space_url).toMatch(/^https:\/\/chat\.google\.com\/room\//);
-    expect(s.members).toEqual(["comms@esnmesa.org", "events@esnmesa.org", "helper@esnmesa.org", "oc@esnmesa.org"]);
+    expect(s.members).toEqual(["comms@esnmesa.org", "events@esnmesa.org", "executive@esnmesa.org", "finance@esnmesa.org", "helper@esnmesa.org", "oc@esnmesa.org", "treasurer@esnmesa.org", "vp@esnmesa.org"]);
+    // HR, IT and newbies are not invited.
+    expect(s.members).not.toContain("hr@esnmesa.org");
+    expect(s.members).not.toContain("admin@esnmesa.org");
     expect(s.space.display_name).toMatch(/^Karaoke night · /);
     expect(s.space.description).toMatch(/^📅 .* · OC: Olga Organiser$/);
     expect(s.space.description.length).toBeLessThanOrEqual(150);
@@ -132,7 +135,7 @@ describe("Chat spaces and roster changes", () => {
     expect((await (await as(USERS.volunteer1)).rpc("is_event_oc", { event: eventId })).data).toBe(true);
     await runJobs();
     const s = await space(eventId);
-    expect(s.members).toEqual(["comms@esnmesa.org", "events@esnmesa.org", "member@esnmesa.org", "volunteer1@esnmesa.org"]);
+    expect(s.members).toEqual(["comms@esnmesa.org", "events@esnmesa.org", "executive@esnmesa.org", "finance@esnmesa.org", "member@esnmesa.org", "treasurer@esnmesa.org", "volunteer1@esnmesa.org", "vp@esnmesa.org"]);
     expect(s.space.description).toContain("OC: Vera Volunteer");
   });
 
@@ -143,6 +146,17 @@ describe("Chat spaces and roster changes", () => {
     await admin.from("role_members").delete().eq("email", "volunteer2@esnmesa.org").eq("role", "comms");
     await runJobs();
     expect((await space(eventId)).members).not.toContain("volunteer2@esnmesa.org");
+  });
+
+  it("a new Finance, executive or VP member is added to upcoming spaces", async () => {
+    for (const role of ["finance", "executive", "vice_president"] as const) {
+      await admin.from("role_members").insert({ email: "volunteer2@esnmesa.org", role, source: "manual" });
+      await runJobs();
+      expect((await space(eventId)).members).toContain("volunteer2@esnmesa.org");
+      await admin.from("role_members").delete().eq("email", "volunteer2@esnmesa.org").eq("role", role);
+      await runJobs();
+      expect((await space(eventId)).members).not.toContain("volunteer2@esnmesa.org");
+    }
   });
 
   it("only Events creates a space by hand", async () => {

@@ -1317,3 +1317,11 @@ Decisions:
   why, for everyone who sees the hand-in. "We did take photos – undo" takes it back (same people).
   The "Photos are uploaded" tick is hidden while it is set, and the option is not offered once the
   folder holds files (photos found later count as photos).
+
+## 2026-11-07 – More teams in every event's Chat space
+
+- **Invited roles:** Events, Comms, Finance (incl. the Treasurer, as everywhere), the executive
+  board (`executive`, the whole board group – there is no separate President role) and the Vice
+  President, from `role_members` (`CHAT_SPACE_ROLES` in `lib/roles.ts`, `chat_space_roster()`).
+  HR, newbies and IT are not invited. Joining or leaving one of these roles re-syncs every
+  upcoming space; the migration re-synced the upcoming spaces that already existed.
