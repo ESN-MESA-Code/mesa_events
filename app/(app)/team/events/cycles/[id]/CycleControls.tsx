@@ -85,7 +85,7 @@ export function AllocationControls({ cycleId, month, status }: { cycleId: string
             )
               return;
             run(runAllocation, { cycle_id: cycleId }, (d) => {
-              const r = d as { assignments: number; events: Record<string, { status: string }>; issues: unknown[]; unplaced: number; topChoices: { wished: number; met: number } };
+              const r = d as { assignments: number; events: Record<string, { status: string }>; issues: unknown[]; unplaced: number; blocked: number; topChoices: { wished: number; met: number } };
               const st = Object.values(r.events).map((e) => e.status);
               setSummary(
                 [
@@ -95,6 +95,7 @@ export function AllocationControls({ cycleId, month, status }: { cycleId: string
                   `${st.filter((s) => s === "dropped").length} dropped`,
                   r.topChoices.wished > 0 && `${r.topChoices.met} of ${r.topChoices.wished} top choices met`,
                   `${plural(r.unplaced, "volunteer")} without an event`,
+                  r.blocked > 0 && `${plural(r.blocked, "person", "people")} on the blacklist left out – add them by hand to non-crucial events`,
                   r.issues.length > 0 && `${plural(r.issues.length, "person", "people")} from an idea on two overlapping events – place them by hand`,
                 ]
                   .filter(Boolean)

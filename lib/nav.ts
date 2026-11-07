@@ -42,6 +42,8 @@ export function navItems(roles: readonly AppRole[], volunteer: VolunteerNav = { 
   if (hasRole(roles, "finance") || exec) team.push({ href: "/team/finance", label: "Finance" });
   // Internal events, meetings and office hours are planned by HR and the Vice President (round 2026-10-30).
   if (isInternalPlanner(roles) || exec) team.push({ href: "/team/internal", label: "Internal" });
+  // Who shows up, and the blacklist: HR and the Events team (2026-11-07).
+  if (hasRole(roles, "hr") || hasRole(roles, "events") || exec) team.push({ href: "/team/reliability", label: "Reliability" });
   // Uploading to ESN Activities is the executive board's (round 2026-10-30).
   if (exec) team.push({ href: "/team/esn-activities", label: "ESN Activities" });
   if (hasRole(roles, "admin")) team.push({ href: "/admin", label: "Admin" });

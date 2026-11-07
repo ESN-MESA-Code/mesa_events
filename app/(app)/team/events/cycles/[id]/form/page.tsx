@@ -27,7 +27,7 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
   const { data: cycle } = await supabase.from("planning_cycles").select("*").eq("id", id).maybeSingle();
   if (!cycle) notFound();
 
-  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }, { data: members }, days] = await Promise.all([
+  const [{ data: events }, { data: signups }, { data: responses }, { data: limitRows }, { data: members }, days, { data: blacklist }] = await Promise.all([
     supabase.from("events").select("id, title, starts_at, helpers_needed, status").eq("cycle_id", id).neq("status", "dropped").order("starts_at"),
     supabase.rpc("cycle_signups", { cycle: id }),
     supabase.rpc("cycle_responses", { cycle: id }),
@@ -35,7 +35,10 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
     // Everyone who has signed in to the app, for "not answered yet" (usability review #19).
     cycle.status === "form_open" ? supabase.from("profiles").select("id, full_name, email").order("full_name") : Promise.resolve({ data: [] }),
     loadTimelineDays(supabase),
+    // The blacklist (2026-11-07): they may answer, the allocation leaves them out.
+    supabase.from("volunteer_blacklist").select("profile_id, reason").is("removed_at", null),
   ]);
+  const blacklisted = new Map((blacklist ?? []).map((b) => [b.profile_id, b.reason]));
   const formLatest = limitRows?.[0]?.form_latest ?? monthStartIso(cycle.month);
   const timeline = cycleTimeline(cycle.month, days);
   const now = nowMs();
@@ -137,6 +140,11 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
               {people.map((r) => (
                 <li key={r.profile_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid={`response-${r.email}`}>
                   <span className="font-medium text-gray-900">{r.full_name}</span>
+                  {blacklisted.has(r.profile_id) && (
+                    <Badge tone="red" title={`On the blacklist: ${blacklisted.get(r.profile_id)} – left out of the automatic allocation`}>
+                      Blacklisted
+                    </Badge>
+                  )}
                   <span className="text-xs text-gray-500">
                     submitted {formatDateTime(r.submitted_at)} · {plural(r.events, "event")}
                     {r.note && ` · “${r.note}”`}

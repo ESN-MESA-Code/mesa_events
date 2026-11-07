@@ -13,6 +13,8 @@ import { claimSlot, decideUnderstaffed, reopenEvent, requestChatSpace } from "@/
 import { CancelEventForm, CancellationDecision, DropOutButton, EventDetailsForm, RequestCancellationForm } from "./EventClient";
 import { CANCEL_CONSEQUENCES } from "@/lib/labels";
 import { EventChecklist } from "./EventChecklist";
+import { AttendanceReport } from "./AttendanceReport";
+import type { AttendanceOutcome } from "@/lib/reliability";
 import { isAre, plural } from "@/lib/plural";
 import { STATE_MARK, stateLabel, type ChannelState } from "@/lib/publishing";
 import { eventAddress, formatVenue, hasAddress } from "@/lib/address";
@@ -24,7 +26,9 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const { event, supabase, viewer, myAssignment, isOc, isEvents, canManage, isStaff, isTeam, cycle } = await loadEventForPage(id);
 
-  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }, { data: requests }] = await Promise.all([
+  // After the start the OC (or the Events team) reports who was missing (2026-11-07).
+  const mayReport = (isOc || isEvents) && Date.parse(event.starts_at) <= nowMs() && !["cancelled", "dropped", "draft"].includes(event.status);
+  const [{ data: roster }, { data: slots }, { data: log }, { data: reasons }, { data: published }, { data: requests }, { data: reports }] = await Promise.all([
     supabase.from("assignments").select("id, role, status, source, dropped_at, profile_id, profiles(full_name, email)").eq("event_id", id).order("created_at"),
     supabase.rpc("open_slots"),
     supabase.from("activity_log").select("id, at, actor_email, entity, action, details").eq("event_id", id).order("at", { ascending: false }).limit(20),
@@ -36,7 +40,9 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
     isStaff || isTeam
       ? supabase.from("cancellation_requests").select("id, requested_by, reason, requested_at, decision, decision_note, decided_at").eq("event_id", id).order("requested_at", { ascending: false }).limit(1)
       : Promise.resolve({ data: [] }),
+    mayReport ? supabase.from("attendance_reports").select("assignment_id, outcome, note").eq("event_id", id) : Promise.resolve({ data: [] }),
   ]);
+  const reportOf = new Map((reports ?? []).map((r) => [r.assignment_id, { outcome: r.outcome as AttendanceOutcome, note: r.note }]));
   const { data: channelNames } = (published ?? []).length ? await supabase.from("publication_channels").select("key, name") : { data: [] };
   const channelName = new Map((channelNames ?? []).map((c) => [c.key, c.name]));
   const reasonOf = new Map((reasons ?? []).map((r) => [r.assignment_id, r.reason]));
@@ -277,6 +283,18 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
             </p>
           )}
         </Panel>
+
+        {mayReport && active.some((a) => a.profile_id !== viewer.id) && (
+          <Panel title="Who was missing?" id="attendance-report">
+            <AttendanceReport
+              eventId={id}
+              members={active
+                .filter((a) => a.profile_id !== viewer.id)
+                .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))
+                .map((a) => ({ assignmentId: a.id, name: name(a), role: a.role as "oc" | "helper", report: reportOf.get(a.id) ?? null }))}
+            />
+          </Panel>
+        )}
       </div>
 
       <div className="space-y-6">

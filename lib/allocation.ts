@@ -27,6 +27,9 @@
 //   OC, no helper) → dropped. An OC with too few co-OCs or helpers →
 //   under-staffed (the OC decides whether it runs). Helpers but no OC → no_oc
 //   (Events assigns one or drops it).
+// * People on the blacklist (`blocked`, 2026-11-07) are left out – their
+//   answers and their fixed places alike – and listed in `blocked`: the
+//   Events team adds them by hand, only as helpers on non-crucial events.
 
 export type Rank = 1 | 2 | 3 | 4 | 5;
 
@@ -67,6 +70,8 @@ export interface AllocationOptions {
   /** Seeds the tie-break lottery: the cycle id, so a re-run gives the same roster. */
   seed: string;
   people?: AllocationPerson[];
+  /** On the blacklist: never placed automatically. */
+  blocked?: readonly string[];
 }
 
 export type StaffingStatus = "staffed" | "understaffed" | "no_oc" | "dropped";
@@ -84,8 +89,10 @@ export interface AllocationResult {
   conflicts: Array<{ profileId: string; eventIds: [string, string] }>;
   /** Someone fixed on two overlapping events: they are on `otherEventId`, not on `eventId`. */
   issues: Array<{ kind: "fixed_clash"; eventId: string; profileId: string; role: "oc" | "helper"; otherEventId: string }>;
-  /** Volunteers who signed up for something and got nothing. */
+  /** Volunteers who signed up for something and got nothing (the blocked ones not counted). */
   unplaced: string[];
+  /** People on the blacklist who signed up or were fixed on an event: left out. */
+  blocked: string[];
   /** Top-choice wishes in all, and how many of them were met. */
   topChoices: { wished: number; met: number };
 }
@@ -138,12 +145,21 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
   const sortedEvents = [...events].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || byId(a.id, b.id));
   const eventIds = new Set(sortedEvents.map((e) => e.id));
   const span = spans(sortedEvents);
-  const mine = choices.filter((c) => eventIds.has(c.eventId)).sort((a, b) => byId(a.profileId, b.profileId) || byId(a.eventId, b.eventId));
+  const blockedSet = new Set(options.blocked ?? []);
+  const blocked = [
+    ...new Set([
+      ...choices.filter((c) => eventIds.has(c.eventId) && blockedSet.has(c.profileId)).map((c) => c.profileId),
+      ...sortedEvents.flatMap((e) => (e.fixed ?? []).filter((f) => blockedSet.has(f.profileId)).map((f) => f.profileId)),
+    ]),
+  ].sort(byId);
+  /** An event's fixed people without the blocked ones (a new array). */
+  const keptFixed = (fixed: AllocationEvent["fixed"]) => (fixed ?? []).filter((f) => !blockedSet.has(f.profileId));
+  const mine = choices.filter((c) => eventIds.has(c.eventId) && !blockedSet.has(c.profileId)).sort((a, b) => byId(a.profileId, b.profileId) || byId(a.eventId, b.eventId));
   const wish = new Map(mine.map((c) => [`${c.profileId}|${c.eventId}`, c]));
 
   // Everyone with an answer or fixed on an event, with their limits and history.
   const info = new Map((options.people ?? []).map((p) => [p.profileId, p]));
-  const ids = [...new Set([...mine.map((c) => c.profileId), ...sortedEvents.flatMap((e) => (e.fixed ?? []).map((f) => f.profileId))])].sort(byId);
+  const ids = [...new Set([...mine.map((c) => c.profileId), ...sortedEvents.flatMap((ev) => keptFixed(ev.fixed).map((f) => f.profileId))])].sort(byId);
   const person = new Map(
     ids.map((id): [string, Volunteer] => {
       const answers = mine.filter((c) => c.profileId === id).flatMap((c) => [c.ocRank, c.helperRank].filter((r): r is Rank => r !== null));
@@ -209,7 +225,7 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
 
   // 0. People fixed on the event (proposer, partners): OCs first.
   for (const e of sortedEvents) {
-    const fixed = [...(e.fixed ?? [])].sort((a, b) => (a.role === b.role ? byId(a.profileId, b.profileId) : a.role === "oc" ? -1 : 1));
+    const fixed = keptFixed(e.fixed).sort((a, b) => (a.role === b.role ? byId(a.profileId, b.profileId) : a.role === "oc" ? -1 : 1));
     for (const f of fixed) {
       if (person.get(f.profileId)!.events.includes(e.id)) continue;
       const other = person.get(f.profileId)!.events.find((o) => clash(o, e.id));
@@ -255,11 +271,11 @@ export function allocate(events: AllocationEvent[], choices: AllocationChoice[],
     }
   }
 
-  const result: AllocationResult = { assignments, events: {}, conflicts: findConflicts(sortedEvents, assignments), issues, unplaced: [], topChoices: { wished: 0, met: 0 } };
+  const result: AllocationResult = { assignments, events: {}, conflicts: findConflicts(sortedEvents, assignments), issues, unplaced: [], blocked, topChoices: { wished: 0, met: 0 } };
   for (const e of sortedEvents) {
     const ocIds = ocs.get(e.id)!;
     const ocsNeeded = Math.max(1, e.ocsNeeded ?? 1);
-    const signups = new Set([...mine.filter((c) => c.eventId === e.id).map((c) => c.profileId), ...(e.fixed ?? []).map((f) => f.profileId)]);
+    const signups = new Set([...choices.filter((c) => c.eventId === e.id).map((c) => c.profileId), ...(e.fixed ?? []).map((f) => f.profileId)]);
     result.events[e.id] = {
       status: staffingStatus(ocIds.length, ocsNeeded, helpers.get(e.id)!.length, e.helpersNeeded),
       ocIds,

@@ -125,6 +125,38 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"attendance_reports": {
+                  Row: {
+                    "assignment_id": string,"event_id": string,"note": string | null,"outcome": string,"profile_id": string,"reported_at": string,"reported_by": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assignment_id": string,"event_id": string,"note"?: string | null,"outcome": string,"profile_id": string,"reported_at"?: string,"reported_by": string
+                  }
+                  Update: {
+                    "assignment_id"?: string,"event_id"?: string,"note"?: string | null,"outcome"?: string,"profile_id"?: string,"reported_at"?: string,"reported_by"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_reports_assignment_id_fkey"
+      columns: ["assignment_id"]
+isOneToOne: true
+      referencedRelation: "assignments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_reports_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_reports_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"calendar_feeds": {
                   Row: {
                     "created_at": string,"last_used_at": string | null,"profile_id": string,"token_hash": string,"token_prefix": string
@@ -485,14 +517,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"ocs_needed": number,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
+                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"non_crucial": boolean,"ocs_needed": number,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -1187,6 +1219,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"volunteer_blacklist": {
+                  Row: {
+                    "added_at": string,"added_by": string,"id": string,"profile_id": string,"reason": string,"remove_note": string | null,"removed_at": string | null,"removed_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_at"?: string,"added_by": string,"id"?: string,"profile_id": string,"reason": string,"remove_note"?: string | null,"removed_at"?: string | null,"removed_by"?: string | null
+                  }
+                  Update: {
+                    "added_at"?: string,"added_by"?: string,"id"?: string,"profile_id"?: string,"reason"?: string,"remove_note"?: string | null,"removed_at"?: string | null,"removed_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "volunteer_blacklist_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"volunteer_choices": {
                   Row: {
                     "event_id": string,"helper_rank": number | null,"oc_rank": number | null,"response_id": string
@@ -1268,6 +1320,12 @@ isOneToOne: false
 "auth_email":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"blacklist_add":
+{ Args: { "profile": string,"reason": string }; Returns: string
+                           },
+"blacklist_remove":
+{ Args: { "note"?: string,"profile": string }; Returns: undefined
+                           },
 "book_cash_report":
 { Args: { "category": string,"report": string }; Returns: string
                            },
@@ -1340,6 +1398,9 @@ isOneToOne: false
       } },
 "claim_slot":
 { Args: { "event": string,"slot_role": string }; Returns: string
+                           },
+"clear_attendance_report":
+{ Args: { "assignment": string }; Returns: undefined
                            },
 "clear_volunteer_response":
 { Args: { "cycle": string,"profile": string,"reason": string }; Returns: undefined
@@ -1569,6 +1630,16 @@ isOneToOne: false
               "email": string,"full_name": string,"helper_count": number,"meeting_count": number,"newbie": boolean,"oc_count": number,"office_hour_count": number,"profile_id": string,"talk_count": number
             }[]
                            },
+"member_incidents":
+{ Args: { "profile": string }; Returns: {
+              "event_id": string,"event_title": string,"kind": string,"note": string,"reported_at": string,"reported_by": string,"starts_at": string
+            }[]
+                           },
+"member_reliability":
+{ Args: { "months"?: number }; Returns: {
+              "blacklist_reason": string,"blacklisted": boolean,"blacklisted_at": string,"blacklisted_by": string,"email": string,"events_done": number,"excused": number,"full_name": string,"last_incident_at": string,"late": number,"late_dropouts": number,"no_show": number,"profile_id": string,"short_notice": number
+            }[]
+                           },
 "merge_formats":
 { Args: { "from_format": string,"into_format": string }; Returns: number
                            },
@@ -1650,6 +1721,9 @@ isOneToOne: false
                            },
 "replace_group_role":
 { Args: { "emails": (string)[],"member_role": Database["public"]['Enums']["app_role"] }; Returns: number
+                           },
+"report_attendance":
+{ Args: { "assignment": string,"note"?: string,"outcome": string }; Returns: undefined
                            },
 "request_cancellation":
 { Args: { "event": string,"reason": string }; Returns: string

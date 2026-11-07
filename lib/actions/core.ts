@@ -88,6 +88,7 @@ export const PAGES = {
   internal: "/team/internal",
   internalEvent: ["/internal/[id]", "page"],
   activity: "/team/internal/activity",
+  reliability: "/team/reliability",
   officeHours: ["/office-hours", "layout"],
   admin: "/admin",
 } as const satisfies Record<string, RevalidateTarget>;

@@ -15,10 +15,10 @@ describe("navigation", () => {
   });
 
   it("team pages are their own group; executives see all of them (incl. Finance), not Admin", () => {
-    expect(labels(navItems(["events"]).team)).toEqual(["Events"]);
+    expect(labels(navItems(["events"]).team)).toEqual(["Events", "Reliability"]);
     expect(labels(navItems(["treasurer"]).team)).toEqual(["Finance"]);
-    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance", "Internal", "ESN Activities"]);
-    expect(labels(navItems(["hr"]).team)).toEqual(["Internal"]);
+    expect(labels(navItems(["executive"]).team)).toEqual(["Events", "Comms", "Finance", "Internal", "Reliability", "ESN Activities"]);
+    expect(labels(navItems(["hr"]).team)).toEqual(["Internal", "Reliability"]);
     expect(labels(navItems(["vice_president"]).team)).toEqual(["Internal"]);
     expect(labels(navItems(["admin"]).team)).toEqual(["Admin"]);
     expect(labels(navItems(["executive"]).personal)).not.toContain("Finance");

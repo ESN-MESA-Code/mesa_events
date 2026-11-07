@@ -312,16 +312,20 @@ export const clearVolunteerResponse = defineAction(
 
 // ── Allocation and roster ───────────────────────────────────────────────────
 
-/** Runs the automatic allocation on the form's answers and saves it (replacing any earlier run). */
+/**
+ * Runs the automatic allocation on the form's answers and saves it (replacing any earlier run).
+ * People on the blacklist are left out (2026-11-07): the Events team adds them by hand.
+ */
 export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (ctx, { cycle_id }) => {
   requireRole(ctx, "events");
-  const [{ data: events, error: e1 }, { data: signups, error: e2 }, { data: history, error: e3 }, { data: fixed, error: e4 }] = await Promise.all([
+  const [{ data: events, error: e1 }, { data: signups, error: e2 }, { data: history, error: e3 }, { data: fixed, error: e4 }, { data: blacklist, error: e5 }] = await Promise.all([
     ctx.supabase.from("events").select("id, starts_at, ends_at, helpers_needed, ocs_needed").eq("cycle_id", cycle_id).eq("status", "scheduled"),
     ctx.supabase.rpc("cycle_signups", { cycle: cycle_id }),
     ctx.supabase.rpc("allocation_history", { cycle: cycle_id }),
     ctx.supabase.rpc("event_fixed_people", { cycle: cycle_id }),
+    ctx.supabase.from("volunteer_blacklist").select("profile_id").is("removed_at", null),
   ]);
-  dbError(e1 ?? e2 ?? e3 ?? e4);
+  dbError(e1 ?? e2 ?? e3 ?? e4 ?? e5);
   const choices: AllocationChoice[] = (signups ?? []).map((s) => ({
     profileId: s.profile_id,
     eventId: s.event_id,
@@ -346,11 +350,11 @@ export const runAllocation = defineAction(z.object({ cycle_id: uuid }), async (c
       fixed: (fixed ?? []).filter((f) => f.event_id === e.id).map((f) => ({ profileId: f.profile_id, role: f.role as "oc" | "helper" })),
     })),
     choices,
-    { seed: cycle_id, people }
+    { seed: cycle_id, people, blocked: (blacklist ?? []).map((b) => b.profile_id) }
   );
   const rows = result.assignments.map((a) => ({ event_id: a.eventId, profile_id: a.profileId, role: a.role, source: a.source }));
   dbError((await ctx.supabase.rpc("save_allocation", { cycle: cycle_id, rows })).error);
-  return { assignments: rows.length, events: result.events, conflicts: result.conflicts, issues: result.issues, unplaced: result.unplaced.length, topChoices: result.topChoices };
+  return { assignments: rows.length, events: result.events, conflicts: result.conflicts, issues: result.issues, unplaced: result.unplaced.length, blocked: result.blocked.length, topChoices: result.topChoices };
 }, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.me, PAGES.home] });
 
 /**

@@ -255,3 +255,24 @@ describe("allocate: determinism", () => {
     expect(r.assignments).toEqual([{ eventId: "e1", profileId: "ben", role: "helper", source: "auto" }]);
   });
 });
+
+describe("allocate: the blacklist", () => {
+  it("leaves blacklisted people out, also as idea partners, and lists them", () => {
+    const r = allocate(
+      [ev("e1", 2, "2026-11-05T18:00:00Z", { fixed: [{ profileId: "pia", role: "helper" }] })],
+      [pick("ana", "e1", 1, 1), pick("ben", "e1", 2, 1), pick("cem", "e1", null, 1)],
+      { seed: "cycle-1", blocked: ["ana", "pia"] }
+    );
+    expect(rolesOf(r, "e1")).toEqual({ oc: "ben", helpers: ["cem"] });
+    expect(r.blocked).toEqual(["ana", "pia"]);
+    // Not "without an event": they were left out on purpose.
+    expect(r.unplaced).toEqual([]);
+    // They still count as having signed up.
+    expect(r.events.e1.signups).toBe(4);
+  });
+
+  it("someone on the blacklist who signed up for nothing is not listed", () => {
+    const r = allocate([ev("e1", 1)], [pick("ben", "e1", 1, null)], { seed: "s", blocked: ["zoe"] });
+    expect(r.blocked).toEqual([]);
+  });
+});

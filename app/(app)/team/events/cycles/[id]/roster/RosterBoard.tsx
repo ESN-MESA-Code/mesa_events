@@ -6,6 +6,8 @@ import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, 
 import { Alert, Badge, Card } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { assign, moveAssignment, unassign } from "@/app/actions/planning";
+import { setNonCrucial } from "@/app/actions/reliability";
+import { blacklistAllows } from "@/lib/reliability";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, type EventStatus } from "@/lib/labels";
 import { staffingStatus } from "@/lib/allocation";
 import { berlinDate, formatShortDate } from "@/lib/dates";
@@ -21,6 +23,8 @@ export interface BoardPerson {
   wishes: Record<string, { oc: number | null; helper: number | null }>;
   /** From the volunteer form: at most this many events; null = no limit. */
   maxEvents?: number | null;
+  /** On the blacklist (2026-11-07): the reason; null/absent = not on it. */
+  blacklisted?: string | null;
 }
 
 export interface BoardEvent {
@@ -33,6 +37,8 @@ export interface BoardEvent {
   /** How many OCs (round 2026-11-04: an event can have several). */
   ocsNeeded: number;
   status: EventStatus;
+  /** The Events team's call: people on the blacklist may help on it. */
+  nonCrucial: boolean;
   assignments: Array<{ id: string; profileId: string; role: "oc" | "helper"; source: string }>;
 }
 
@@ -77,9 +83,22 @@ function Slot({ id, label, children, disabled }: { id: string; label: string; ch
 /** How long a change on a confirmed roster waits for Undo before it is saved and announced (usability review #20). */
 const UNDO_MS = 10_000;
 
-export function RosterBoard({ events, people, editable, confirmed }: { events: BoardEvent[]; people: BoardPerson[]; editable: boolean; confirmed: boolean }) {
+export function RosterBoard({
+  events,
+  people,
+  editable,
+  confirmed,
+  canMarkCrucial = false,
+}: {
+  events: BoardEvent[];
+  people: BoardPerson[];
+  editable: boolean;
+  confirmed: boolean;
+  /** The Events team marks events non-crucial (also before the allocation). */
+  canMarkCrucial?: boolean;
+}) {
   const cycleParam = useParams<{ id: string }>().id;
-  const { run, error, toast } = useAction();
+  const { run, error, setError, toast } = useAction();
   const [filter, setFilter] = useState("");
   const [waiting, setWaiting] = useState(0);
   const waitingRef = useRef(0);
@@ -140,6 +159,14 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
       return;
     }
     const [eventId, role] = target.split(":");
+    // The blacklist: only as a helper on a non-crucial event (the database refuses the rest too).
+    const movingId = data.kind === "person" ? data.profileId : events.flatMap((ev) => ev.assignments).find((a) => a.id === data.assignmentId)?.profileId;
+    const moving = movingId ? byId.get(movingId) : undefined;
+    const targetEvent = events.find((ev) => ev.id === eventId);
+    if (moving?.blacklisted && targetEvent && !blacklistAllows(role as "oc" | "helper", targetEvent.nonCrucial)) {
+      setError(`${moving.name} is on the blacklist: only as a helper on an event marked non-crucial.`);
+      return;
+    }
     const label = `${titleOf.get(eventId) ?? "the event"} (${role === "oc" ? "OC" : "helper"})`;
     if (data.kind === "assignment") {
       const w = who(data.assignmentId);
@@ -167,6 +194,14 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
         <span className="font-medium text-gray-900 truncate">{person.name}</span>
         {eventId && wishLabel(person, eventId) && <span className="text-[11px] text-gray-500 truncate">({wishLabel(person, eventId)})</span>}
         {assignment?.source === "proposer" && <Badge tone="purple">idea</Badge>}
+        {person.blacklisted && (
+          <Badge tone="red" title={`On the blacklist: ${person.blacklisted}`} data-testid="blacklisted">
+            Blacklisted
+          </Badge>
+        )}
+        {person.blacklisted && assignment && eventId && !blacklistAllows(assignment.role, events.find((e) => e.id === eventId)?.nonCrucial ?? false) && (
+          <span className="w-full text-[11px] font-medium text-red-700">⚠ on the blacklist – {assignment.role === "oc" ? "should not be OC" : "this event is not marked non-crucial"}</span>
+        )}
         {clash && <span className="w-full text-[11px] font-medium text-red-700">⚠ {clash}</span>}
       </div>
     );
@@ -216,8 +251,13 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
               const days = [...new Set([...(l?.sameDay.keys() ?? [])].map((id) => events.find((e) => e.id === id)!.startsAt))].map((iso) => formatShortDate(iso));
               return [
                 heading,
-                <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable} highlight={count === 0}>
+                <Chip key={p.id} id={`person:${p.id}`} data={{ kind: "person", profileId: p.id }} disabled={!editable} highlight={count === 0 && !p.blacklisted}>
                   <span className="font-medium">{p.name}</span>
+                  {p.blacklisted && (
+                    <Badge tone="red" className="ml-1.5" title={`On the blacklist: ${p.blacklisted}`}>
+                      Blacklisted
+                    </Badge>
+                  )}
                   <span className={cn("text-xs", count >= HEAVY_LOAD || (p.maxEvents && count > p.maxEvents) ? "font-semibold text-amber-700" : "text-gray-500")}>
                     {" "}
                     · {plural(Object.keys(p.wishes).length, "wish", "wishes")}
@@ -225,6 +265,7 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                     {p.maxEvents && count > p.maxEvents ? " – more than they can do" : count >= HEAVY_LOAD && " – a lot"}
                   </span>
                   {days.length > 0 && <span className="block text-[11px] font-medium text-red-700">⚠ two events on {[...new Set(days)].join(", ")}</span>}
+                  {p.blacklisted && <span className="block text-[11px] text-red-700">Only as helper on non-crucial events</span>}
                 </Chip>,
               ];
             })}
@@ -249,6 +290,19 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                   {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}
                   <Badge tone={staffing.tone}>{shortOfOcs ? "Short of OCs" : staffing.label}</Badge>
                 </div>
+                {canMarkCrucial ? (
+                  <label className="flex items-center gap-2 text-xs text-gray-700" title="The event also runs if a helper does not show up: people on the blacklist may help on it.">
+                    <input
+                      type="checkbox"
+                      checked={ev.nonCrucial}
+                      onChange={(e) => run(setNonCrucial, { event_id: ev.id, non_crucial: e.target.checked })}
+                      data-testid={`non-crucial-${ev.title}`}
+                    />
+                    Non-crucial – blacklisted people may help
+                  </label>
+                ) : (
+                  ev.nonCrucial && <Badge tone="gray">Non-crucial</Badge>
+                )}
                 <div>
                   <p className="text-xs font-semibold uppercase text-gray-500 mb-1">{ev.ocsNeeded > 1 ? `OCs ${oc.length}/${ev.ocsNeeded}` : "OC"}</p>
                   <Slot id={`${ev.id}:oc`} label={`${ev.title} OC`} disabled={!editable}>
@@ -273,12 +327,23 @@ export function RosterBoard({ events, people, editable, confirmed }: { events: B
                 </div>
                 {wishers.length > 0 && (
                   <p className="text-xs text-gray-500">
-                    Also wanted: {wishers.map((p) => `${p.name} (${wishLabel(p, ev.id)})`).join("; ")}
+                    Also wanted:{" "}
+                    {wishers.map((p, i) => (
+                      <span key={p.id} className={cn(p.blacklisted && "text-red-700")} title={p.blacklisted ? `On the blacklist: ${p.blacklisted}` : undefined}>
+                        {i > 0 && "; "}
+                        {p.blacklisted && "⛔ "}
+                        {p.name} ({wishLabel(p, ev.id)}){p.blacklisted && (ev.nonCrucial && p.wishes[ev.id]?.helper ? " – blacklisted, may help here" : " – blacklisted")}
+                      </span>
+                    ))}
                   </p>
                 )}
-                {editable && staffing !== STAFFING.staffed && free.some((p) => !wishers.includes(p)) && (
+                {editable && staffing !== STAFFING.staffed && free.some((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial)) && (
                   <p className="text-xs text-amber-800" data-testid="free-hint">
-                    Not assigned anywhere yet: {free.filter((p) => !wishers.includes(p)).map((p) => p.name).join(", ")}
+                    Not assigned anywhere yet:{" "}
+                    {free
+                      .filter((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial))
+                      .map((p) => (p.blacklisted ? `${p.name} (blacklisted – helper only)` : p.name))
+                      .join(", ")}
                   </p>
                 )}
               </Card>
