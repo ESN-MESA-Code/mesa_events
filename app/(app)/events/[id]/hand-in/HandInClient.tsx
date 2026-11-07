@@ -258,7 +258,22 @@ export function PhotoFolder({ eventId, folder, canTick, canCheck, canDeclare }: 
   const router = useRouter();
   const { run, pending, error } = useAction();
   const [waitingSince, setWaitingSince] = useState<string | null>(null);
+  const [askingNoPhotos, setAskingNoPhotos] = useState(false);
   const counted = folder?.counted_at ?? null;
+  // "No photos taken" (round 2026-11-07): offered while the folder is empty and nobody said so yet.
+  const noPhotos = !!folder?.no_photos_at && !folder.photo_count;
+  const offerNoPhotos = canDeclare && !folder?.no_photos_at && !folder?.photo_count;
+  const noPhotosButton = offerNoPhotos && !askingNoPhotos && (
+    <Button type="button" variant="outline" size="sm" onClick={() => setAskingNoPhotos(true)} data-testid="no-photos-open">
+      No photos taken…
+    </Button>
+  );
+  const noPhotosParts = (
+    <>
+      {offerNoPhotos && askingNoPhotos && <NoPhotosForm eventId={eventId} onClose={() => setAskingNoPhotos(false)} />}
+      {noPhotos && <NoPhotosNote eventId={eventId} folder={folder!} canUndo={canDeclare} />}
+    </>
+  );
   // Until the job's new count arrived (counted after the click).
   const waiting = !!waitingSince && !(counted && counted > waitingSince);
 
@@ -280,7 +295,8 @@ export function PhotoFolder({ eventId, folder, canTick, canCheck, canDeclare }: 
       <div className="space-y-3" data-testid="photo-folder">
         <p className="text-sm text-gray-600">The photo folder in Drive is being created – it appears here within a few minutes.</p>
         {canTick && !folder?.no_photos_at && <TickPhotos eventId={eventId} marked={!!folder?.marked_uploaded_at} by={folder?.marked_uploaded_by ?? null} />}
-        <NoPhotos eventId={eventId} folder={folder} canDeclare={canDeclare} />
+        {noPhotosButton && <div>{noPhotosButton}</div>}
+        {noPhotosParts}
       </div>
     );
   }
@@ -310,22 +326,25 @@ export function PhotoFolder({ eventId, folder, canTick, canCheck, canDeclare }: 
         )}
       </p>
       {folder.count_error && <Alert tone="warning">Drive could not be read the last time. {canTick ? "If the photos are there, tick them below." : ""}</Alert>}
-      {canCheck && (
+      {(canCheck || noPhotosButton) && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending || waiting}
-            onClick={() => run(checkPhotosAgain, { event_id: eventId }, () => setWaitingSince(new Date().toISOString()))}
-          >
-            {waiting ? "Checking Drive…" : "Check again"}
-          </Button>
+          {canCheck && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending || waiting}
+              onClick={() => run(checkPhotosAgain, { event_id: eventId }, () => setWaitingSince(new Date().toISOString()))}
+            >
+              {waiting ? "Checking Drive…" : "Check again"}
+            </Button>
+          )}
+          {noPhotosButton}
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
       )}
+      {noPhotosParts}
       {canTick && !folder.no_photos_at && <TickPhotos eventId={eventId} marked={!!folder.marked_uploaded_at} by={folder.marked_uploaded_by} />}
-      <NoPhotos eventId={eventId} folder={folder} canDeclare={canDeclare} />
     </div>
   );
 }
@@ -351,65 +370,64 @@ function TickPhotos({ eventId, marked, by }: { eventId: string; marked: boolean;
 }
 
 /**
- * Photos are not a must (round 2026-11-07): when nobody took any, the OC or
- * a helper says so here – the photo step is then done. Shown as said (with
- * who and why) to everyone who sees the hand-in; it can be taken back.
- * Not offered once the folder holds photos.
+ * "No photos taken…" (round 2026-11-07): photos are not a must – when nobody
+ * took any, the OC or a helper says so and the photo step is done. Laid out
+ * like the other inline requests (e.g. asking to cancel): a reason, a note on
+ * what it means, the action and Back.
  */
-function NoPhotos({ eventId, folder, canDeclare }: { eventId: string; folder: PhotoFolderProps["folder"]; canDeclare: boolean }) {
+function NoPhotosForm({ eventId, onClose }: { eventId: string; onClose: () => void }) {
   const { run, pending, error } = useAction();
-  const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState("");
-  if ((folder?.photo_count ?? 0) > 0) return null;
-  if (folder?.no_photos_at) {
-    return (
-      <div className="space-y-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm" data-testid="no-photos">
-        <p>
-          <strong>No photos taken</strong>
-          <span className="text-gray-500">
-            {" "}
-            – said by {folder.no_photos_by ?? "someone"} on {formatDateTime(folder.no_photos_at)}
-          </span>
-        </p>
-        {folder.no_photos_reason && <p className="break-words text-gray-600">“{folder.no_photos_reason}”</p>}
-        {canDeclare && (
-          <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => run(declareNoPhotos, { event_id: eventId, declared: false })} data-testid="undo-no-photos">
-            We did take photos – undo
-          </Button>
-        )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
-    );
-  }
-  if (!canDeclare) return null;
-  if (!asking) {
-    return (
-      <button type="button" className="text-xs text-gray-600 underline hover:text-gray-900" onClick={() => setAsking(true)} data-testid="no-photos-open">
-        Nobody took photos?
-      </button>
-    );
-  }
   return (
     <form
-      className="space-y-2 rounded-md border border-gray-200 px-3 py-2 text-sm"
+      className="space-y-2"
+      data-testid="no-photos-form"
       onSubmit={(e) => {
         e.preventDefault();
-        run(declareNoPhotos, { event_id: eventId, declared: true, reason }, () => setAsking(false), "Noted – no photos for this event.");
+        run(declareNoPhotos, { event_id: eventId, declared: true, reason: reason.trim() }, onClose, "Noted – no photos for this event.");
       }}
     >
-      <p className="text-gray-700">Forgot to take pictures? Say so and the photo step is done – the Events team sees it on the hand-in.</p>
-      <Field label="Why? (optional)" htmlFor="no-photos-reason">
-        <Input id="no-photos-reason" value={reason} maxLength={300} placeholder="e.g. phone battery was empty" onChange={(e) => setReason(e.target.value)} />
-      </Field>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" disabled={pending} data-testid="no-photos-confirm">
+      <Input aria-label="Why were no photos taken? (optional)" placeholder="Why not? (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} autoFocus />
+      <p className="text-xs text-gray-500">The photo step then counts as done. Everyone who sees the hand-in, the Events team too, sees who said it and why.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={pending} data-testid="no-photos-confirm">
           No photos taken
         </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setAsking(false)}>
-          Cancel
+        <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+          Back
         </Button>
-        {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
+      {error && (
+        <span role="alert" className="text-xs text-red-600">
+          {error}
+        </span>
+      )}
     </form>
+  );
+}
+
+/** Said: who, when and why, in the same box as the manual tick; Undo for the event's team. */
+function NoPhotosNote({ eventId, folder, canUndo }: { eventId: string; folder: NonNullable<PhotoFolderProps["folder"]>; canUndo: boolean }) {
+  const { run, pending, error } = useAction();
+  return (
+    <div className="space-y-1 rounded-md border border-gray-200 px-3 py-2 text-sm" data-testid="no-photos">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-medium text-gray-900">No photos taken</p>
+        {canUndo && (
+          <Button type="button" variant="ghost" size="sm" className="-my-1 -mr-2 h-7" disabled={pending} onClick={() => run(declareNoPhotos, { event_id: eventId, declared: false }, undefined, "Undone – the photos are due again.")} data-testid="undo-no-photos">
+            Undo
+          </Button>
+        )}
+      </div>
+      {folder.no_photos_reason && <p className="break-words text-gray-700">{folder.no_photos_reason}</p>}
+      <p className="text-xs text-gray-500">
+        Said by {folder.no_photos_by ?? "a team member"} on {formatDateTime(folder.no_photos_at!)}.
+      </p>
+      {error && (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
