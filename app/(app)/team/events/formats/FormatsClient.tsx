@@ -311,7 +311,7 @@ export function FormatsCard({ formats, categories, canEdit }: { formats: FormatR
                       }}
                     >
                       <span className="text-xs text-gray-600">Move all runs and ideas of {f.name} to</span>
-                      <FormatSelect aria-label={`Merge ${f.name} into`} formats={formats.filter((x) => x.id !== f.id)} categories={categories} value={merging.into} onChange={(into) => setMerging({ from: f.id, into })} empty="Pick a format" className="h-8 w-auto" />
+                      <FormatSelect aria-label={`Merge ${f.name} into`} formats={formats.filter((x) => x.id !== f.id)} categories={categories} value={merging.into} onChange={(into) => setMerging({ from: f.id, into })} empty="Pick a format" size="sm" />
                       <Button size="sm" disabled={pending || !merging.into}>
                         Merge
                       </Button>

@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { formatDateTime, formatShortDate } from "@/lib/dates";
+import { CircleCheck, Lightbulb, Lock } from "lucide-react";
+import { formatDateTime } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { loadSorting } from "@/lib/sortingLoad";
-import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { Alert, Badge, EmptyState } from "@/components/ui";
+import { Panel } from "@/components/Panel";
+import { DateTile } from "@/components/DateTile";
 import { IdeaCard } from "../ScheduleClient";
 
 export const metadata: Metadata = { title: "Ideas" };
@@ -56,16 +59,19 @@ export default async function CycleIdeasPage({ params }: { params: Promise<{ id:
   return (
     <div className="space-y-6">
       {!editable && open.length > 0 && (
-        <Alert tone="info" data-testid="ideas-locked">
-          The schedule is fixed now, so these ideas can no longer be added to this month. Members can propose them again for a later month.
+        <Alert tone="info" className="flex items-start gap-2 rounded-xl px-4 py-3" data-testid="ideas-locked">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>The schedule is fixed now, so these ideas can no longer be added to this month. Members can propose them again for a later month.</span>
         </Alert>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>Open ideas</CardTitle>
-          <Badge tone={ideas.length ? "amber" : undefined}>{ideas.length}</Badge>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="idea-inbox">
+      <Panel
+        title="Open ideas"
+        icon={Lightbulb}
+        count={ideas.length}
+        countTone={ideas.length ? "amber" : "gray"}
+        description={editable ? "Accept, merge or decline – on the Schedule tab you can also drag an idea onto a day." : "Ideas dated in this month."}
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="idea-inbox">
           {!ideas.length && <EmptyState>No open ideas for this month.</EmptyState>}
           {ideas.map((i) => (
             <IdeaCard
@@ -92,42 +98,36 @@ export default async function CycleIdeasPage({ params }: { params: Promise<{ id:
               }}
             />
           ))}
-          <p className="text-xs text-gray-500 md:col-span-2 xl:col-span-3">
-            Ideas dated in other months appear in those months&apos; Ideas tab.{editable && " On the Schedule tab, drag an idea from the calendar tray onto a day to add it quickly."}
-          </p>
-        </CardContent>
-      </Card>
+        </div>
+        <p className="mt-3 text-xs text-gray-500">Ideas dated in other months appear in those months&apos; Ideas tab.</p>
+      </Panel>
       {decided.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Decided</CardTitle>
-            <Badge>{decided.length}</Badge>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-gray-100 text-sm" data-testid="ideas-decided">
-              {decided.map((i) => {
-                const d = DECIDED[i.status] ?? { label: i.status, tone: "blue" as const };
-                return (
-                  <li key={i.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2">
-                    <span className="w-24 shrink-0 tabular-nums text-xs text-gray-600">{formatShortDate(i.proposed_date)}</span>
-                    {i.event_id ? (
-                      <Link href={`/events/${i.event_id}?from=cycle:${id}`} className="font-medium text-gray-900 hover:text-esn">
-                        {i.title}
-                      </Link>
-                    ) : (
-                      <span className="font-medium text-gray-900">{i.title}</span>
-                    )}
-                    <span className="text-xs text-gray-500">by {(i.profiles as { full_name: string } | null)?.full_name ?? "someone"}</span>
-                    <Badge tone={d.tone} className="ml-auto">
-                      {d.label}
-                    </Badge>
-                    {i.decision_note && <span className="w-full text-xs text-gray-500 sm:pl-27">“{i.decision_note}”</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
+        <Panel title="Decided" icon={CircleCheck} count={decided.length}>
+          <ul className="divide-y divide-gray-100 text-sm" data-testid="ideas-decided">
+            {decided.map((i) => {
+              const d = DECIDED[i.status] ?? { label: i.status, tone: "blue" as const };
+              return (
+                <li key={i.id} className="flex gap-3 py-3">
+                  <DateTile iso={`${i.proposed_date}T12:00:00Z`} tone={i.status === "rejected" ? "muted" : "default"} />
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                    <div className="min-w-0 flex-1 basis-48">
+                      <p className="truncate text-xs font-medium text-gray-600">by {(i.profiles as { full_name: string } | null)?.full_name ?? "someone"}</p>
+                      {i.event_id ? (
+                        <Link href={`/events/${i.event_id}?from=cycle:${id}`} className="font-semibold text-gray-900 hover:text-esn">
+                          {i.title}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-gray-900">{i.title}</span>
+                      )}
+                      {i.decision_note && <p className="mt-0.5 text-xs italic text-gray-500">“{i.decision_note}”</p>}
+                    </div>
+                    <Badge tone={d.tone}>{d.label}</Badge>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
       )}
     </div>
   );

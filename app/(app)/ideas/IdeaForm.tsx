@@ -121,7 +121,7 @@ export function IdeaForm({
           <Input id="idea-title" {...register("title")} placeholder="e.g. Pub quiz in English" />
         </Field>
         {formats.length > 0 && (
-          <Field label="Is this a new run of an event we did before?" htmlFor="idea-format" hint="Then its earlier runs and descriptions stay together.">
+          <Field label="Is this a new run of an event we did before?" htmlFor="idea-format" hint="Type to search our earlier events – then its runs and descriptions stay together.">
             <FormatSelect id="idea-format" formats={formats} categories={categories} value={formatId ?? ""} onChange={pickFormat} />
           </Field>
         )}

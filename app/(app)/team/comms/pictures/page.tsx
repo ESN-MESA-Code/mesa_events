@@ -36,7 +36,7 @@ export default async function PicturesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="Comms"
-        description="Default pictures for the Telegram posts: an event without its own picture gets its format's, else its type's. Choose them once here; a picture added to a post wins."
+        description="Default pictures for the Telegram posts – a post's own picture wins, else the format's, else the type's."
       />
       <CommsTabs current="pictures" month={month ? monthParam(month) : null} executive={viewer.roles.includes("executive")} />
       <DefaultPictures types={types} formats={formatSlots} editable={editable} />

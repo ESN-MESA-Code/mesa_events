@@ -53,8 +53,10 @@ describe("seed:staging", () => {
     expect(lists.length).toBe(eventIds.length);
   });
 
-  it("has every cycle phase: three done months, now, next (adjusting), after (form open)", () => {
-    expect(Object.values(first.cycles)).toEqual(["confirmed", "confirmed", "confirmed", "confirmed", "allocated", "form_open"]);
+  it("has every cycle phase: twelve done months, now, next (adjusting), after (form open)", () => {
+    expect(Object.values(first.cycles)).toEqual([...Array(13).fill("confirmed"), "allocated", "form_open"]);
+    // Fifteen months in a row: every month of the year has a cycle.
+    expect(new Set(Object.keys(first.cycles).map((m) => m.slice(5, 7))).size).toBe(12);
   });
 
   it("has every event status, a decided and a waiting under-staffed event, a reopenable cancellation", async () => {

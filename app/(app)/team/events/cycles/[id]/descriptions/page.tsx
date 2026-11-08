@@ -6,8 +6,11 @@ import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
 import { formatDateTime, formatShortDate, isoToBerlinInput, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
-import { Card, CardContent, EmptyState } from "@/components/ui";
+import { ChevronRight, Clock, FileText, Lock } from "lucide-react";
+import { EmptyState } from "@/components/ui";
+import { Panel, PanelGroup } from "@/components/Panel";
 import { DeadlineControl } from "../CycleControls";
+import { DescriptionState, EventLine } from "../MonthEvents";
 import { loadMonthEvents, type MonthEvent } from "@/lib/monthEvents";
 import { cycleTimeline } from "@/lib/timeline";
 import { loadReminderDays } from "@/lib/remindersLoad";
@@ -65,24 +68,19 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
   const reminderLine = reminders.descriptionDaysBefore ? `reminders ${every} from ${reminders.descriptionDaysBefore} days before` : "no automatic reminders";
 
   const row = (r: MonthEvent, extra: React.ReactNode) => (
-    <li key={r.id} className="grid gap-x-3 gap-y-0.5 py-2 sm:grid-cols-[6.5rem_minmax(0,1fr)_auto] sm:items-baseline" data-testid={`month-event-${r.id}`}>
-      <span className="text-xs tabular-nums text-gray-500 sm:text-sm">{formatShortDate(r.startsAt)}</span>
-      <span className="min-w-0">
-        <Link href={`/events/${r.id}/description?from=cycle:${id}`} className="font-medium text-gray-900 hover:text-esn">
-          {r.title}
-        </Link>
-        <span className="text-xs text-gray-500"> · {r.oc ?? "no OC"}</span>
-      </span>
-      <span className="flex flex-wrap items-baseline gap-x-2 text-xs text-gray-500 sm:justify-end">{extra}</span>
-    </li>
+    <EventLine
+      key={r.id}
+      e={r}
+      href={`/events/${r.id}/description?from=cycle:${id}`}
+      muted={r.started}
+      meta={<DescriptionState e={r} />}
+      aside={extra ? <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 sm:justify-end">{extra}</span> : undefined}
+    />
   );
-  const group = (title: string, count: number, tone: string, testId: string, children: React.ReactNode) => (
-    <section data-testid={testId}>
-      <h3 className={cn("pt-4 text-xs font-medium", tone)}>
-        {title} · {count}
-      </h3>
+  const group = (title: string, count: number, tone: "amber" | "blue" | "green", testId: string, children: React.ReactNode) => (
+    <PanelGroup title={title} count={count} tone={tone === "blue" ? "gray" : tone} testId={testId}>
       <ul className="divide-y divide-gray-100 text-sm">{children}</ul>
-    </section>
+    </PanelGroup>
   );
   const notNeeded = [
     ...(cancelled ?? []).map((e) => ({ id: e.id, title: e.title, why: e.cancelled_by === "description deadline" ? "cancelled at the deadline" : `cancelled${e.cancel_reason ? ` – ${e.cancel_reason}` : ""}` })),
@@ -90,17 +88,34 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
   ];
 
   return (
-    <Card>
-      <CardContent className="pt-5">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 border-b border-gray-100 pb-3 text-sm" data-testid="description-deadline">
+    <Panel
+      title="Descriptions"
+      icon={FileText}
+      aside={
+        confirmed && rows.length > 0 ? (
+          <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", inCount === rows.length ? "bg-emerald-50 text-emerald-800" : "bg-esn/10 text-esn")}>
+            {inCount} of {rows.length} in
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="space-y-6">
+        {confirmed && rows.length > 0 && (
+          <div className="h-2 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((inCount / rows.length) * 100)}%` }} />
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-gray-50 px-3 py-2.5 text-sm" data-testid="description-deadline">
           {!confirmed ? (
-            <span className="text-gray-600" data-testid="deadline-not-yet">
+            <span className="flex items-center gap-2 text-gray-600" data-testid="deadline-not-yet">
+              <Clock className="h-4 w-4 text-gray-400" aria-hidden="true" />
               The deadline is set once the roster is confirmed.
             </span>
           ) : passed ? (
             <>
-              <span className="font-medium text-gray-900" data-testid="deadline-locked">
-                🔒 Deadline {formatDateTime(cycle.description_deadline!)}
+              <span className="flex items-center gap-2 font-semibold text-gray-900" data-testid="deadline-locked">
+                <Lock className="h-4 w-4 text-gray-500" aria-hidden="true" />
+                Deadline {formatDateTime(cycle.description_deadline!)}
               </span>
               <span className="text-gray-500">
                 passed · {autoCancelled ? `${autoCancelled} cancelled` : "nothing cancelled"} · {reminderLine}
@@ -122,20 +137,15 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
               </p>
             </div>
           )}
-          {confirmed && rows.length > 0 && (
-            <span className="ml-auto text-gray-500">
-              {inCount} of {rows.length} in
-            </span>
-          )}
         </div>
 
         {confirmed && !rows.length && <EmptyState>No running events.</EmptyState>}
-        <div data-testid="cycle-descriptions">
+        <div className="space-y-6" data-testid="cycle-descriptions">
           {waiting.length > 0 &&
             group(
               "Waiting for the OC",
               waiting.length,
-              "text-amber-800",
+              "amber",
               "descriptions-oc",
               waiting.map((r) => {
                 const due = dueOf.get(r.id);
@@ -158,34 +168,32 @@ export default async function DescriptionsPage({ params }: { params: Promise<{ i
             group(
               "With Comms",
               withComms.length,
-              "text-blue-800",
+              "blue",
               "descriptions-comms",
               withComms.map((r) => row(r, r.submittedAt && <span>sent {formatShortDate(r.submittedAt)}</span>))
             )}
           {done.length > 0 && (
-            <details className="pt-4" data-testid="descriptions-done">
-              <summary className="cursor-pointer text-xs font-medium text-emerald-800">
-                {done.some((r) => r.description === "approved") ? "Approved or published" : "Published"} · {done.length}
+            <details className="group" data-testid="descriptions-done">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500 [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true" />
+                {done.some((r) => r.description === "approved") ? "Approved or published" : "Published"}
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[11px] font-bold tracking-normal text-emerald-800">{done.length}</span>
               </summary>
               <ul className="divide-y divide-gray-100 text-sm">{done.map((r) => row(r, r.description === "approved" && <span>going to the Chat space</span>))}</ul>
             </details>
           )}
           {notNeeded.length > 0 && (
-            <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500" data-testid="descriptions-not-needed">
-              Not needed:{" "}
-              {notNeeded.map((n, i) => (
-                <span key={n.id}>
-                  {i > 0 && " · "}
-                  <Link href={`/events/${n.id}?from=cycle:${id}`} className="hover:text-esn hover:underline">
-                    {n.title}
-                  </Link>{" "}
-                  ({n.why})
-                </span>
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-4 text-xs text-gray-500" data-testid="descriptions-not-needed">
+              <span className="mr-1 font-medium">Not needed:</span>
+              {notNeeded.map((n) => (
+                <Link key={n.id} href={`/events/${n.id}?from=cycle:${id}`} className="rounded-full bg-gray-100 px-2.5 py-1 hover:text-esn" title={n.why}>
+                  {n.title} <span className="text-gray-400">({n.why})</span>
+                </Link>
               ))}
-            </p>
+            </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }

@@ -15,6 +15,7 @@ import { rosterLoad, HEAVY_LOAD } from "@/lib/rosterLoad";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/plural";
 import { RANK_LABELS } from "@/lib/volunteer";
+import { DateTile } from "@/components/DateTile";
 
 export interface BoardPerson {
   id: string;
@@ -281,14 +282,19 @@ export function RosterBoard({
             const shortOfOcs = oc.length > 0 && oc.length < ev.ocsNeeded;
             const wishers = people.filter((p) => p.wishes[ev.id] && !ev.assignments.some((a) => a.profileId === p.id));
             return (
-              <Card key={ev.id} className="p-3 space-y-2" data-testid={`roster-${ev.title}`}>
-                <p className="text-xs font-semibold tabular-nums text-esn-dark">{ev.when}</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <a href={`/events/${ev.id}?from=cycle:${cycleParam}`} className="font-semibold text-gray-900 hover:text-esn mr-auto">
-                    {ev.title}
-                  </a>
-                  {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}
-                  <Badge tone={staffing.tone}>{shortOfOcs ? "Short of OCs" : staffing.label}</Badge>
+              <Card key={ev.id} className="space-y-3 p-4" data-testid={`roster-${ev.title}`}>
+                <div className="flex gap-3">
+                  <DateTile iso={ev.startsAt} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium tabular-nums text-gray-600">{ev.when}</p>
+                    <a href={`/events/${ev.id}?from=cycle:${cycleParam}`} className="font-semibold leading-snug text-gray-900 hover:text-esn">
+                      {ev.title}
+                    </a>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {ev.status !== "scheduled" && <Badge tone={EVENT_STATUS_TONES[ev.status]}>{EVENT_STATUS_LABELS[ev.status]}</Badge>}
+                      <Badge tone={staffing.tone}>{shortOfOcs ? "Short of OCs" : staffing.label}</Badge>
+                    </div>
+                  </div>
                 </div>
                 {canMarkCrucial ? (
                   <label className="flex items-center gap-2 text-xs text-gray-700" title="The event also runs if a helper does not show up: people on the blacklist may help on it.">
@@ -337,15 +343,19 @@ export function RosterBoard({
                     ))}
                   </p>
                 )}
-                {editable && staffing !== STAFFING.staffed && free.some((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial)) && (
-                  <p className="text-xs text-amber-800" data-testid="free-hint">
-                    Not assigned anywhere yet:{" "}
-                    {free
-                      .filter((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial))
-                      .map((p) => (p.blacklisted ? `${p.name} (blacklisted – helper only)` : p.name))
-                      .join(", ")}
-                  </p>
-                )}
+                {editable && staffing !== STAFFING.staffed && free.some((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial)) && (() => {
+                  const others = free.filter((p) => !wishers.includes(p) && (!p.blacklisted || ev.nonCrucial));
+                  // Folded: the same list on every card was a wall of names (redesign 2026-11-08).
+                  return (
+                    <details className="group text-xs text-amber-800" data-testid="free-hint">
+                      <summary className="flex cursor-pointer list-none items-center gap-1 font-medium [&::-webkit-details-marker]:hidden">
+                        <span aria-hidden="true" className="transition-transform group-open:rotate-90">›</span>
+                        {plural(others.length, "person", "people")} not assigned anywhere yet
+                      </summary>
+                      <p className="mt-1 pl-3">{others.map((p) => (p.blacklisted ? `${p.name} (blacklisted – helper only)` : p.name)).join(", ")}</p>
+                    </details>
+                  );
+                })()}
               </Card>
             );
           })}

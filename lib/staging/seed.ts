@@ -1,6 +1,7 @@
 // The staging demo data (`npm run seed:staging`, `npm run staging:reset`,
 // Admin → "Reset demo data"): about 40 fictional members and 35 events over
-// six planning cycles relative to today – three done months, the current
+// fifteen planning cycles relative to today – twelve done months (nine of
+// them short archive months, so every month of the year has one), the current
 // month (events today, hand-ins open), next month (form closed, roster being
 // adjusted) and the month after (volunteer form open) – with every status
 // the workflow knows. Deterministic: a fixed random seed and fixed ids, only
@@ -169,8 +170,8 @@ interface ClaimSpec {
 interface Spec {
   key: string;
   plan: EventKey;
-  /** Months from the current one. */
-  cycle: -3 | -2 | -1 | 0 | 1 | 2;
+  /** Months from the current one (-12 … -4: the archive months, ARCHIVE). */
+  cycle: number;
   /** Day of the cycle's month … */
   day?: number;
   /** … or days from today (current month; kept inside it where possible). */
@@ -282,6 +283,27 @@ const PAST: Spec[] = [
     ],
   },
 ];
+
+// The archive months (2026-11-08): a done cycle for each of the nine months
+// before the three past ones, so the Events team's month list covers every
+// month of the year. Three events each, all handed in (published, signed
+// off, photos, report, on ESN Activities), no claims – the finance demo stays
+// in the recent months. Plans that fit any season, rotated; OC and helpers
+// rotated over the regular volunteers.
+export const ARCHIVE_MONTHS = [-12, -11, -10, -9, -8, -7, -6, -5, -4] as const;
+const ARCHIVE_PLANS: EventKey[] = ["pubQuiz", "museumNight", "languageCafe", "salzburg", "boardGames", "karaoke", "bouldering", "nuremberg", "movieNight", "escapeRoom", "swing", "photoWalk", "stammtisch", "cityRally", "prague", "potluck", "volleyball", "vienna"];
+const ARCHIVE_CREW = ["tomasz", "chloe", "diego", "oskar", "ingrid", "hamza", "felix", "isabel", "lea", "giulia", "kwame", "zeynep", "anna", "emil", "sara", "liam", "arjun", "mei"];
+const ARCHIVE: Spec[] = ARCHIVE_MONTHS.flatMap((k, m) =>
+  [0, 1, 2].map((j): Spec => {
+    const n = m * 3 + j;
+    const crew = (i: number) => ARCHIVE_CREW[(n * 2 + i) % ARCHIVE_CREW.length]!;
+    return {
+      key: `archive${-k}_${j}`, plan: ARCHIVE_PLANS[n % ARCHIVE_PLANS.length]!, cycle: k, day: 6 + j * 8,
+      oc: crew(0), helpers: [crew(1), crew(5)], description: "published",
+      attendance: { count: 18 + ((n * 7) % 35), signedOff: true }, photos: 12 + ((n * 13) % 90), report: true, esn: n % 4 === 3 ? "manual" : "script",
+    };
+  })
+);
 
 // The current month: done events with hand-ins open, two events today, the
 // next days with every staffing and description situation.
@@ -476,11 +498,15 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
 
   // 3. Cycles.
   const M = monthOf(iso(now));
-  const months = new Map<number, string>([-3, -2, -1, 0, 1, 2, 3].map((k) => [k, addMonths(M, k)]));
-  const taken = check(await db.from("planning_cycles").select("month, created_by").in("month", [...months.values()].slice(0, 6)), "months");
+  const months = new Map<number, string>([...ARCHIVE_MONTHS, -3, -2, -1, 0, 1, 2, 3].map((k) => [k, addMonths(M, k)]));
+  const taken = check(await db.from("planning_cycles").select("month, created_by").in("month", [-3, -2, -1, 0, 1, 2].map((k) => months.get(k)!)), "months");
   if (taken.length) {
     throw new Error(`Staging seed: these months already have a planning cycle that the seed did not create: ${taken.map((t) => t.month).join(", ")}. Reset the demo data (npm run staging:reset) or remove them.`);
   }
+  // An archive month someone planned for real (or another seed) keeps its cycle: the seed leaves it out.
+  const archiveTaken = new Set(check(await db.from("planning_cycles").select("month").in("month", ARCHIVE_MONTHS.map((k) => months.get(k)!)), "archive months").map((t) => t.month));
+  const archiveMonths = ARCHIVE_MONTHS.filter((k) => !archiveTaken.has(months.get(k)!));
+  if (archiveTaken.size) log(`  Archive months with a cycle already, left out: ${[...archiveTaken].join(", ")}`);
 
   // When each event happens.
   const today = berlinDate(iso(now));
@@ -500,7 +526,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
     return { start: berlinInputToIso(`${true_}T${s.time ?? plan.time}`), month: s.offset! < 0 ? -1 : 1 };
   };
 
-  const specs: Spec[] = [...PAST, ...CURRENT, ...NEXT, ...LATER];
+  const specs: Spec[] = [...ARCHIVE.filter((s) => archiveMonths.includes(s.cycle as (typeof ARCHIVE_MONTHS)[number])), ...PAST, ...CURRENT, ...NEXT, ...LATER];
   const built: Built[] = specs.map((spec) => {
     const plan = EVENTS[spec.plan] as (typeof EVENTS)[EventKey] & { hours?: number; days?: number };
     const { start, month } = placed(spec);
@@ -525,7 +551,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
   });
   const byKey = new Map(built.map((b) => [b.spec.key, b]));
 
-  const cycleRows = [-3, -2, -1, 0, 1, 2].map((k) => {
+  const cycleRows = [...archiveMonths, -3, -2, -1, 0, 1, 2].map((k) => {
     const month = months.get(k)!;
     const firstDay = at(month, 1, "23:59");
     const firstStart = Math.min(...built.filter((b) => b.cycleMonth === month).map((b) => Date.parse(b.startsAt)));

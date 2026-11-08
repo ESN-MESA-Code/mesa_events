@@ -5,7 +5,9 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { berlinDate, formatDateTime, isoToBerlinInput, nowMs } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { hasRole } from "@/lib/roles";
-import { Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { CalendarDays, ListChecks } from "lucide-react";
+import { EmptyState } from "@/components/ui";
+import { Panel } from "@/components/Panel";
 import { AddEventForm, ScheduleRow } from "../ScheduleClient";
 import { ScheduleCalendar } from "../ScheduleCalendar";
 import { z } from "zod";
@@ -72,12 +74,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Calendar</CardTitle>
-          <span className="text-sm text-gray-500">{plural(planned.length, "event")}</span>
-        </CardHeader>
-        <CardContent>
+      <Panel title="Calendar" icon={CalendarDays} aside={<span className="text-sm text-gray-500">{plural(planned.length, "event")}</span>}>
           <ScheduleCalendar
             month={cycle.month}
             today={today}
@@ -94,16 +91,10 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
             }))}
             ideas={ideas.map((i) => ({ id: i.id, title: i.title, date: i.proposed_date, helpers: i.helpers_needed, type: i.type_suggestion }))}
           />
-        </CardContent>
-      </Card>
+      </Panel>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Schedule</CardTitle>
-              <span className="text-sm text-gray-500">{plural(planned.length, "event")}</span>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Panel title="Events" icon={ListChecks} count={planned.length} description={editableSchedule ? "Edit or remove an event, or add one of your own." : undefined}>
+            <div className="space-y-4">
               {!planned.length && <EmptyState>No events yet: accept ideas or add your own.</EmptyState>}
               <ul className="divide-y divide-gray-100" data-testid="schedule">
                 {planned.map((e) => (
@@ -115,6 +106,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                       title: e.title,
                       type: e.type,
                       startsAt: isoToBerlinInput(e.starts_at),
+                      startsIso: e.starts_at,
                       startsLabel: formatDateTime(e.starts_at),
                       endsAt: e.ends_at ? isoToBerlinInput(e.ends_at) : "",
                       location: e.location ?? "",
@@ -133,10 +125,8 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                 ))}
               </ul>
               {editableSchedule && <AddEventForm cycleId={cycle.id} defaultStart={`${cycle.month}T19:00`} categories={categories} formats={formats} />}
-            </CardContent>
-          </Card>
-
-        </div>
+            </div>
+          </Panel>
     </div>
   );
 }

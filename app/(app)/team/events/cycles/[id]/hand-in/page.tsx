@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { BellRing, PackageCheck } from "lucide-react";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
 import { formatShortDate, nowMs } from "@/lib/dates";
 import { loadMonthEvents } from "@/lib/monthEvents";
 import { describeHandinReminders } from "@/lib/reminders";
 import { loadReminderDays } from "@/lib/remindersLoad";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
-import { HandInHeader, HandInRow, MonthEventGroup } from "../MonthEvents";
+import { Panel, PanelGroup } from "@/components/Panel";
+import { HandInRow, MonthEventGroup } from "../MonthEvents";
 
 export const metadata: Metadata = { title: "Hand-in" };
 
-// The cycle's hand-in (round 2026-11-03): per event that took place a
-// checklist of what the OC hands in – attendance list, photos, event report
+// The cycle's hand-in (round 2026-11-03; redesign 2026-11-08): per event that
+// took place what the OC hands in – attendance list, photos, event report
 // (receipts are Finance's) – the open ones first; the OCs are reminded
 // automatically, as the admin set it.
 export default async function HandInPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,21 +32,28 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
   const happened = open.length + done.length;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Hand-in</CardTitle>
-        <Badge tone={open.length ? "amber" : "green"} data-testid="hand-in-count">
+    <Panel
+      title="Hand-in"
+      icon={PackageCheck}
+      aside={
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${open.length ? "bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-800"}`} data-testid="hand-in-count">
           {done.length} of {happened} handed in
-        </Badge>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <p className="text-sm text-gray-600" data-testid="hand-in-reminders">
+        </span>
+      }
+    >
+      <div className="space-y-6">
+        {happened > 0 && (
+          <div className="h-2 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((done.length / happened) * 100)}%` }} />
+          </div>
+        )}
+        <p className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600" data-testid="hand-in-reminders">
+          <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
           {describeHandinReminders(reminders)}
         </p>
-        {!happened && <EmptyState>No event has taken place yet – the hand-in opens on each event&apos;s day.</EmptyState>}
+        {!happened && <p className="py-6 text-center text-sm text-gray-500">No event has taken place yet – the hand-in opens on each event&apos;s day.</p>}
         {open.length > 0 && (
           <MonthEventGroup title="Missing something" count={open.length} tone="amber" testId="hand-in-open">
-            <HandInHeader />
             {open.map((r) => (
               <HandInRow key={r.id} e={r} cycleId={id} />
             ))}
@@ -53,19 +61,23 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
         )}
         {done.length > 0 && (
           <MonthEventGroup title="Handed in" count={done.length} tone="green" testId="hand-in-done">
-            <HandInHeader />
             {done.map((r) => (
               <HandInRow key={r.id} e={r} cycleId={id} />
             ))}
           </MonthEventGroup>
         )}
         {ahead.length > 0 && (
-          <section data-testid="hand-in-ahead">
-            <h3 className="border-b border-gray-100 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Still ahead</h3>
-            <p className="pt-2 text-xs text-gray-600">{ahead.map((r) => `${r.title} (${formatShortDate(r.startsAt)})`).join(" · ")}</p>
-          </section>
+          <PanelGroup title="Still ahead" count={ahead.length} testId="hand-in-ahead">
+            <ul className="flex flex-wrap gap-1.5 pt-1">
+              {ahead.map((r) => (
+                <li key={r.id} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
+                  {r.title} <span className="text-gray-500">· {formatShortDate(r.startsAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </PanelGroup>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }

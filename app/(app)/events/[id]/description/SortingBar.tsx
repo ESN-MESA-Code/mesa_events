@@ -54,7 +54,7 @@ export function SortingBar({ eventId, sorting, onCategory }: { eventId: string; 
           value={draft.formatId}
           empty="A one-off – no format"
           onChange={(id) => setDraft({ formatId: id, categoryId: sorting.formats.find((f) => f.id === id)?.category_id ?? draft.categoryId })}
-          className="h-8 w-auto"
+          size="sm"
         />
         <Button size="sm" disabled={pending} onClick={save}>
           Save

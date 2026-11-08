@@ -294,22 +294,25 @@ export function ScheduleBoard({
         <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
           <EventList month={month} events={colored} setHover={setHover} today={today} channels={channels} coverage={coverage} pretix={pretix} days={days} posts={posts} editable={editable} byId={byId} focus={focus} setFocus={setFocus} />
 
-          <Card className="p-3">
-            <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600" data-testid="board-legend">
-              <span>
-                <span className="rounded bg-amber-100 px-1 text-amber-900">📅 Event</span> = when it takes place
-              </span>
-              <span>
-                <EventDot color="bg-rose-500" className="align-middle" /> = one event: its dot is on its date and on every post advertising it (point at an event to see its posts)
-              </span>
-              {channels.map((c) => (
-                <span key={c.key}>
-                  <span className={cn("rounded border px-1", chipOf(c.key))}>{SHORT[c.key] ?? c.name}</span> = {c.name} post
+          <Card className="p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="mr-auto text-base font-bold text-gray-900">Month board</h2>
+              {pending && <span className="text-xs text-gray-500">Saving…</span>}
+              <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600" data-testid="board-legend">
+                <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-900" title="When the event takes place">📅 Event</span>
+                <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-1.5 py-0.5" title="One event: its dot is on its date and on every post advertising it (point at an event to see its posts)">
+                  <EventDot color="bg-rose-500" /> same event
                 </span>
-              ))}
-              <span>⏸ = not confirmed yet (will not go out)</span>
-              {pending && <span className="ml-auto text-gray-500">Saving…</span>}
-            </p>
+                {channels.map((c) => (
+                  <span key={c.key} className={cn("rounded-md border px-1.5 py-0.5", chipOf(c.key))} title={`${c.name} post`}>
+                    {SHORT[c.key] ?? c.name} = {c.name}
+                  </span>
+                ))}
+                <span className="rounded-md bg-gray-50 px-1.5 py-0.5" title="Not confirmed yet – will not go out">
+                  ⏸ not confirmed
+                </span>
+              </p>
+            </div>
             {/* Desktop and tablet: the whole month at once. */}
             <div className="hidden sm:block" data-testid="schedule-board">
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
@@ -342,9 +345,15 @@ export function ScheduleBoard({
                 ))}
             </ol>
             {editable && (
-              <p className="mt-2 text-xs text-gray-500">
-                Drag a channel chip of an event from the list onto a day to plan that post (10:00), or onto a post of the same channel to bundle them. Drag a post to another day to move it; click it for the preview, publishing and the rest. Keyboard: focus a chip, Space, arrow keys, Space – or “Plan…”.
-              </p>
+              <details className="group mt-3 text-xs text-gray-500">
+                <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-gray-600 [&::-webkit-details-marker]:hidden">
+                  <span aria-hidden="true" className="transition-transform group-open:rotate-90">›</span>
+                  How the board works
+                </summary>
+                <p className="mt-1 pl-3">
+                  Drag a channel chip of an event from the list onto a day to plan that post (10:00), or onto a post of the same channel to bundle them. Drag a post to another day to move it; click it for the preview, publishing and the rest. Keyboard: focus a chip, Space, arrow keys, Space – or “Plan…”.
+                </p>
+              </details>
             )}
           </Card>
         </div>
@@ -467,7 +476,7 @@ function EventList({
         data-testid={`tray-${e.id}`}
         onMouseEnter={() => setHover(e.id)}
         onMouseLeave={() => setHover(null)}
-        className={cn("rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}
+        className={cn("rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs transition-shadow hover:shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}
       >
         <button type="button" className="flex items-center gap-1.5 text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
           <EventDot color={e.color} />
@@ -508,11 +517,14 @@ function EventList({
   };
   const big = (list: BoardEvent[]) => list.filter((e) => isBigEvent(e.type)).length;
   return (
-    <Card className="h-fit p-3 lg:sticky lg:top-4" data-testid="tray">
-      <h2 className="mb-1 text-sm font-semibold">Events ({events.length})</h2>
-      <p className="mb-2 text-xs text-gray-600">{open.length ? `${open.length} upcoming still to plan or tick off` : "Every upcoming event is planned and ticked off"}</p>
-      <label className="mb-2 flex items-center gap-1 text-xs text-gray-600">
-        <input type="checkbox" checked={todo} onChange={(e) => setTodo(e.target.checked)} /> only the ones still to do
+    <Card className="h-fit p-4 lg:sticky lg:top-4" data-testid="tray">
+      <h2 className="flex items-center gap-2 text-base font-bold text-gray-900">
+        Events
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-100 px-1.5 text-xs font-bold tabular-nums text-gray-700">{events.length}</span>
+      </h2>
+      <p className={cn("mb-3 text-xs", open.length ? "font-medium text-amber-800" : "text-emerald-700")}>{open.length ? `${open.length} upcoming still to plan or tick off` : "Every upcoming event is planned and ticked off"}</p>
+      <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700">
+        <input type="checkbox" className="accent-esn" checked={todo} onChange={(e) => setTodo(e.target.checked)} /> only the ones still to do
       </label>
       <div className="space-y-3 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-1">
         {!own.events.length ? <p className="text-xs text-gray-500">Nothing to do this month.</p> : <ul className="space-y-2">{own.events.map(item)}</ul>}

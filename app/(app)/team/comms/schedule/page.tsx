@@ -155,7 +155,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Comms" description="Every event is advertised on Telegram and Instagram once its pretix page is up: tick pretix off, drag the event from the list onto a day, bundle posts, post. The list also holds the events of the next months, so big ones can be advertised weeks ahead. Telegram posts go out by themselves once confirmed.">
+      <PageHeader title="Comms" description="Tick pretix off, drag an event onto a day, bundle and post – Telegram posts go out by themselves once confirmed. Big events of the next months are in the list too.">
         <MonthSelector
           options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
           current={monthParam(month)}

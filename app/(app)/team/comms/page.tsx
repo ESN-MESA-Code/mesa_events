@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/access";
 import { createSessionClient } from "@/lib/supabase/session";
-import { addMonths, cycleLabel, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
-import { Alert, Badge, Card, CardContent, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
+import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, Check, Clock, FileText, Megaphone } from "lucide-react";
+import { addMonths, berlinTime, cycleLabel, dueUrgency, formatDateTime, formatDue, formatShortDate, monthOf, nowMs } from "@/lib/dates";
+import { Badge, Card, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
+import { DateTile } from "@/components/DateTile";
 import { ActionButton } from "@/components/ActionButton";
 import { StageTrack } from "@/components/status";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -120,10 +123,12 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const deadline = inMonth.find((r) => r.deadline)?.deadline ?? null;
   const showHref = (show: FilterId) => `/team/comms?month=${monthParam(month!)}${show === "needs" ? "" : `&show=${show}`}`;
   const missingHref = (channel: string) => `/team/comms?month=${monthParam(month!)}&show=all&missing=${channel}`;
+  // A passed deadline is history, not an alarm: only one still ahead is tinted.
+  const deadlineUrgency = deadline && Date.parse(deadline) > now ? dueUrgency(deadline, now) : null;
 
   return (
     <>
-      <PageHeader title="Comms" description="Each event of the month from its description to its report – approved descriptions go to the Chat space by themselves; then the pretix page and the advertising. What is next, and the action right there.">
+      <PageHeader title="Comms" description="Every event of the month from its description to its report – and what Comms does next.">
         <MonthSelector
           options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: work(m) ? `${work(m)} for Comms` : undefined }))}
           current={month ? monthParam(month) : null}
@@ -134,173 +139,249 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
       </PageHeader>
       <CommsTabs current="stages" month={month ? monthParam(month) : null} executive={isExecutive} />
 
-      {(cancelled ?? []).length > 0 && (
-        <Alert tone="warning" className="mb-6 space-y-2" data-testid="cancelled-published">
-          <p className="font-medium">Cancelled after the description was published</p>
-          <p>The Chat space was told. Decide whether to post a correction where the description went out.</p>
-          <ul className="divide-y divide-amber-200">
-            {(cancelled ?? []).map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center gap-2 py-2">
-                <Link href={`/events/${e.id}?from=comms`} className="font-medium underline">
-                  {e.title}
-                </Link>
-                <span className="text-xs">
-                  {formatDateTime(e.starts_at)} · cancelled {e.cancelled_at ? formatDateTime(e.cancelled_at) : ""}
-                  {e.cancel_reason ? ` – ${e.cancel_reason}` : ""}
-                </span>
-                {isComms && (
-                  <span className="ml-auto">
+      <div className="space-y-6">
+        {(cancelled ?? []).length > 0 && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5" data-testid="cancelled-published">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800" aria-hidden="true">
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-bold text-gray-900">Cancelled after the description was published</h2>
+                <p className="text-sm text-amber-900">The Chat space was told. Decide whether to post a correction where the description went out.</p>
+              </div>
+            </div>
+            <ul className="mt-3 space-y-2">
+              {(cancelled ?? []).map((e) => (
+                <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-white px-3 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <Link href={`/events/${e.id}?from=comms`} className="block font-semibold text-gray-900 hover:text-esn">
+                      {e.title}
+                    </Link>
+                    <span className="block text-xs text-gray-600">
+                      {formatDateTime(e.starts_at)} · cancelled {e.cancelled_at ? formatDateTime(e.cancelled_at) : ""}
+                      {e.cancel_reason ? ` – ${e.cancel_reason}` : ""}
+                    </span>
+                  </span>
+                  {isComms && (
                     <ActionButton action={noteCancellation} input={{ event_id: e.id }} variant="outline">
                       Handled
                     </ActionButton>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-      {!month ? (
-        <Card>
-          <EmptyState>No events in the last six months or ahead.</EmptyState>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="space-y-4 pt-5">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="comms-month">
-              <h2 className="text-base font-semibold text-gray-900">{cycleLabel(month)}</h2>
-              <p className="text-sm text-gray-600" data-testid="comms-progress">
+        {!month ? (
+          <Card>
+            <EmptyState>No events in the last six months or ahead.</EmptyState>
+          </Card>
+        ) : (
+          <>
+            <section aria-label={cycleLabel(month)} data-testid="comms-month">
+              <p className="sr-only" data-testid="comms-progress">
                 {descriptionsIn} of {inMonth.length} descriptions in · {advertisedCount} of {ahead.length} upcoming advertised
               </p>
-              <p className="text-xs text-gray-500">{deadline ? `Description ${formatDue(deadline, now)}` : "No description deadline set"}</p>
-            </div>
-
-            <nav aria-label="Filter by stage" className="flex flex-wrap gap-2" data-testid="stage-filters">
-              {(["needs", ...FILTERS.map((f) => f.id), "all"] as FilterId[]).map((id) => {
-                const label = id === "needs" ? "Needs Comms" : id === "all" ? "All" : FILTERS.find((f) => f.id === id)!.label;
-                if (id !== "needs" && id !== "all" && counts[id] === 0 && filter !== id) return null;
-                return (
-                  <Link
-                    key={id}
-                    href={showHref(id)}
-                    aria-current={filter === id ? "page" : undefined}
+              <ul className="grid gap-3 sm:grid-cols-3">
+                <Stat icon={FileText} label="Descriptions in" value={descriptionsIn} total={inMonth.length} />
+                <Stat icon={Megaphone} label="Upcoming advertised" value={advertisedCount} total={ahead.length} />
+                <li className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <span
                     className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-medium",
-                      filter === id ? "border-esn bg-esn text-white" : "border-gray-300 bg-white text-gray-700 hover:border-esn hover:text-esn"
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                      deadlineUrgency === "urgent" ? "bg-red-50 text-red-700" : deadlineUrgency === "soon" ? "bg-amber-50 text-amber-800" : "bg-esn/5 text-esn"
                     )}
-                    data-testid={`filter-${id}`}
+                    aria-hidden="true"
                   >
-                    {label} <span className="tabular-nums opacity-80">{counts[id]}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <p className="flex flex-wrap items-center gap-2 text-xs text-gray-600" data-testid="channel-filters">
-              Not yet on:
-              {channels.map((c) => (
-                <Link
-                  key={c.key}
-                  href={missing === c.key ? showHref("needs") : missingHref(c.key)}
-                  aria-current={missing === c.key ? "page" : undefined}
-                  className={cn("rounded-full border px-2 py-0.5", missing === c.key ? "border-esn bg-esn text-white" : "border-gray-300 hover:border-esn hover:text-esn")}
-                >
-                  {c.name}
-                </Link>
-              ))}
-            </p>
-
-            {!shown.length ? (
-              <EmptyState>
-                {filter === "needs" ? (
-                  <>
-                    Nothing needs Comms in this month.{" "}
-                    <Link href={showHref("all")} className="text-esn hover:underline">
-                      Show all {inMonth.length}
-                    </Link>
-                  </>
-                ) : (
-                  "No events at this stage."
-                )}
-              </EmptyState>
-            ) : (
-              <ul className="divide-y divide-gray-100" data-testid="comms-rows">
-                {shown.map((r) => {
-                  const v = views.get(r.event_id)!;
-                  // The board of the month its first post goes out in – for an event ahead with none yet, the first board that lists it (round 2026-11-02).
-                  const firstPost = channels
-                    .filter((c) => c.schedulable)
-                    .map((c) => statusOf.get(`${r.event_id}|${c.key}`))
-                    .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
-                    .sort()[0];
-                  const boardHref = `/team/comms/schedule?month=${monthParam(firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth))}&event=${r.event_id}`;
-                  return (
-                    <li key={r.event_id} className="space-y-2 py-3" data-testid={`comms-row-${r.event_id}`}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/events/${r.event_id}/description?from=comms`} className="font-medium text-gray-900 hover:text-esn">
-                          {r.title}
-                        </Link>
-                        <span className="text-xs text-gray-500">{formatShortDate(r.starts_at)}</span>
-                        {v.marks.includes("late") && <Badge tone="red">late</Badge>}
-                        {v.marks.includes("missed") && <Badge tone="gray">missed</Badge>}
-                        {/* Approved = published by itself (round 2026-11-03); until the job ran, the row says so. */}
-                        {r.status === "approved" && (
-                          <span className="text-xs text-gray-500" data-testid="chat-publishing">
-                            {publishing.has(r.event_id) ? "Going to the Chat space…" : "Goes to the Chat space once it exists"}
-                          </span>
-                        )}
-                        <span className="ml-auto flex flex-wrap items-center gap-2" data-testid="row-action">
-                          {v.current === "write" && <span className="text-xs text-gray-500">The OC writes it – reminded automatically</span>}
-                          {v.current === "review" && (
-                            <Link href={`/events/${r.event_id}/description?from=comms`} className={buttonVariants({ size: "sm" })}>
-                              Review
-                            </Link>
-                          )}
-                          {v.current === "pretix" && (
-                            <Link href={boardHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                              Tick pretix
-                            </Link>
-                          )}
-                          {v.current === "advertise" && (
-                            <Link href={boardHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                              Advertise
-                            </Link>
-                          )}
-                          {v.current === "happened" && <span className="text-xs text-gray-500">Advertised – the event is on {formatShortDate(r.starts_at)}</span>}
-                          {v.current === "report" && <span className="text-xs text-gray-500">The OC writes the report – reminded automatically</span>}
-                        </span>
-                      </div>
-                      <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
-                      <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600" data-testid="channel-chips">
-                        {(() => {
-                          const req = channels.filter((c) => c.required);
-                          const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
-                          return req.length > 0 ? (
-                            <Link href={boardHref} className={cn("font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")} data-testid="channel-coverage">
-                              {on}/{req.length} channels planned
-                            </Link>
-                          ) : null;
-                        })()}
-                        {channels.map((c) => {
-                          const st = statusOf.get(`${r.event_id}|${c.key}`);
-                          const state = (st?.state ?? "not_planned") as ChannelState;
-                          return (
-                            <span key={c.key} title={`${c.name}: ${stateLabel(c.key, state)}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`} className={cn(state === "published" && "text-emerald-700", state === "planned" && "text-esn")}>
-                              {c.name} {STATE_MARK[state]}
-                              {state === "planned" && st?.at ? ` ${formatShortDate(st.at)}` : ""}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    </li>
-                  );
-                })}
+                    <Clock className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-gray-500">Description deadline</span>
+                    <span className="block truncate font-semibold text-gray-900">{deadline ? formatDue(deadline, now).replace(/^\w/, (ch) => ch.toUpperCase()) : "Not set"}</span>
+                  </span>
+                </li>
               </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </section>
+
+            <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="space-y-3 border-b border-gray-100 p-4 sm:px-5">
+                <nav aria-label="Filter by stage" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap" data-testid="stage-filters">
+                  {(["needs", ...FILTERS.map((f) => f.id), "all"] as FilterId[]).map((id) => {
+                    const label = id === "needs" ? "Needs Comms" : id === "all" ? "All" : FILTERS.find((f) => f.id === id)!.label;
+                    if (id !== "needs" && id !== "all" && counts[id] === 0 && filter !== id) return null;
+                    const on = filter === id && !missing;
+                    return (
+                      <Link
+                        key={id}
+                        href={showHref(id)}
+                        aria-current={filter === id ? "page" : undefined}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                          on ? "border-esn bg-esn text-white" : "border-gray-200 bg-white text-gray-700 hover:border-esn hover:text-esn"
+                        )}
+                        data-testid={`filter-${id}`}
+                      >
+                        {label}{" "}
+                        <span className={cn("rounded-full px-1.5 text-xs font-semibold tabular-nums", on ? "bg-white/20" : id === "needs" && counts.needs ? "bg-esn text-white" : "bg-gray-100 text-gray-600")}>{counts[id]}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500" data-testid="channel-filters">
+                  <span className="mr-1 font-medium">Not yet on</span>
+                  {channels.map((c) => (
+                    <Link
+                      key={c.key}
+                      href={missing === c.key ? showHref("needs") : missingHref(c.key)}
+                      aria-current={missing === c.key ? "page" : undefined}
+                      className={cn("rounded-md border px-2 py-0.5 font-medium transition-colors", missing === c.key ? "border-esn bg-esn text-white" : "border-gray-200 text-gray-600 hover:border-esn hover:text-esn")}
+                    >
+                      {c.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {!shown.length ? (
+                <div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600" aria-hidden="true">
+                    <Check className="h-6 w-6" />
+                  </span>
+                  <p className="text-sm text-gray-600">
+                    {filter === "needs" && !missing ? (
+                      <>
+                        Nothing needs Comms in {cycleLabel(month).replace(/ events$/, "")}.{" "}
+                        <Link href={showHref("all")} className="font-semibold text-esn hover:underline">
+                          Show all {inMonth.length}
+                        </Link>
+                      </>
+                    ) : (
+                      "No events at this stage."
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100" data-testid="comms-rows">
+                  {shown.map((r) => {
+                    const v = views.get(r.event_id)!;
+                    // The board of the month its first post goes out in – for an event ahead with none yet, the first board that lists it (round 2026-11-02).
+                    const firstPost = channels
+                      .filter((c) => c.schedulable)
+                      .map((c) => statusOf.get(`${r.event_id}|${c.key}`))
+                      .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
+                      .sort()[0];
+                    const boardHref = `/team/comms/schedule?month=${monthParam(firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth))}&event=${r.event_id}`;
+                    const req = channels.filter((c) => c.required);
+                    const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
+                    const past = Date.parse(r.starts_at) <= now;
+                    return (
+                      <li key={r.event_id} className="flex gap-3 px-4 py-4 sm:gap-4 sm:px-5" data-testid={`comms-row-${r.event_id}`}>
+                        <DateTile iso={r.starts_at} tone={past ? "muted" : "default"} />
+                        <div className="min-w-0 flex-1 space-y-2.5">
+                          <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium tabular-nums text-gray-600">
+                                {berlinTime(r.starts_at)}
+                                {/* Approved = published by itself (round 2026-11-03); until the job ran, the row says so. */}
+                                {r.status === "approved" && (
+                                  <span data-testid="chat-publishing"> · {publishing.has(r.event_id) ? "Going to the Chat space…" : "Goes to the Chat space once it exists"}</span>
+                                )}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Link href={`/events/${r.event_id}/description?from=comms`} className="font-semibold leading-snug text-gray-900 hover:text-esn">
+                                  {r.title}
+                                </Link>
+                                {v.marks.includes("late") && <Badge tone="red">late</Badge>}
+                                {v.marks.includes("missed") && <Badge tone="gray">missed</Badge>}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="row-action">
+                              {v.current === "write" && <span className="text-xs text-gray-500">The OC writes it – reminded automatically</span>}
+                              {v.current === "review" && (
+                                <Link href={`/events/${r.event_id}/description?from=comms`} className={buttonVariants({ size: "sm" })}>
+                                  Review
+                                </Link>
+                              )}
+                              {v.current === "pretix" && (
+                                <Link href={boardHref} className={buttonVariants({ size: "sm" })}>
+                                  Tick pretix
+                                </Link>
+                              )}
+                              {v.current === "advertise" && (
+                                <Link href={boardHref} className={buttonVariants({ size: "sm" })}>
+                                  Advertise
+                                </Link>
+                              )}
+                              {v.current === "happened" && <span className="text-xs text-gray-500">Advertised – the event is on {formatShortDate(r.starts_at)}</span>}
+                              {v.current === "report" && <span className="text-xs text-gray-500">The OC writes the report – reminded automatically</span>}
+                            </div>
+                          </div>
+                          <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="channel-chips">
+                            {req.length > 0 && (
+                              <Link
+                                href={boardHref}
+                                className={cn("mr-1 inline-flex items-center gap-1 font-semibold hover:underline", on === req.length ? "text-emerald-700" : "text-amber-800")}
+                                data-testid="channel-coverage"
+                              >
+                                <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+                                {on}/{req.length} channels planned
+                              </Link>
+                            )}
+                            {channels.map((c) => {
+                              const st = statusOf.get(`${r.event_id}|${c.key}`);
+                              const state = (st?.state ?? "not_planned") as ChannelState;
+                              return (
+                                <span
+                                  key={c.key}
+                                  title={`${c.name}: ${stateLabel(c.key, state)}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
+                                    state === "published" && "bg-emerald-50 text-emerald-800",
+                                    state === "planned" && "bg-esn/5 text-esn",
+                                    state === "skipped" && "bg-gray-100 text-gray-500 line-through",
+                                    state === "not_planned" && "bg-gray-50 text-gray-500"
+                                  )}
+                                >
+                                  {c.name} {STATE_MARK[state]}
+                                  {state === "planned" && st?.at ? ` ${formatShortDate(st.at)}` : ""}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     </>
+  );
+}
+
+/** A count on top of the month: icon, label, "3 / 6" and a thin bar. */
+function Stat({ icon: Icon, label, value, total }: { icon: LucideIcon; label: string; value: number; total: number }) {
+  const full = total > 0 && value >= total;
+  return (
+    <li className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", full ? "bg-emerald-50 text-emerald-700" : "bg-esn/5 text-esn")} aria-hidden="true">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-medium text-gray-500">{label}</span>
+        <span className="block font-semibold tabular-nums text-gray-900">
+          {value} <span className="font-normal text-gray-400">/ {total}</span>
+        </span>
+        <span className="mt-1 block h-1 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
+          <span className={cn("block h-full rounded-full", full ? "bg-emerald-500" : "bg-esn")} style={{ width: `${total ? Math.round((value / total) * 100) : 0}%` }} />
+        </span>
+      </span>
+    </li>
   );
 }

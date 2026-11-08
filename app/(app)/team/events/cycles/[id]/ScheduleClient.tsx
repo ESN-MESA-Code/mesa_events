@@ -9,12 +9,15 @@ import { acceptIdea, clearVolunteerResponse, createEvent, dropEvent, mergeIdea, 
 import { plural } from "@/lib/plural";
 import { CategoryBadge, CategorySelect, FormatSelect } from "@/components/Sorting";
 import { suggestCategory, type Category, type Format } from "@/lib/formats";
+import { DateTile } from "@/components/DateTile";
 
 interface RowEvent {
   id: string;
   title: string;
   type: EventType;
   startsAt: string;
+  /** The start as an ISO timestamp, for the date tile. */
+  startsIso: string;
   startsLabel: string;
   endsAt: string;
   location: string;
@@ -118,49 +121,46 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
   }
 
   const category = categories.find((c) => c.id === event.categoryId);
-  // One grid for every row, so dates, titles and labels line up in columns.
+  // A date tile, time and type above the title, the staffing below; status and actions on the right.
   return (
-    <li
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 sm:grid-cols-[10.5rem_minmax(0,1fr)_7.5rem_7.5rem_9rem_auto]"
-      data-testid={`schedule-${event.title}`}
-    >
-      <span className="col-span-2 text-sm tabular-nums text-gray-600 sm:col-span-1">{event.startsLabel}</span>
-      <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="min-w-0 truncate font-medium text-gray-900 hover:text-esn">
-        {category && (
-          <span className="mr-1.5" title={category.name} aria-label={category.name}>
-            {category.emoji}
-          </span>
-        )}
-        {event.title}
-      </a>
-      <span className="hidden sm:block">
-        <Badge>{EVENT_TYPE_LABELS[event.type]}</Badge>
-      </span>
-      <span className="justify-self-end sm:justify-self-start">
-        <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
-      </span>
-      <span className="col-span-2 text-xs text-gray-500 sm:col-span-1" title={event.proposer ? `idea by ${event.proposer}` : undefined}>
-        {event.ocsNeeded > 1 && `${event.ocsNeeded} OCs · `}
-        {plural(event.helpersNeeded, "helper")} · {event.signups} volunteered
-      </span>
-      {canEdit ? (
-        <span className="col-span-2 flex gap-1 sm:col-span-1 sm:justify-self-end">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          <ActionButton
-            action={dropEvent}
-            input={{ id: event.id }}
-            variant="ghost"
-            confirm={{ title: `Remove ${event.title} (${event.startsLabel}) from the schedule?`, body: `${event.signups} volunteered so far. It is dropped from the month and the volunteer form.`, confirmLabel: "Remove", danger: true }}
-            done={`${event.title} removed from the schedule.`}
-          >
-            Remove
-          </ActionButton>
-        </span>
-      ) : (
-        <span className="hidden sm:block" />
-      )}
+    <li className="flex gap-3 py-3" data-testid={`schedule-${event.title}`}>
+      <DateTile iso={event.startsIso} tone={["cancelled", "completed"].includes(event.status) ? "muted" : "default"} />
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="truncate text-xs font-medium tabular-nums text-gray-600">
+            <span className="sr-only">{event.startsLabel} · </span>
+            {event.startsAt.slice(11, 16)} · {EVENT_TYPE_LABELS[event.type]}
+            {category && ` · ${category.emoji} ${category.name}`}
+          </p>
+          <a href={`/events/${event.id}?from=cycle:${cycleParam}`} className="font-semibold leading-snug text-gray-900 hover:text-esn">
+            {event.title}
+          </a>
+          <p className="mt-0.5 text-xs text-gray-500" title={event.proposer ? `idea by ${event.proposer}` : undefined}>
+            {event.ocsNeeded > 1 && `${event.ocsNeeded} OCs · `}
+            {plural(event.helpersNeeded, "helper")} · {event.signups} volunteered
+            {event.proposer && ` · idea by ${event.proposer}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
+          {canEdit && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              <ActionButton
+                action={dropEvent}
+                input={{ id: event.id }}
+                variant="ghost"
+                confirm={{ title: `Remove ${event.title} (${event.startsLabel}) from the schedule?`, body: `${event.signups} volunteered so far. It is dropped from the month and the volunteer form.`, confirmLabel: "Remove", danger: true }}
+                done={`${event.title} removed from the schedule.`}
+              >
+                Remove
+              </ActionButton>
+            </>
+          )}
+        </div>
+      </div>
     </li>
   );
 }
@@ -299,14 +299,19 @@ export function IdeaCard({
   const planned = idea.formatId ? events.filter((e) => e.formatId === idea.formatId) : [];
 
   return (
-    <div className="rounded-lg border border-gray-200 p-3 space-y-2" data-testid={`idea-${idea.title}`}>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-medium text-gray-900">{idea.title}</span>
-        <span className="text-xs text-gray-500 ml-auto">{idea.date}</span>
+    <div className="flex flex-col gap-2.5 rounded-xl border border-gray-200 bg-white p-4" data-testid={`idea-${idea.title}`}>
+      <div className="flex gap-3">
+        <DateTile iso={`${idea.date}T12:00:00Z`} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-gray-600">by {idea.proposer}</p>
+          <p className="font-semibold leading-snug text-gray-900">{idea.title}</p>
+          <span className="sr-only">{idea.date}</span>
+        </div>
       </div>
-      <p className="text-xs text-gray-500">
-        by {idea.proposer} · {(idea.ocs ?? 1) > 1 && `${idea.ocs} OCs · `}
-        {plural(idea.helpers, "helper")} · {idea.wantsToOc ? "wants to OC" : "not OC"}
+      <p className="flex flex-wrap gap-1.5 text-xs">
+        {(idea.ocs ?? 1) > 1 && <span className="rounded-md bg-gray-100 px-2 py-0.5 text-gray-700">{idea.ocs} OCs</span>}
+        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-gray-700">{plural(idea.helpers, "helper")}</span>
+        <span className={idea.wantsToOc ? "rounded-md bg-emerald-50 px-2 py-0.5 text-emerald-800" : "rounded-md bg-gray-100 px-2 py-0.5 text-gray-500"}>{idea.wantsToOc ? "wants to OC" : "not OC"}</span>
       </p>
       {!!idea.partners?.length && (
         <p className="text-xs text-gray-600">
@@ -326,9 +331,9 @@ export function IdeaCard({
         </p>
       )}
       {sameFormatIdeas > 0 && <p className="text-xs text-esn-dark">{plural(sameFormatIdeas, "more idea")} for {format?.name ?? "this format"} this month – merge them?</p>}
-      {idea.pitch && <p className="text-sm text-gray-700 whitespace-pre-line">{idea.pitch}</p>}
+      {idea.pitch && <p className="line-clamp-6 whitespace-pre-line text-sm text-gray-700">{idea.pitch}</p>}
       {canEdit && mode === "none" && (
-        <div className="flex flex-wrap gap-1">
+        <div className="mt-auto flex flex-wrap gap-1 border-t border-gray-100 pt-3">
           <Button size="sm" onClick={() => setMode("accept")}>
             Accept
           </Button>

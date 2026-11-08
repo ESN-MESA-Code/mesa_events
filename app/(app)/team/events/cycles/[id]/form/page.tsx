@@ -8,7 +8,10 @@ import { cycleTimeline } from "@/lib/timeline";
 import { loadTimelineDays } from "@/lib/timelineLoad";
 import { plural } from "@/lib/plural";
 import { hasRole } from "@/lib/roles";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { CalendarDays, ClipboardList, Clock, Lock, Users } from "lucide-react";
+import { Badge, EmptyState } from "@/components/ui";
+import { Panel } from "@/components/Panel";
+import { cn } from "@/lib/utils";
 import { ClearResponseButton } from "../ScheduleClient";
 import { FormControls } from "../CycleControls";
 import { CopyButton } from "@/components/CopyButton";
@@ -59,22 +62,34 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
         ? `Open · closes ${cycle.form_closes_at ? formatDateTime(cycle.form_closes_at) : "–"}`
         : `Closed${cycle.form_closes_at ? ` ${formatDateTime(cycle.form_closes_at)}` : ""}`;
 
+  const totalOc = [...perEvent.values()].filter((c) => c.oc > 0).length;
+  const helpersCovered = (events ?? []).filter((e) => (perEvent.get(e.id)?.helper ?? 0) >= e.helpers_needed).length;
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Volunteer form</CardTitle>
+      <Panel
+        title="Volunteer form"
+        icon={ClipboardList}
+        description="Members pick the events they can do and rank OC and helper per event."
+        aside={
           <Badge tone={cycle.status === "form_open" ? "green" : "gray"} data-testid="form-state">
             {state}
           </Badge>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-gray-600">
-            Members pick the events they can do and rank OC and helper per event. {plural(people.length, "volunteer")} answered.
-          </p>
+        }
+      >
+        <div className="space-y-4">
+          <ul className="grid gap-3 sm:grid-cols-3">
+            <FormStat label="Answers" value={people.length} note={plural(people.length, "volunteer")} />
+            <FormStat label="Events with an OC wish" value={totalOc} total={events?.length ?? 0} />
+            <FormStat label="Events with enough helpers" value={helpersCovered} total={events?.length ?? 0} />
+          </ul>
+          <p className="sr-only">{plural(people.length, "volunteer")} answered.</p>
           {cycle.status === "planning" && Date.parse(timeline.formOpens) > now && Date.parse(timeline.formCloses) > now && (
-            <p className="text-sm text-gray-700" data-testid="form-opens-auto">
-              🕘 Opens by itself on <strong>{formatDateTime(timeline.formOpens)}</strong> with the events on the schedule, closing {formatDateTime(timeline.formCloses)}. Open it earlier here if the schedule is ready.
+            <p className="flex items-start gap-2 rounded-xl bg-esn/5 px-3 py-2.5 text-sm text-esn-dark" data-testid="form-opens-auto">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                Opens by itself on <strong>{formatDateTime(timeline.formOpens)}</strong> with the events on the schedule, closing {formatDateTime(timeline.formCloses)}. Open it earlier here if the schedule is ready.
+              </span>
             </p>
           )}
           {canEdit && (
@@ -87,73 +102,76 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
               standard={Date.parse(timeline.formCloses) > now ? { input: isoToBerlinInput(timeline.formCloses), label: formatDateTime(timeline.formCloses) } : null}
             />
           )}
-          {!["planning", "form_open", "form_closed"].includes(cycle.status) && <p className="text-sm text-gray-500">The allocation has run – the form stays closed.</p>}
-        </CardContent>
-      </Card>
+          {!["planning", "form_open", "form_closed"].includes(cycle.status) && (
+            <p className="flex items-center gap-2 text-sm text-gray-500">
+              <Lock className="h-4 w-4" aria-hidden="true" />
+              The allocation has run – the form stays closed.
+            </p>
+          )}
+        </div>
+      </Panel>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign-ups per event</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!events?.length ? (
-              <EmptyState>No events on the schedule yet.</EmptyState>
-            ) : (
-              <table className="w-full text-sm" data-testid="form-signups">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500">
-                    <th className="py-1 pr-3 font-medium">Date</th>
-                    <th className="py-1 pr-3 font-medium">Event</th>
-                    <th className="py-1 pr-3 text-right font-medium">OC</th>
-                    <th className="py-1 text-right font-medium">Helpers</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {events.map((e) => {
-                    const c = perEvent.get(e.id) ?? { oc: 0, helper: 0 };
-                    return (
-                      <tr key={e.id}>
-                        <td className="whitespace-nowrap py-2 pr-3 tabular-nums text-gray-600">{formatDateTime(e.starts_at)}</td>
-                        <td className="py-2 pr-3 font-medium text-gray-900">{e.title}</td>
-                        <td className={`py-2 pr-3 text-right tabular-nums ${c.oc ? "" : "text-amber-700"}`}>{c.oc}</td>
-                        <td className={`py-2 text-right tabular-nums ${c.helper >= e.helpers_needed ? "" : "text-amber-700"}`}>
+        <Panel title="Sign-ups per event" icon={CalendarDays} count={events?.length ?? 0}>
+          {!events?.length ? (
+            <EmptyState>No events on the schedule yet.</EmptyState>
+          ) : (
+            <table className="w-full text-sm" data-testid="form-signups">
+              <thead>
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                  <th className="pb-2 pr-3">Event</th>
+                  <th className="pb-2 pr-3 text-right">OC</th>
+                  <th className="pb-2 text-right">Helpers</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {events.map((e) => {
+                  const c = perEvent.get(e.id) ?? { oc: 0, helper: 0 };
+                  return (
+                    <tr key={e.id}>
+                      <td className="py-2.5 pr-3">
+                        <span className="block text-xs tabular-nums text-gray-500">{formatDateTime(e.starts_at)}</span>
+                        <span className="font-semibold text-gray-900">{e.title}</span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-right">
+                        <span className={cn("inline-flex min-w-8 justify-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums", c.oc ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800")}>{c.oc}</span>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <span className={cn("inline-flex min-w-12 justify-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums", c.helper >= e.helpers_needed ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800")}>
                           {c.helper}/{e.helpers_needed}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </CardContent>
-        </Card>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Volunteer answers</CardTitle>
-            <Badge>{people.length}</Badge>
-          </CardHeader>
-          <CardContent>
+        <Panel title="Volunteer answers" icon={Users} count={people.length}>
             {!people.length && <EmptyState>Nobody has answered yet.</EmptyState>}
             <ul className="divide-y divide-gray-100 text-sm" data-testid="volunteer-responses">
               {people.map((r) => (
-                <li key={r.profile_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid={`response-${r.email}`}>
-                  <span className="font-medium text-gray-900">{r.full_name}</span>
-                  {blacklisted.has(r.profile_id) && (
-                    <Badge tone="red" title={`On the blacklist: ${blacklisted.get(r.profile_id)} – left out of the automatic allocation`}>
-                      Blacklisted
-                    </Badge>
-                  )}
-                  <span className="text-xs text-gray-500">
-                    submitted {formatDateTime(r.submitted_at)} · {plural(r.events, "event")}
-                    {r.note && ` · “${r.note}”`}
+                <li key={r.profile_id} className="flex items-start gap-3 py-2.5" data-testid={`response-${r.email}`}>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-esn/10 text-xs font-bold text-esn" aria-hidden="true">
+                    {initials(r.full_name)}
                   </span>
-                  {canEdit && cycle.status === "form_open" && (
-                    <span className="ml-auto">
-                      <ClearResponseButton cycleId={cycle.id} profileId={r.profile_id} name={r.full_name} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-gray-900">{r.full_name}</span>
+                      {blacklisted.has(r.profile_id) && (
+                        <Badge tone="red" title={`On the blacklist: ${blacklisted.get(r.profile_id)} – left out of the automatic allocation`}>
+                          Blacklisted
+                        </Badge>
+                      )}
                     </span>
-                  )}
+                    <span className="block text-xs text-gray-500">
+                      submitted {formatDateTime(r.submitted_at)} · {plural(r.events, "event")}
+                    </span>
+                    {r.note && <span className="mt-0.5 block text-xs italic text-gray-600">“{r.note}”</span>}
+                  </span>
+                  {canEdit && cycle.status === "form_open" && <ClearResponseButton cycleId={cycle.id} profileId={r.profile_id} name={r.full_name} />}
                 </li>
               ))}
             </ul>
@@ -173,9 +191,36 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
             {canEdit && cycle.status === "form_open" && (
               <p className="mt-2 text-xs text-gray-500">Answers are locked after submitting. Clear someone&apos;s answers (logged) when they made a mistake; they can then submit again.</p>
             )}
-          </CardContent>
-        </Card>
+        </Panel>
       </div>
     </div>
+  );
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+
+/** A number on top of the form: label, the value and (with a total) a thin bar. */
+function FormStat({ label, value, total, note }: { label: string; value: number; total?: number; note?: string }) {
+  const pct = total ? Math.round((value / total) * 100) : null;
+  return (
+    <li className="rounded-xl bg-gray-50 px-3 py-2.5">
+      <span className="block text-xs font-medium text-gray-500">{label}</span>
+      <span className="block text-lg font-bold tabular-nums text-gray-900">
+        {value}
+        {total !== undefined && <span className="text-sm font-normal text-gray-400"> / {total}</span>}
+        {note && total === undefined && <span className="sr-only"> {note}</span>}
+      </span>
+      {pct !== null && (
+        <span className="mt-1 block h-1 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
+          <span className={cn("block h-full rounded-full", pct >= 100 ? "bg-emerald-500" : "bg-esn")} style={{ width: `${pct}%` }} />
+        </span>
+      )}
+    </li>
   );
 }

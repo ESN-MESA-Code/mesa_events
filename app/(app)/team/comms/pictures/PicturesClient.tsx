@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, Input } from "@/components/ui";
+import { ImageIcon, Layers, Search, Shapes } from "lucide-react";
+import { Input } from "@/components/ui";
+import { Panel } from "@/components/Panel";
 import { useAction } from "@/components/ActionButton";
 import { PictureButton, UploadedPicture, pictureProblem } from "@/components/PostPicture";
 import { setDefaultPicture } from "@/app/actions/publishing";
@@ -37,13 +39,13 @@ function Slot({ slot, editable }: { slot: PictureSlot; editable: boolean }) {
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm" data-testid={`picture-${slot.key}`}>
+    <li className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm" data-testid={`picture-${slot.key}`}>
       <div>
-        <p className="font-medium text-gray-900">{slot.name}</p>
+        <p className="font-semibold text-gray-900">{slot.name}</p>
         <p className="text-xs text-gray-500">{slot.note}</p>
       </div>
-      <div className="flex min-h-24 items-center justify-center rounded bg-gray-50">
-        {slot.picture ? <UploadedPicture picture={slot.picture} className="max-h-32" /> : <span className="text-xs text-gray-400">No default picture</span>}
+      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-gray-50">
+        {slot.picture ? <UploadedPicture picture={slot.picture} className="max-h-full" /> : <span className="flex flex-col items-center gap-1 text-xs text-gray-400"><ImageIcon className="h-6 w-6" aria-hidden="true" />No default picture</span>}
       </div>
       {editable && (
         <div className="flex flex-wrap items-center gap-2">
@@ -76,27 +78,29 @@ export function DefaultPictures({ types, formats, editable }: { types: PictureSl
   const grid = "grid gap-3 sm:grid-cols-2 lg:grid-cols-4";
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>By event type</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className={grid} data-testid="type-pictures">
-            {types.map((t) => (
-              <Slot key={t.key} slot={t} editable={editable} />
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>By format (event series)</CardTitle>
-          <span className="text-xs text-gray-500">{formats.filter((f) => f.picture).length} of {formats.length} with a picture</span>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Input aria-label="Find a format" placeholder="Find a format, e.g. Language Café" value={query} onChange={(e) => setQuery(e.target.value)} className="max-w-sm" />
+      <Panel title="By event type" icon={Shapes} description="Used when an event has no format picture.">
+        <ul className={grid} data-testid="type-pictures">
+          {types.map((t) => (
+            <Slot key={t.key} slot={t} editable={editable} />
+          ))}
+        </ul>
+      </Panel>
+      <Panel
+        title="By format (event series)"
+        icon={Layers}
+        aside={
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+            {formats.filter((f) => f.picture).length} of {formats.length} with a picture
+          </span>
+        }
+      >
+        <div className="space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <Input aria-label="Find a format" placeholder="Find a format, e.g. Language Café" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
+          </div>
           {!shown.length ? (
-            <p className="text-sm text-gray-500">No format matches.</p>
+            <p className="py-6 text-center text-sm text-gray-500">No format matches.</p>
           ) : (
             <ul className={grid} data-testid="format-pictures">
               {shown.map((f) => (
@@ -104,8 +108,8 @@ export function DefaultPictures({ types, formats, editable }: { types: PictureSl
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   );
 }

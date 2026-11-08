@@ -1,8 +1,9 @@
 # Staging – a demo site with test data
 
 A staging deployment shows the platform to the board and the team leads with **made-up data only**:
-40 fictional members (`….demo@esnmesa.org`), six months of events around today, and every step of
-the monthly workflow in some state. Nothing it does leaves the database: Google Chat, Drive,
+40 fictional members (`….demo@esnmesa.org`), fifteen months of events around today (a planning
+cycle for every month of the year: twelve done ones, the current month, next month and the one
+after), and every step of the monthly workflow in some state. Nothing it does leaves the database: Google Chat, Drive,
 Directory and Telegram run on the fakes, and **Demo outbox** shows what would have been sent.
 
 This page is the checklist for setting it up (the user's step – nothing here was deployed), for
