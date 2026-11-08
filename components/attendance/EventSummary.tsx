@@ -1,6 +1,8 @@
 "use client";
 
+import { Clock, ClipboardCheck, Smartphone, UserCheck } from "lucide-react";
 import { countryName } from "@/lib/countries";
+import { Stat } from "@/components/EventKit";
 import type { Breakdown, Event, EventStats } from "@/types/attendance";
 
 interface Props {
@@ -23,28 +25,27 @@ function rows(breakdown: Breakdown, label: (key: string) => string) {
     .map(([key, n]) => ({ key, label: key === NOT_GIVEN ? "Not given" : label(key), n }));
 }
 
+/** One breakdown as bars, each as long as its share of the largest answer. */
 function BreakdownList({ title, breakdown, label = (k) => k }: { title: string; breakdown?: Breakdown; label?: (key: string) => string }) {
   if (!breakdown || Object.keys(breakdown).length === 0) return null;
+  const list = rows(breakdown, label);
+  const max = Math.max(...list.map((r) => r.n), 1);
   return (
-    <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">{title}</h3>
-      <ul className="text-sm text-gray-700 space-y-0.5">
-        {rows(breakdown, label).map((r) => (
-          <li key={r.key} className="flex justify-between gap-3">
-            <span className={r.key === NOT_GIVEN ? "text-gray-400" : ""}>{r.label}</span>
-            <span className="tabular-nums">{r.n}</span>
+    <div className="rounded-xl border border-gray-100 p-3">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{title}</h3>
+      <ul className="space-y-1.5 text-sm text-gray-700">
+        {list.map((r) => (
+          <li key={r.key}>
+            <div className="flex justify-between gap-3">
+              <span className={r.key === NOT_GIVEN ? "text-gray-400" : "min-w-0 truncate"}>{r.label}</span>
+              <span className="font-semibold tabular-nums">{r.n}</span>
+            </div>
+            <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
+              <div className={r.key === NOT_GIVEN ? "h-full rounded-full bg-gray-300" : "h-full rounded-full bg-esn/70"} style={{ width: `${(r.n / max) * 100}%` }} />
+            </div>
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function Figure({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2" title={hint}>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900 tabular-nums">{value}</p>
     </div>
   );
 }
@@ -57,16 +58,18 @@ export default function EventSummary({ event, stats }: Props) {
   return (
     <div className="space-y-4">
       {/* Only figures that say something; each one says what it is (usability review #26). */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Figure label="Sign-ins" value={signins} />
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <Stat icon={UserCheck} label="Sign-ins" value={signins} />
         {event.headcount !== null ? (
-          <Figure label="Counted by the OC" value={event.headcount} hint="People the OC counted at the event, entered with the sign-off" />
+          <Stat icon={ClipboardCheck} label="Counted by the OC" value={event.headcount} title="People the OC counted at the event, entered with the sign-off" tone="green" valueTone="default" />
         ) : (
-          <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">The OC enters a headcount when signing the list off.</div>
+          <div className="flex items-center rounded-xl border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">The OC enters a headcount when signing the list off.</div>
         )}
-        {(stats?.kiosk ?? 0) > 0 && <Figure label="On the OC's phone (kiosk)" value={stats!.kiosk} hint="Signed in on the organiser's device instead of their own" />}
+        {(stats?.kiosk ?? 0) > 0 && <Stat icon={Smartphone} label="On the OC's phone" value={stats!.kiosk} title="Signed in on the organiser's device instead of their own (kiosk)" tone="gray" />}
         {signins > 0 && (
-          <Figure
+          <Stat
+            icon={Clock}
+            tone="gray"
             label={signins === 1 || time(stats!.first_signin) === time(stats!.last_signin) ? "Signed in at" : "First – last sign-in"}
             value={time(stats!.first_signin) === time(stats!.last_signin) ? time(stats!.first_signin) : `${time(stats!.first_signin)}–${time(stats!.last_signin)}`}
           />
@@ -74,7 +77,7 @@ export default function EventSummary({ event, stats }: Props) {
       </div>
 
       {event.headcount !== null && event.headcount !== signins && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           {event.headcount > signins
             ? `${event.headcount - signins} counted ${event.headcount - signins === 1 ? "person has" : "people have"} not signed in.`
             : `${signins - event.headcount} more sign-ins than people counted.`}
@@ -82,7 +85,7 @@ export default function EventSummary({ event, stats }: Props) {
       )}
 
       {hasBreakdown ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <BreakdownList title="University" breakdown={stats!.university} />
           <BreakdownList title="Exchange programme" breakdown={stats!.exchange_program} />
           <BreakdownList

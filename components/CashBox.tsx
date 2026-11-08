@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select, Textarea } from "@/components/ui";
+import { ArrowDownToLine, ArrowUpFromLine, CircleCheck, CreditCard, Equal, PiggyBank, Scale, TrendingUp, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Alert, Badge, Button, Select, Textarea } from "@/components/ui";
+import { ProgressTrack, Stat, type TrackStep } from "@/components/EventKit";
 import { ActionButton, useAction } from "@/components/ActionButton";
 import { bookCashBox, bumpEsncards, checkCashBox, closeCashBox, reopenCashBox, saveCashCount, setCashNote, startCashBox } from "@/app/actions/cash";
 import { CASH_STATUS_LABELS, CASH_STATUS_TONES, DENOMINATIONS, cardRevenue, cashStatus, countTotal, denominationLabel, difference, expectedClosing, isNote, takings, type CashCounts } from "@/lib/cash";
@@ -46,12 +49,23 @@ export interface CashFinance {
   suggested: string | null;
 }
 
-function Figure({ label, value, tone }: { label: string; value: string; tone?: "red" | "green" }) {
+function Figure({ icon, label, value, tone }: { icon: LucideIcon; label: string; value: string; tone?: "red" | "green" }) {
+  return <Stat icon={icon} label={label} value={value} tone={tone ?? "default"} />;
+}
+
+/** The white card of the cash box (redesign 2026-11-08): an icon, the title, its badge. */
+function Shell({ title, badge, children }: { title: React.ReactNode; badge: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={cn("text-lg font-semibold tabular-nums", tone === "red" && "text-red-700", tone === "green" && "text-emerald-700")}>{value}</p>
-    </div>
+    <section id="cash-box" aria-label="Cash box" className="scroll-mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm" data-testid="cash-box">
+      <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-esn/5 text-esn" aria-hidden="true">
+          <Wallet className="h-[18px] w-[18px]" />
+        </span>
+        <h2 className="mr-auto min-w-0 text-base font-bold text-gray-900">{title}</h2>
+        {badge}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -78,46 +92,64 @@ function CountForm({
   const total = countTotal(numbers);
   const dirty = JSON.stringify(Object.entries(numbers).filter(([, n]) => n > 0).sort()) !== JSON.stringify(Object.entries(saved).sort());
   const label = phase === "opening" ? "Before (opening)" : "After (closing)";
-  const field = (d: number) => (
-    <label key={d} className="flex items-center gap-2 text-sm">
-      <span className="w-14 shrink-0 text-right tabular-nums text-gray-600">{denominationLabel(d)}</span>
-      <span className="text-gray-400">×</span>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        max={100000}
-        aria-label={`${label}: ${denominationLabel(d)}`}
-        className="h-8 w-16 rounded border border-gray-300 px-2 text-right tabular-nums disabled:bg-gray-50"
-        value={counts[String(d)] ?? ""}
-        disabled={disabled}
-        onChange={(e) => setCounts((c) => ({ ...c, [String(d)]: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
-      />
-    </label>
-  );
+  const PhaseIcon = phase === "opening" ? ArrowDownToLine : ArrowUpFromLine;
+  const field = (d: number) => {
+    const n = numbers[String(d)] ?? 0;
+    return (
+      <label key={d} className="flex items-center gap-2 text-sm">
+        <span className={cn("w-14 shrink-0 rounded-md px-1.5 py-0.5 text-right text-xs font-semibold tabular-nums", isNote(d) ? "bg-esn/5 text-esn-dark" : "bg-amber-50 text-amber-800")}>{denominationLabel(d)}</span>
+        <span className="text-gray-300" aria-hidden="true">
+          ×
+        </span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={100000}
+          aria-label={`${label}: ${denominationLabel(d)}`}
+          className="h-8 w-16 rounded-md border border-gray-300 px-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-esn-accent disabled:bg-gray-50"
+          value={counts[String(d)] ?? ""}
+          disabled={disabled}
+          onChange={(e) => setCounts((c) => ({ ...c, [String(d)]: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+        />
+        <span className={cn("ml-auto hidden text-xs tabular-nums sm:inline", n > 0 ? "text-gray-600" : "text-gray-300")}>{formatCents(n * d)}</span>
+      </label>
+    );
+  };
   return (
     <form
-      className="space-y-3"
+      className="space-y-3 rounded-xl border border-gray-200 p-4"
       data-testid={`count-${phase}`}
       onSubmit={(e) => {
         e.preventDefault();
         run(saveCashCount, { report_id: reportId, phase, counts: Object.fromEntries(Object.entries(numbers).filter(([, n]) => n > 0)) });
       }}
     >
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h3 className="font-semibold">{label}</h3>
-        <span className="ml-auto text-lg font-semibold tabular-nums" data-testid={`total-${phase}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", savedBy ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500")} aria-hidden="true">
+          {savedBy ? <CircleCheck className="h-4 w-4" /> : <PhaseIcon className="h-4 w-4" />}
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-gray-900">{label}</h3>
+          {savedBy ? (
+            <p className="text-xs text-gray-500">Counted by {savedBy}</p>
+          ) : (
+            <p className="text-xs text-amber-700">Not counted yet{suggested && !disabled ? ` – filled in from ${suggested.label}; count and correct it` : ""}</p>
+          )}
+        </div>
+        <span className="ml-auto text-xl font-bold tabular-nums text-gray-900" data-testid={`total-${phase}`}>
           {total === null ? "–" : formatCents(total)}
         </span>
       </div>
-      {savedBy ? (
-        <p className="text-xs text-gray-500">Counted by {savedBy}</p>
-      ) : (
-        <p className="text-xs text-amber-700">Not counted yet{suggested && !disabled ? ` – filled in from ${suggested.label}; count and correct it` : ""}</p>
-      )}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-        <div className="space-y-1.5">{DENOMINATIONS.filter(isNote).map(field)}</div>
-        <div className="space-y-1.5">{DENOMINATIONS.filter((d) => !isNote(d)).map(field)}</div>
+      <div className="grid gap-x-5 gap-y-1.5 border-t border-gray-100 pt-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Notes</p>
+          {DENOMINATIONS.filter(isNote).map(field)}
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Coins</p>
+          {DENOMINATIONS.filter((d) => !isNote(d)).map(field)}
+        </div>
       </div>
       {!disabled && (
         <Button type="submit" size="sm" variant={dirty || !savedBy ? "default" : "outline"} disabled={pending || total === null}>
@@ -252,24 +284,26 @@ export function CashBox({
 }) {
   if (!report) {
     return (
-      <Card id="cash-box" className="scroll-mt-4" data-testid="cash-box">
-        <CardHeader>
-          <CardTitle>Cash box</CardTitle>
-          <Badge tone="gray">Not started</Badge>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-gray-600">
+      <Shell title="Cash box" badge={<Badge tone="gray">Not started</Badge>}>
+        <div className="space-y-5 px-4 pb-5 text-sm text-gray-600 sm:px-5">
           <p>
             {officeHour
               ? "Count the cash box when the office hour starts, count the ESNcards you sell, and count the box again at the end. The OC signs it off."
               : "Using the cash box (selling drinks or the like)? Count it before and after; the OC signs it off and Finance sees the takings."}
           </p>
+          <div className="rounded-xl bg-gray-50/70 px-2 py-4">
+            <ProgressTrack label="How the cash box works" steps={trackSteps(null, false, officeHour)} className="mx-auto max-w-2xl" />
+          </div>
           {canCount ? (
             <StartForm target={target} boxes={boxes} officeHour={officeHour} />
           ) : (
-            <p>The OC and helpers start it.</p>
+            <p className="flex items-center gap-2 text-gray-500">
+              <PiggyBank className="h-4 w-4 text-gray-400" aria-hidden="true" />
+              The OC and helpers start it.
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Shell>
     );
   }
 
@@ -282,9 +316,9 @@ export function CashBox({
   const diff = officeHour ? difference(report) : null;
 
   return (
-    <Card id="cash-box" className="scroll-mt-4" data-testid="cash-box">
-      <CardHeader>
-        <CardTitle>
+    <Shell
+      title={
+        <>
           Cash box
           {report.box && (
             <span className="font-normal text-gray-500" data-testid="cash-box-name">
@@ -292,31 +326,33 @@ export function CashBox({
               · {report.box.name}
             </span>
           )}
-        </CardTitle>
+        </>
+      }
+      badge={
         <Badge tone={CASH_STATUS_TONES[status]} data-testid="cash-status">
           {CASH_STATUS_LABELS[status]}
         </Badge>
-      </CardHeader>
-      <CardContent className="space-y-5">
+      }
+    >
+      <div className="border-y border-gray-100 bg-gray-50/60 px-2 py-4 sm:px-6">
+        <ProgressTrack label="Cash box steps" steps={trackSteps(report, finance?.booked ?? false, officeHour)} className="mx-auto max-w-2xl" />
+      </div>
+      <div className="space-y-5 p-4 sm:p-5">
         {closed && (
           <Alert tone="success">
             Signed off by {report.closed}. {report.checked ? `Checked by ${report.checked}.` : "Finance checks it."}
           </Alert>
         )}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="cash-figures">
-          <Figure label="Before" value={formatCents(report.opening_cents)} />
-          <Figure label="After" value={formatCents(report.closing_cents)} />
-          <Figure label="Takings (after − before)" value={formatCents(take)} tone={take !== null && take < 0 ? "red" : undefined} />
-          {officeHour ? (
-            <Figure label="ESNcards sold" value={`${report.esncards_internal} internal · ${report.esncards_external} external`} />
-          ) : (
-            <Figure label="Status" value={CASH_STATUS_LABELS[status]} />
-          )}
+        <div className={cn("grid grid-cols-2 gap-2", officeHour ? "lg:grid-cols-4" : "sm:grid-cols-3")} data-testid="cash-figures">
+          <Figure icon={ArrowDownToLine} label="Before" value={formatCents(report.opening_cents)} />
+          <Figure icon={ArrowUpFromLine} label="After" value={formatCents(report.closing_cents)} />
+          <Figure icon={TrendingUp} label="Takings (after − before)" value={formatCents(take)} tone={take !== null && take < 0 ? "red" : take !== null && take > 0 ? "green" : undefined} />
           {officeHour && (
             <>
-              <Figure label="Cards should bring" value={formatCents(cards)} />
-              <Figure label="Expected after (all cash)" value={formatCents(expected)} />
-              <Figure label="Difference" value={diff === null ? "–" : `${diff > 0 ? "+" : ""}${formatCents(diff)}`} tone={diff === null || diff === 0 ? undefined : diff < 0 ? "red" : "green"} />
+              <Figure icon={CreditCard} label="ESNcards sold" value={`${report.esncards_internal} internal · ${report.esncards_external} external`} />
+              <Figure icon={CreditCard} label="Cards should bring" value={formatCents(cards)} />
+              <Figure icon={Equal} label="Expected after (all cash)" value={formatCents(expected)} />
+              <Figure icon={Scale} label="Difference" value={diff === null ? "–" : `${diff > 0 ? "+" : ""}${formatCents(diff)}`} tone={diff === null || diff === 0 ? undefined : diff < 0 ? "red" : "green"} />
             </>
           )}
         </div>
@@ -328,7 +364,7 @@ export function CashBox({
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <CountForm
             key={`o-${report.opening_counted}`}
             reportId={report.id}
@@ -344,8 +380,8 @@ export function CashBox({
         <NoteForm reportId={report.id} note={report.note} disabled={!editable} />
 
         {editable && (
-          <div className="rounded-lg border border-esn/30 bg-esn/5 p-3 space-y-2" data-testid="sign-off">
-            <p className="text-sm">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-esn/20 bg-esn/5 p-4" data-testid="sign-off">
+            <p className="min-w-0 flex-1 basis-64 text-sm text-esn-dark">
               {isOc
                 ? "When the box is counted after the end, sign it off: the counts and sales are then fixed (Finance can reopen it)."
                 : "The OC signs the cash box off once it is counted before and after."}
@@ -385,7 +421,23 @@ export function CashBox({
             {finance.booked && <span className="text-sm text-gray-600">The takings are in the ledger.</span>}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Shell>
   );
+}
+
+/** Before → after → signed off → checked by Finance (→ booked when there are takings). */
+function trackSteps(report: CashReportView | null, booked: boolean, officeHour: boolean): TrackStep[] {
+  const before = report?.opening_cents != null;
+  const after = report?.closing_cents != null;
+  const closed = !!report?.closed_at;
+  const checked = !!report?.checked_at;
+  const current = !before ? 0 : !after ? 1 : !closed ? 2 : !checked ? 3 : 4;
+  const state = (i: number): TrackStep["state"] => (!report ? "todo" : i < current ? "done" : i === current ? "current" : "todo");
+  return [
+    { label: "Count before", note: officeHour ? "at the start" : "before selling", state: state(0) },
+    { label: "Count after", note: "at the end", state: state(1) },
+    { label: "Signed off", note: report?.closed ?? "by the OC", state: state(2) },
+    { label: booked ? "Booked" : "Checked", note: report?.checked ?? "by Finance", state: checked || booked ? "done" : state(3) },
+  ];
 }

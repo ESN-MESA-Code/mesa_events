@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { loadEventForPage } from "@/lib/events";
-import { Alert, Card, CardContent, EmptyState } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { Callout } from "@/components/EventKit";
+import { FileWarning } from "lucide-react";
 import { AttendanceManager } from "./AttendanceManager";
 import type { Event as ListEvent } from "@/types/attendance";
 import { headers } from "next/headers";
@@ -53,18 +55,18 @@ export default async function AttendanceTabPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-4">
       {(event.type === "day_trip" || event.type === "weekend_trip") && (
-        <Alert tone="warning">LMU does not accept digital attendance lists: for funded trips keep the paper list as well.</Alert>
+        <Callout tone="warning" icon={FileWarning} title="Keep the paper list as well">
+          LMU does not accept digital attendance lists: for funded trips keep the paper list as well.
+        </Callout>
       )}
-      <CardContent className="p-0">
-        <AttendanceManager
+      <AttendanceManager
           event={listEvent}
           canSignOff={isOc || (isEvents && !ocEmail)}
           canOrganise={isStaff || isEvents}
           ocEmail={ocEmail}
           isExecutive={viewer.roles.includes("executive")}
           attendanceUrl={`${base}/event/${list.public_token}`}
-        />
-      </CardContent>
+      />
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatShortDate, berlinDate, daysSpanned, nowMs } from "@/lib/dates";
 import { kindsFor, receiptsStatus, type ClaimStatus, type ExpenseKind, type Rule, maskEmail, maskIban } from "@/lib/reimbursement";
 import { ClaimItem } from "@/components/ClaimItem";
-import { Alert, Badge, Card, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { Badge, Card, EmptyState } from "@/components/ui";
+import { Callout } from "@/components/EventKit";
 import { ActionButton } from "@/components/ActionButton";
 import { withdrawReceipt } from "@/app/actions/handin";
 import { PhotoFolder, PreapprovalForm, ReceiptForm } from "./HandInClient";
@@ -16,7 +17,8 @@ import { EsnUpload } from "@/components/EsnUpload";
 import { loadEsn } from "@/lib/esn/load";
 import { ESN_STATUS_LABEL, type EventReport } from "@/lib/esn/formData";
 import { hasRole } from "@/lib/roles";
-import { Check } from "lucide-react";
+import { Banknote, CalendarClock, Camera, Check, ChevronDown, CircleDashed, ClipboardList, FileText, Globe2, PackageCheck, Receipt, UserRound } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Hand-in" };
@@ -27,7 +29,8 @@ export const metadata: Metadata = { title: "Hand-in" };
 // registered and the paper Beleg handed to Finance. Comms, Events and
 // executives also see the event's ESN Activities status here. One column of
 // folding steps (round 2026-11-03 (2)) instead of a status card above two
-// columns of open forms.
+// columns of open forms; next to it how far along it is and what to know
+// (redesign 2026-11-08).
 export default async function HandInPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { event, supabase, viewer, isStaff, isTeam, isOc, isEvents, myAssignment } = await loadEventForPage(id);
@@ -90,25 +93,41 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
   // The first of the viewer's open steps that unfolds (attendance is on its own tab).
   const first = handInOpen ? (["photos", "report", "receipts", "esn"] as const).find((k) => states[k] === "todo" && (k !== "receipts" || !!myAssignment) && (k !== "esn" || !!esn)) : undefined;
   const counted = [states.attendance, states.photos, states.report, states.receipts];
+  const doneCount = counted.filter((x) => x === "done").length;
+  const STEP_NAMES = ["Attendance list", "Photos in Drive", "Event report", "Receipts"] as const;
+  const nextOpen = counted.findIndex((x) => x === "todo");
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
       <RevealOnHash />
+      <div className="min-w-0 space-y-4">
       {!handInOpen && (
-        <Alert tone="info" data-testid="receipts-later">
+        <Callout tone="info" icon={CalendarClock} title={`Hand-in opens on ${formatShortDate(event.starts_at)}`} data-testid="receipts-later">
           Hand-in opens on the day of the event ({formatShortDate(event.starts_at)}). Keep every paper receipt until then.
-        </Alert>
+        </Callout>
       )}
-      <Card id="hand-in-status" className="scroll-mt-4">
-        <CardHeader>
-          <CardTitle>Hand-in</CardTitle>
-          <span className="text-xs text-gray-500" data-testid="handin-count">
-            {counted.filter((x) => x === "done").length} of {counted.length} done
+      <section id="hand-in-status" aria-label="Hand-in" className="scroll-mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-esn/5 text-esn" aria-hidden="true">
+            <PackageCheck className="h-[18px] w-[18px]" />
           </span>
-        </CardHeader>
+          <div className="mr-auto min-w-0">
+            <h2 className="text-base font-bold text-gray-900">Hand-in</h2>
+            <p className="text-sm text-gray-500">What&apos;s left after the event – each step opens where it&apos;s done.</p>
+          </div>
+          <span className="text-sm text-gray-600" data-testid="handin-count">
+            <span className="font-semibold tabular-nums text-gray-900">{doneCount}</span> of {counted.length} done
+          </span>
+          <div className="flex w-full gap-1" aria-hidden="true">
+            {counted.map((x, i) => (
+              <span key={i} className={cn("h-1.5 flex-1 rounded-full", x === "done" ? "bg-emerald-500" : x === "todo" ? "bg-amber-300" : "bg-gray-100")} />
+            ))}
+          </div>
+        </div>
         <ul className="divide-y divide-gray-100 border-t border-gray-100" data-testid="handin-status">
           <Step
             id="attendance"
+            icon={ClipboardList}
             title="Attendance list"
             state={states.attendance}
             detail={list?.signed_off_at ? `Signed off (${list.headcount} counted)` : started ? "Not signed off yet" : "On the day"}
@@ -117,6 +136,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
 
           <Step
             id="photos"
+            icon={Camera}
             title="Photos in Drive"
             state={states.photos}
             open={first === "photos"}
@@ -136,7 +156,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
             )}
           </Step>
 
-          <Step id="event-report" testId="report-status" title="Event report" state={states.report} open={first === "report"} detail={report ? "Written" : ocOnly ? "The OC writes it" : started ? "Not written yet" : "After the event"}>
+          <Step id="event-report" testId="report-status" icon={FileText} title="Event report" state={states.report} open={first === "report"} detail={report ? "Written" : ocOnly ? "The OC writes it" : started ? "Not written yet" : "After the event"}>
             <p className="text-sm text-gray-600">Participants and results for ESN Activities – one report per event, by the OC.</p>
             {!started ? (
               <p className="text-sm text-gray-500">The report is written after the event has started.</p>
@@ -169,6 +189,7 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           <Step
             id="receipts"
             testId="receipts-status"
+            icon={Receipt}
             title="Receipts and paper receipts"
             state={states.receipts}
             open={first === "receipts"}
@@ -228,8 +249,8 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                   </ul>
                 )}
                 {handInOpen && (
-                  <Fold id="register-receipt" defaultOpen={!myClaims.length} className="group/form scroll-mt-4 rounded-lg border border-gray-200">
-                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-esn hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                  <Fold id="register-receipt" defaultOpen={!myClaims.length} className="group/form scroll-mt-4 overflow-hidden rounded-xl border border-gray-200">
+                    <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-esn hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
                       <span className="group-open/form:hidden">＋ Register a receipt</span>
                       <span className="hidden group-open/form:inline">Register a receipt</span>
                     </summary>
@@ -253,9 +274,6 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
                     </div>
                   </Fold>
                 )}
-                <p className="text-xs text-gray-500">
-                  Hand every paper receipt (<strong>Beleg</strong>) to Finance – without it nothing is paid. Claims are paid monthly; above €100 earlier.
-                </p>
                 {event.type === "weekend_trip" && (
                   <details className="text-sm">
                     <summary className="cursor-pointer text-esn">Attractions or museums? Ask the Treasurer first</summary>
@@ -279,23 +297,93 @@ export default async function HandInPage({ params }: { params: Promise<{ id: str
           </Step>
 
           {esn && (
-            <Step id="esn-activities" title="ESN Activities" state={states.esn} open={first === "esn"} detail={ESN_STATUS_LABEL[esn.status.state]}>
+            <Step id="esn-activities" icon={Globe2} title="ESN Activities" state={states.esn} open={first === "esn"} detail={ESN_STATUS_LABEL[esn.status.state]}>
               <EsnUpload eventId={id} status={esn.status} canSet={hasRole(viewer.roles, "executive")} />
             </Step>
           )}
         </ul>
-      </Card>
+      </section>
+      </div>
+
+      <aside className="space-y-5 lg:sticky lg:top-4" aria-label="About the hand-in">
+        <section className="hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:block">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Progress</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums text-gray-900">
+            {doneCount}
+            <span className="text-lg font-semibold text-gray-400">/{counted.length}</span>
+          </p>
+          <p className="text-sm text-gray-600">
+            {doneCount === counted.length ? "Everything is handed in – thank you!" : nextOpen >= 0 ? `Next: ${STEP_NAMES[nextOpen]}` : started ? "The rest is up to the OC and the team." : "Starts on the day of the event."}
+          </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            {counted.map((x, i) => (
+              <li key={STEP_NAMES[i]} className="flex items-center gap-2">
+                <StepMarker state={x} size="sm" />
+                <span className={x === "done" ? "text-gray-500" : x === "todo" ? "font-medium text-gray-900" : "text-gray-500"}>{STEP_NAMES[i]}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900">Good to know</h2>
+          <ul className="mt-3 space-y-3 text-sm text-gray-600">
+            <Tip icon={Receipt}>
+              Every expense needs its paper receipt (<strong className="font-semibold text-gray-800">Beleg</strong>) handed to Finance – without it nothing is paid.
+            </Tip>
+            <Tip icon={Banknote}>Claims are paid monthly, above €100 earlier, to the IBAN or PayPal saved under Expenses.</Tip>
+            <Tip icon={Camera}>Photos go into the event&apos;s own Drive folder – the app counts them by itself.</Tip>
+          </ul>
+          <Link href="/me/reimbursements" className="mt-4 inline-block text-sm font-semibold text-esn hover:underline">
+            Your expenses →
+          </Link>
+        </section>
+      </aside>
     </div>
+  );
+}
+
+function Tip({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-esn" aria-hidden="true" />
+      <span>{children}</span>
+    </li>
   );
 }
 
 type StepState = "done" | "todo" | "later" | "others";
 
-const TAGS: Record<Exclude<StepState, "done">, { label: string; className: string }> = {
+const TAGS: Record<StepState, { label: string; className: string }> = {
+  done: { label: "Done", className: "bg-emerald-50 text-emerald-700" },
   todo: { label: "To do", className: "bg-amber-100 text-amber-900" },
   later: { label: "Later", className: "bg-gray-100 text-gray-500" },
   others: { label: "OC", className: "bg-gray-100 text-gray-600" },
 };
+
+/** The step's state as a round marker: ✓, the step's icon (to do), dashed (later), a person (the OC's). */
+function StepMarker({ state, icon: Icon, size = "md" }: { state: StepState; icon?: LucideIcon; size?: "sm" | "md" }) {
+  const box = size === "md" ? "h-9 w-9" : "h-5 w-5";
+  const glyph = size === "md" ? "h-[18px] w-[18px]" : "h-3 w-3";
+  if (state === "done")
+    return (
+      <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white", box)}>
+        <Check role="img" aria-label="Done" className={glyph} strokeWidth={3} />
+      </span>
+    );
+  const Glyph = state === "later" ? CircleDashed : state === "others" ? UserRound : (Icon ?? CircleDashed);
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full",
+        box,
+        state === "todo" ? "bg-amber-50 text-amber-700 ring-2 ring-amber-300" : "bg-gray-100 text-gray-400"
+      )}
+      aria-hidden="true"
+    >
+      <Glyph className={glyph} />
+    </span>
+  );
+}
 
 /**
  * One step of the hand-in: ✓ / To do / Later (/ OC for a helper), what it
@@ -304,6 +392,7 @@ const TAGS: Record<Exclude<StepState, "done">, { label: string; className: strin
 function Step({
   id,
   testId,
+  icon,
   title,
   state,
   detail,
@@ -314,6 +403,7 @@ function Step({
 }: {
   id: string;
   testId?: string;
+  icon: LucideIcon;
   title: string;
   state: StepState;
   detail: React.ReactNode;
@@ -324,15 +414,12 @@ function Step({
 }) {
   const head = (
     <>
-      <span className="mt-0.5 flex w-12 shrink-0 justify-center">
-        {state === "done" ? (
-          <Check role="img" aria-label="Done" className="h-4 w-4 text-emerald-600" strokeWidth={3} />
-        ) : (
-          <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", TAGS[state].className)}>{TAGS[state].label}</span>
-        )}
-      </span>
+      <StepMarker state={state} icon={icon} />
       <span className="min-w-0 flex-1">
-        <span className={cn("block text-sm font-medium", state === "done" ? "text-gray-500" : "text-gray-900")}>{title}</span>
+        <span className="flex flex-wrap items-center gap-2">
+          <span className={cn("text-sm font-semibold", state === "done" ? "text-gray-600" : "text-gray-900")}>{title}</span>
+          {state !== "done" && <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", TAGS[state].className)}>{TAGS[state].label}</span>}
+        </span>
         <span className="block text-xs text-gray-600">{detail}</span>
       </span>
       {extra}
@@ -341,10 +428,10 @@ function Step({
   // Without anything to unfold: a plain row, leading to its tab.
   if (!children) {
     return (
-      <li id={id} data-testid={testId} data-state={state} className="flex scroll-mt-4 items-start gap-3 px-5 py-3">
+      <li id={id} data-testid={testId} data-state={state} className="flex scroll-mt-4 items-center gap-3 px-4 py-3 sm:px-5">
         {head}
         {link && (
-          <Link href={link.href} className="shrink-0 text-xs font-medium text-esn hover:underline">
+          <Link href={link.href} className="shrink-0 text-sm font-semibold text-esn hover:underline">
             {link.label}
           </Link>
         )}
@@ -354,13 +441,11 @@ function Step({
   return (
     <li data-testid={testId} data-state={state}>
       <Fold id={id} defaultOpen={open} className="group scroll-mt-4">
-        <summary className="flex cursor-pointer list-none items-start gap-3 px-5 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 sm:px-5 [&::-webkit-details-marker]:hidden">
           {head}
-          <span aria-hidden="true" className="mt-0.5 shrink-0 text-xs text-gray-400 transition-transform group-open:rotate-180">
-            ▾
-          </span>
+          <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="space-y-3 px-5 pb-4 sm:pl-[5.75rem]">{children}</div>
+        <div className="space-y-3 px-4 pb-5 sm:pl-[4.5rem] sm:pr-5">{children}</div>
       </Fold>
     </li>
   );

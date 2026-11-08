@@ -27,6 +27,7 @@ import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, 
 import { describeError, useAction } from "@/components/ActionButton";
 import { reviewDescription, saveDescription, submitDescription } from "@/app/actions/descriptions";
 import { cn } from "@/lib/utils";
+import { AlertCircle, CheckCircle2, History, Loader2, PencilLine, Send, Users } from "lucide-react";
 import type { EventAddress } from "@/lib/address";
 import type { EventMeeting } from "@/lib/meeting";
 import { VenueFields } from "./VenueFields";
@@ -46,6 +47,15 @@ const STATUS: Record<string, { label: string; tone: "gray" | "blue" | "amber" | 
 const STEP_TITLES: Record<StepId, string> = { basics: "Basics", intro: "Intro", program: "Programme", extras: "Details", esn: "For ESN Activities" };
 /** The steps that make up the published text (left); "esn" sits below the preview. */
 const TEXT_STEPS: StepId[] = ["basics", "intro", "program", "extras"];
+
+/** A step's number before its title (redesign 2026-11-08): the post's four parts, then ESN Activities, then the hand-off. */
+function StepNumber({ n, done = false }: { n: number; done?: boolean }) {
+  return (
+    <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold", done ? "bg-emerald-500 text-white" : "bg-esn/10 text-esn")} aria-hidden="true">
+      {n}
+    </span>
+  );
+}
 const AUTOSAVE_MS = 800;
 
 interface Props {
@@ -308,11 +318,21 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
       )}
       <div className="space-y-4">
         {sorting && <SortingBar eventId={eventId} sorting={sorting} onCategory={followCategory} />}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
           <Badge tone={st.tone} data-testid="description-status">
             {st.label}
           </Badge>
-          <span className="text-xs text-gray-500" data-testid="save-state" aria-live="polite">
+          <span className={cn("inline-flex items-center gap-1 text-xs", saveState === "error" ? "text-red-700" : saveState === "saved" ? "text-emerald-700" : "text-gray-500")}>
+            {saveState === "saving" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : saveState === "saved" ? (
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : saveState === "error" ? (
+              <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          <span data-testid="save-state" aria-live="polite">
             {saveState === "new"
               ? "Not saved yet – prefilled from the event, saves as you type"
               : saveState === "saved"
@@ -323,12 +343,15 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     ? "Not saved"
                     : "Unsaved changes"}
           </span>
+          </span>
           {others.length > 0 && (
-            <span className="text-xs text-esn" data-testid="presence">
+            <span className="inline-flex items-center gap-1 text-xs text-esn" data-testid="presence">
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
               Also editing: {others.join(", ")}
             </span>
           )}
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setShowTemplates((v) => !v)}>
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => setShowTemplates((v) => !v)}>
+            <History className="h-3.5 w-3.5" aria-hidden="true" />
             {showTemplates ? "Hide templates" : "Start from a previous event"}
           </Button>
         </div>
@@ -373,9 +396,10 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
           </Card>
         )}
 
-        {TEXT_STEPS.map((step) => (
+        {TEXT_STEPS.map((step, i) => (
           <Card key={step} id={`step-${step}`} className={cn("scroll-mt-40", changed.has(step) && "ring-2 ring-esn/40")}>
             <CardHeader>
+              <StepNumber n={i + 1} />
               <CardTitle>{STEP_TITLES[step]}</CardTitle>
               {changed.has(step) && <Badge tone="blue">Changed since the review</Badge>}
               {validation.errors[step].length > 0 && <Badge tone="amber">{validation.errors[step].length} to fix</Badge>}
@@ -464,7 +488,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
             </span>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm leading-relaxed break-words" data-testid="preview" dangerouslySetInnerHTML={{ __html: rendered.html }} />
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed break-words shadow-inner" data-testid="preview" dangerouslySetInnerHTML={{ __html: rendered.html }} />
             {validation.warnings.length > 0 && (
               <ul className="mt-3 space-y-1 text-xs text-amber-800">
                 {validation.warnings.map((w) => (
@@ -477,6 +501,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
 
         <Card data-testid="esn-details" id="step-esn" className={cn("scroll-mt-40", changed.has("esn") && "ring-2 ring-esn/40")}>
           <CardHeader>
+            <StepNumber n={TEXT_STEPS.length + 1} />
             <CardTitle>{STEP_TITLES.esn}</CardTitle>
             {changed.has("esn") && <Badge tone="blue">Changed since the review</Badge>}
             {validation.errors.esn.length > 0 && <Badge tone="amber">{validation.errors.esn.length} to fix</Badge>}
@@ -550,6 +575,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
 
         <Card>
           <CardHeader>
+            <StepNumber n={TEXT_STEPS.length + 2} done={status === "approved" || status === "published"} />
             <CardTitle>Comms hand-off</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -563,6 +589,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
                     run(submitDescription, { event_id: eventId }, () => setStatus("submitted"), "Submitted – Comms reviews it next. You'll see their answer here.");
                   }}
                 >
+                  <Send className="h-4 w-4" aria-hidden="true" />
                   Submit for Comms review
                 </Button>
                 {!validation.ok && <OpenErrors errors={openErrors} />}

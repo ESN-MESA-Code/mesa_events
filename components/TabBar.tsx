@@ -7,6 +7,7 @@
 // stepper too (round 2026-11-03).
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Tab {
@@ -17,6 +18,8 @@ export interface Tab {
   note?: string;
   /** The tab is a step: done ✓, the current one marked, still to do grey. */
   step?: { state: "done" | "current" | "todo"; late?: boolean; due?: string };
+  /** An icon before the label (the event's tabs, redesign 2026-11-08). */
+  icon?: LucideIcon;
 }
 
 const STEP_SR = { done: "done", current: "current step", todo: "not yet" } as const;
@@ -55,7 +58,7 @@ export function TabBar({ label, tabs, testId }: { label: string; tabs: Tab[]; te
                 t.step?.state === "todo" && !t.active && "text-gray-400"
               )}
             >
-              <span className="flex items-center gap-1">
+              <span className={cn("flex items-center", t.icon ? "gap-1.5" : "gap-1")}>
                 {t.step && <span className="sr-only">{STEP_SR[t.step.state]}: </span>}
                 {t.step?.state === "done" && (
                   <span aria-hidden="true" className="text-emerald-600">
@@ -63,6 +66,7 @@ export function TabBar({ label, tabs, testId }: { label: string; tabs: Tab[]; te
                   </span>
                 )}
                 {t.step?.state === "current" && <span aria-hidden="true" className={cn("h-2 w-2 rounded-full", t.step.late ? "bg-red-600" : "bg-esn-orange")} />}
+                {t.icon && <t.icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", t.active ? "text-esn" : "text-gray-400")} />}
                 {t.label}
                 {t.note && <span className="h-2 w-2 rounded-full bg-esn-orange" title={t.note} aria-label={t.note} />}
               </span>

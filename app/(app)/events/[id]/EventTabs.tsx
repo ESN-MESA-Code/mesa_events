@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { ClipboardList, FileText, LayoutDashboard, PackageCheck, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { backLink, withFrom } from "@/lib/breadcrumbs";
 import { stepLink, type NextStep } from "@/lib/checklist";
@@ -26,14 +27,14 @@ export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Reco
   const pathname = usePathname();
   const from = useSearchParams().get("from");
   const tabs = [
-    { href: `/events/${id}`, label: "Overview" },
-    { href: `/events/${id}/description`, label: "Description" },
-    { href: `/events/${id}/attendance`, label: "Attendance" },
-    { href: `/events/${id}/hand-in`, label: "Hand-in" },
+    { href: `/events/${id}`, label: "Overview", icon: LayoutDashboard },
+    { href: `/events/${id}/description`, label: "Description", icon: FileText },
+    { href: `/events/${id}/attendance`, label: "Attendance", icon: ClipboardList },
+    { href: `/events/${id}/hand-in`, label: "Hand-in", icon: PackageCheck },
     // The cash box (round 2026-10-30): staff, Events, Finance and executives.
-    ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash box" }] : []),
+    ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash box", icon: Wallet }] : []),
   ];
-  return <TabBar label="Event" tabs={tabs.map((t) => ({ href: withFrom(t.href, from), label: t.label, active: pathname === t.href, note: notes[t.label] }))} />;
+  return <TabBar label="Event" tabs={tabs.map((t) => ({ href: withFrom(t.href, from), label: t.label, icon: t.icon, active: pathname === t.href, note: notes[t.label] }))} />;
 }
 
 /**

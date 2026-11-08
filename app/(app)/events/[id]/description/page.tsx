@@ -5,7 +5,10 @@ import { prefillFromEvent } from "@/lib/description/prefill";
 import { searchEntry, type SearchEntry } from "@/lib/description/search";
 import { dueUrgency, formatDateTime, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
-import { Alert, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { Panel } from "@/components/Panel";
+import { Callout } from "@/components/EventKit";
+import { CalendarClock, FileText } from "lucide-react";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { eventAddress, hasAddress } from "@/lib/address";
 import { eventMeeting } from "@/lib/meeting";
@@ -27,14 +30,10 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
     const text = description?.published_text ?? null;
     const fields = description ? coerceFields(description.fields) : null;
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Description</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel title="Description" icon={FileText} description={isStaff || isTeam ? "The OC writes it; Comms reviews and publishes it." : undefined} className="max-w-3xl">
           {isStaff || isTeam ? (
             fields ? (
-              <div className="rounded-lg bg-gray-50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderDescription(fields).html }} />
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderDescription(fields).html }} />
             ) : (
               <EmptyState>The OC has not started the description yet.</EmptyState>
             )
@@ -43,8 +42,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
           ) : (
             <EmptyState>The description is not published yet.</EmptyState>
           )}
-        </CardContent>
-      </Card>
+      </Panel>
     );
   }
 
@@ -96,8 +94,12 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
   return (
     <div className="space-y-4">
       {deadline && (
-        <Alert tone={late || urgency === "urgent" ? "error" : urgency === "soon" ? "warning" : "info"} data-testid="description-deadline">
-          Descriptions for this month are due <strong>{formatDateTime(deadline)}</strong>.{" "}
+        <Callout
+          tone={late || urgency === "urgent" ? "error" : urgency === "soon" ? "warning" : "info"}
+          icon={CalendarClock}
+          title={<>Descriptions for this month are due {formatDateTime(deadline)}.</>}
+          data-testid="description-deadline"
+        >
           {notSubmitted
             ? Date.parse(deadline) < now
               ? "The deadline has passed."
@@ -105,7 +107,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
             : description.status === "changes_requested"
               ? "It was submitted, so it is not cancelled – but fix it soon, it counts as late after the deadline."
               : null}
-        </Alert>
+        </Callout>
       )}
       <DescriptionEditor
         eventId={id}

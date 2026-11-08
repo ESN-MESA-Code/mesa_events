@@ -3,9 +3,10 @@ import { loadEventForPage } from "@/lib/events";
 import { formatCents, formatDateTime, formatShortDate, isoToBerlinInput, nowMs } from "@/lib/dates";
 import { describeActivity } from "@/lib/activity";
 import { understaffedNote } from "@/lib/checklist";
-import { Clock, MapPin, MessageSquare, Navigation, Ticket, UserPlus, Users } from "lucide-react";
+import { Ban, CalendarX2, Clock, History, Info, MapPin, Megaphone, MessageSquare, Navigation, Ticket, TriangleAlert, UserPlus, UserX, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Alert, buttonVariants, EmptyState } from "@/components/ui";
+import { buttonVariants, EmptyState } from "@/components/ui";
+import { Avatar, Callout } from "@/components/EventKit";
 import { Panel } from "@/components/Panel";
 import { cn } from "@/lib/utils";
 import { ActionButton } from "@/components/ActionButton";
@@ -74,15 +75,16 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="space-y-6">
         {event.status === "understaffed" && (
-          <Alert tone="warning" id="decide" className="scroll-mt-4" data-testid="understaffed-banner">
-            <p className="font-medium">This event is short of people.</p>
-            <p className="mt-1">
-              {slot?.open_oc ? "It has no OC. " : ""}
-              {slot && slot.open_helpers > 0 ? `${plural(slot.open_helpers, "helper slot")} ${isAre(slot.open_helpers)} open. ` : ""}
-              {understaffedNote(hasOc, isOc ? "oc" : isEvents ? "events" : "other")}
-            </p>
-            {canManage && (
-              <div className="mt-2 flex gap-2">
+          <Callout
+            tone="warning"
+            icon={TriangleAlert}
+            title="This event is short of people."
+            id="decide"
+            className="scroll-mt-4"
+            data-testid="understaffed-banner"
+            actions={
+              canManage && (
+                <>
                 {hasOc && (
                   <ActionButton action={decideUnderstaffed} input={{ event_id: id, decision: "run" }} variant="success" done="It runs with the team it has – open slots can still be claimed.">
                     Run it anyway
@@ -101,35 +103,39 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                 ) : (
                   mayAsk && upcoming && <RequestCancellationForm eventId={id} title={event.title} when={when} />
                 )}
-              </div>
-            )}
-          </Alert>
+                </>
+              )
+            }
+          >
+            <p>
+              {slot?.open_oc ? "It has no OC. " : ""}
+              {slot && slot.open_helpers > 0 ? `${plural(slot.open_helpers, "helper slot")} ${isAre(slot.open_helpers)} open. ` : ""}
+              {understaffedNote(hasOc, isOc ? "oc" : isEvents ? "events" : "other")}
+            </p>
+          </Callout>
         )}
 
         {openRequest && (
-          <Alert tone="warning" data-testid="cancellation-request">
-            <p className="font-medium">
-              {requester} asked the Events team to cancel this event ({formatShortDate(openRequest.requested_at)}).
-            </p>
-            <p className="mt-1">“{openRequest.reason}” – it stays on until the Events team decides.</p>
+          <Callout tone="warning" icon={CalendarX2} title={`${requester} asked the Events team to cancel this event (${formatShortDate(openRequest.requested_at)}).`} data-testid="cancellation-request">
+            <p>“{openRequest.reason}” – it stays on until the Events team decides.</p>
             <CancellationDecision requestId={openRequest.id} title={event.title} when={when} canDecide={isEvents && upcoming} canWithdraw={isOc && !isEvents} />
-          </Alert>
+          </Callout>
         )}
         {!openRequest && lastRequest?.decision === "declined" && (isOc || isEvents) && event.status !== "cancelled" && (
-          <Alert tone="info" data-testid="cancellation-declined">
-            The Events team kept this event on ({formatShortDate(lastRequest.decided_at!)}): “{lastRequest.decision_note}”
-          </Alert>
+          <Callout tone="info" icon={Info} title={`The Events team kept this event on (${formatShortDate(lastRequest.decided_at!)}).`} data-testid="cancellation-declined">
+            “{lastRequest.decision_note}”
+          </Callout>
         )}
 
         {event.status === "cancelled" && (
-          <Alert tone="error" data-testid="cancelled-banner">
-            <p className="font-medium">This event is cancelled.</p>
-            <p className="mt-1">
-              {event.cancelled_at ? `Cancelled ${formatShortDate(event.cancelled_at)}` : "Cancelled"}
-              {event.cancel_reason ? ` – ${event.cancel_reason}` : ""}. The team and the Chat space were told; receipts already registered stay valid.
-            </p>
-            {isEvents && upcoming && (
-              <div className="mt-2">
+          <Callout
+            tone="error"
+            icon={Ban}
+            title="This event is cancelled."
+            data-testid="cancelled-banner"
+            actions={
+              isEvents &&
+              upcoming && (
                 <ActionButton
                   action={reopenEvent}
                   input={{ event_id: id }}
@@ -139,12 +145,17 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
                 >
                   Reopen the event
                 </ActionButton>
-              </div>
-            )}
-          </Alert>
+              )
+            }
+          >
+            <p>
+              {event.cancelled_at ? `Cancelled ${formatShortDate(event.cancelled_at)}` : "Cancelled"}
+              {event.cancel_reason ? ` – ${event.cancel_reason}` : ""}. The team and the Chat space were told; receipts already registered stay valid.
+            </p>
+          </Callout>
         )}
 
-        <Panel title="Details">
+        <Panel title="Details" icon={Info}>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:gap-x-6">
             <Fact icon={Clock} label="Starts">
               {formatDateTime(event.starts_at)}
@@ -198,6 +209,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
 
         <Panel
           title="Team"
+          icon={Users}
           aside={
             <span className="text-sm text-gray-600">
               <span className="font-semibold tabular-nums text-gray-900">
@@ -223,12 +235,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
               .sort((a, b) => (a.role === b.role ? 0 : a.role === "oc" ? -1 : 1))
               .map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                  <span
-                    className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", a.role === "oc" ? "bg-esn text-white" : "bg-esn/10 text-esn-dark")}
-                    aria-hidden="true"
-                  >
-                    {initials(name(a))}
-                  </span>
+                  <Avatar name={name(a)} strong={a.role === "oc"} />
                   <span className="min-w-0 flex-1 text-sm">
                     <span className="block font-medium text-gray-900">
                       {name(a)}
@@ -285,7 +292,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
         </Panel>
 
         {mayReport && active.some((a) => a.profile_id !== viewer.id) && (
-          <Panel title="Who was missing?" id="attendance-report">
+          <Panel title="Who was missing?" icon={UserX} id="attendance-report">
             <AttendanceReport
               eventId={id}
               members={active
@@ -299,7 +306,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
 
       <div className="space-y-6">
         <EventChecklist eventId={id} />
-        <Panel title="Chat space" id="chat-space">
+        <Panel title="Chat space" icon={MessageSquare} id="chat-space">
           <div className="space-y-3 text-sm" data-testid="chat-space">
             {event.chat_space_url ? (
               <a href={event.chat_space_url} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline" }), "w-full")}>
@@ -322,7 +329,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
           </div>
         </Panel>
         {(published ?? []).length > 0 && (
-          <Panel title="Chat space and advertising">
+          <Panel title="Published on" icon={Megaphone}>
             <ul className="divide-y divide-gray-100 text-sm" data-testid="published-on">
               {(published ?? []).map((p) => {
                 const state = p.state as ChannelState;
@@ -346,7 +353,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
         )}
         {myAssignment && !upcoming && <p className="text-xs text-gray-500">The event has started; dropping out is no longer possible here.</p>}
         {(activity.length > 0 || (rawLog && (log ?? []).length > 0)) && (
-          <Panel title="Recent activity">
+          <Panel title="Recent activity" icon={History}>
             <ul className="space-y-3 text-sm text-gray-700" data-testid="activity">
               {activity.map((l) => (
                 <li key={l.id} className="relative flex gap-3 pl-4 before:absolute before:left-0 before:top-1.5 before:h-2 before:w-2 before:rounded-full before:bg-esn/30">
@@ -372,12 +379,6 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
       </div>
     </div>
   );
-}
-
-/** "Chloé Dubois" → "CD". */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }
 
 /** One fact of the event: an icon, a small label, the value. */

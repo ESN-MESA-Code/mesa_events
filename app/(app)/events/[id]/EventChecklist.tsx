@@ -6,6 +6,7 @@ import { DueLabel } from "@/components/status";
 import { StepIcon } from "@/components/StepIcon";
 import { checklistInput } from "@/lib/eventStatus";
 import { Panel } from "@/components/Panel";
+import { ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // What still has to happen for this event (OC, helpers and the teams), with
@@ -20,6 +21,7 @@ export async function EventChecklist({ eventId }: { eventId: string }) {
   return (
     <Panel
       title="Checklist"
+      icon={ListChecks}
       aside={
         <span className="text-sm text-gray-600">
           <span className="font-semibold tabular-nums text-gray-900">
