@@ -20,6 +20,8 @@ import {
   normalizeTime,
   paragraph,
   renderDescription,
+  renderLines,
+  splitUrls,
   splitPriceText,
   validateAll,
   validateStep,
@@ -115,36 +117,35 @@ describe("normalisers (README table of the bot)", () => {
 });
 
 describe("rendering the house template", () => {
-  it("renders exactly the bot's template", () => {
+  it("renders exactly the house template (layout B, round 2026-11-08)", () => {
     const r = renderDescription(filled({ importantHeading: "meeting point", important: "Main entrance", weather: true }));
     expect(r.chat).toBe(
       [
+        "*PUB QUIZ*",
+        "",
         "🗓️ Monday, 29 September 2025",
         "⏰ 19:30",
         "📍 LMU Main Building",
         "💸 € 9.50 (ESNcard holders € 7.50)",
         "",
-        "*Dear Internationals,*",
+        "Dear Internationals,",
         "",
-        "Are you ready for a night of trivia? 🎉",
+        "are you ready for a night of trivia? 🎉",
         "",
         "Test your knowledge in teams. Prizes for the best three teams!",
         "",
-        "*🤔 WHAT DOES THE EVENT LOOK LIKE?*",
+        "*🗺️ THE PLAN*",
+        "→ Teams of four",
+        "→ Six rounds",
         "",
-        "• Teams of four",
-        "• Six rounds",
-        "",
-        "*🎒 WHAT SHOULD I BRING?*",
-        "",
+        "*🎒 BRING ALONG*",
         "• Good mood 😄",
         "• Water 💧",
         "",
         "*⚠️ MEETING POINT*",
-        "",
         "• Main entrance",
         "",
-        CONFIG.WEATHER_NOTE,
+        "🌧️ Weather-dependent! Check Telegram and Instagram for updates before you leave.",
         "",
         "We can’t wait to see you there! ✨",
         "",
@@ -154,9 +155,37 @@ describe("rendering the house template", () => {
       ].join("\n")
     );
     expect(r.plain).not.toContain("*");
-    expect(r.html).toContain("<b>Dear Internationals,</b>");
-    expect(r.markdown).toContain("**Dear Internationals,**");
+    expect(r.html).toContain("<b>PUB QUIZ</b>");
+    expect(r.markdown).toContain("**PUB QUIZ**");
     expect(r.bold).toHaveLength(4);
+  });
+
+  it("links web addresses in the preview/ESN HTML and pretix Markdown; Chat and Telegram keep them as typed (round 2026-11-08)", () => {
+    const r = renderDescription(
+      filled({ intro: "Route on https://www.komoot.com/tour/12_34?x=1&y=2. Photos (https://de.wikipedia.org/wiki/Tegernsee_(See)) too!" })
+    );
+    expect(r.html).toContain(
+      'Route on <a href="https://www.komoot.com/tour/12_34?x=1&amp;y=2" target="_blank" rel="noopener noreferrer">https://www.komoot.com/tour/12_34?x=1&amp;y=2</a>. Photos ('
+    );
+    expect(r.html).toContain('<a href="https://de.wikipedia.org/wiki/Tegernsee_(See)" target="_blank" rel="noopener noreferrer">https://de.wikipedia.org/wiki/Tegernsee_(See)</a>) too!');
+    expect(r.markdown).toContain("Route on <https://www.komoot.com/tour/12_34?x=1&y=2>. Photos (<https://de.wikipedia.org/wiki/Tegernsee_(See)>) too!");
+    expect(r.chat).toContain("Route on https://www.komoot.com/tour/12_34?x=1&y=2. Photos");
+    expect(r.telegram).toContain("Route on https://www.komoot.com/tour/12_34?x=1&amp;y=2. Photos");
+    expect(r.telegram).not.toContain("<a ");
+    // Bold lines keep their link; only http(s) addresses with a host are linked.
+    expect(renderLines([{ text: "Sign up: https://pretix.eu/esnmesa/x/", bold: true }]).html).toBe(
+      '<b>Sign up: <a href="https://pretix.eu/esnmesa/x/" target="_blank" rel="noopener noreferrer">https://pretix.eu/esnmesa/x/</a></b>'
+    );
+    expect(renderLines([{ text: "javascript:alert(1) https:// http://x <b>", bold: false }]).html).toBe("javascript:alert(1) https:// http://x &lt;b&gt;");
+    expect(splitUrls("see https://a.de/x.")).toEqual([
+      { text: "see ", url: false },
+      { text: "https://a.de/x", url: true },
+      { text: ".", url: false },
+    ]);
+  });
+
+  it("leaves the title line out when there is no title", () => {
+    expect(renderDescription(filled({ title: "" })).plain.split("\n")[0]).toBe("🗓️ Monday, 29 September 2025");
   });
 
   it("shows placeholders for missing parts, so the preview always works", () => {
@@ -302,14 +331,21 @@ describe("the meeting point (round 2026-11-02)", () => {
   const hike = (over: Partial<DescriptionFields> = {}) =>
     filled({ title: "Hike at the Tegernsee", time: "9:00", venue: "Tegernsee", meeting: "München Hauptbahnhof (Bayerstraße 10a, 80335 München)", meetingTime: "8.15", ...over });
 
-  it("has its own line under the venue, only when there is one", () => {
+  it("comes first, then the start with the venue – only when there is one (layout B)", () => {
     const lines = renderDescription(hike()).plain.split("\n");
-    expect(lines.slice(0, 4)).toEqual(["🗓️ Monday, 29 September 2025", "⏰ 09:00", "📍 Tegernsee", "🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München) at 08:15"]);
-    expect(renderDescription(hike({ meetingTime: "" })).plain).toContain("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München)\n");
+    expect(lines.slice(0, 6)).toEqual([
+      "HIKE AT THE TEGERNSEE",
+      "",
+      "🗓️ Monday, 29 September 2025",
+      "🤝 08:15 · München Hauptbahnhof (Bayerstraße 10a, 80335 München)",
+      "📍 09:00 · Tegernsee",
+      "💸 € 9.50 (ESNcard holders € 7.50)",
+    ]);
+    expect(renderDescription(hike({ meetingTime: "" })).plain).toContain("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München)\n📍 09:00 · Tegernsee\n");
     expect(renderDescription(hike({ meetingTime: "tba" })).plain).toContain("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München)\n");
-    // Without a meeting point the template is unchanged.
-    expect(renderDescription(filled()).plain).not.toContain("Meeting point");
-    expect(renderDescription(filled()).plain.split("\n")[3]).toBe("💸 € 9.50 (ESNcard holders € 7.50)");
+    // Without a meeting point: time and venue on their own lines.
+    expect(renderDescription(filled()).plain).not.toContain("🤝");
+    expect(renderDescription(filled()).plain.split("\n").slice(2, 6)).toEqual(["🗓️ Monday, 29 September 2025", "⏰ 19:30", "📍 LMU Main Building", "💸 € 9.50 (ESNcard holders € 7.50)"]);
   });
 
   it("checks the meeting time; a meeting time after the start is only a warning", () => {

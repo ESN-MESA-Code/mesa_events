@@ -34,14 +34,14 @@ test("the OC sets a meeting point; the event page, the post and the helper's Hom
 
   await test.step("a new description has the meeting point on its own line; no venue warning", async () => {
     await page.goto(`/events/${event.id}/description`);
-    await expect(page.getByTestId("preview")).toContainText("📍 Bahnhof Tegernsee (Bahnhofplatz 1, 83684 Tegernsee)");
-    await expect(page.getByTestId("preview")).toContainText("🤝 Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München) at 08:15");
+    await expect(page.getByTestId("preview")).toContainText("🤝 08:15 · München Hauptbahnhof (Bayerstraße 10a, 80335 München)");
+    await expect(page.getByTestId("preview")).toContainText("· Bahnhof Tegernsee (Bahnhofplatz 1, 83684 Tegernsee)");
     await expect(page.getByTestId("meets-elsewhere")).toBeChecked();
     await expect(page.getByTestId("venue-mismatch")).toHaveCount(0);
     await expect(page.getByTestId("meeting-mismatch")).toHaveCount(0);
     // Another meeting time in the fields: the post follows, the event too.
     await page.getByTestId("meeting-fields").getByLabel("Meeting time").fill("07:50");
-    await expect(page.getByTestId("preview")).toContainText("Meeting point: München Hauptbahnhof (Bayerstraße 10a, 80335 München) at 07:50");
+    await expect(page.getByTestId("preview")).toContainText("🤝 07:50 · München Hauptbahnhof (Bayerstraße 10a, 80335 München)");
     await expect.poll(async () => (await admin.from("events").select("meeting_time").eq("id", event.id).single()).data?.meeting_time).toBe("07:50:00");
   });
 

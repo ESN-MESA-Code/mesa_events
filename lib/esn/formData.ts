@@ -167,7 +167,7 @@ export function buildEsnFormData(i: EsnFormInput): EsnFormData {
     types: type ? [type.id] : [],
     objectives: cls ? esnObjectiveIds(cls) : [],
     goal: oneLine(i.classification?.esnGoal ?? "") || (d ? esnGoal(d) : ""),
-    description: d ? `<p>${renderDescription(d).html}</p>` : "",
+    description: d ? `<p>${renderDescription(d, { title: false }).html}</p>` : "",
     audience: [...ESN_IDS.audience],
     funding: [fee ? ESN_IDS.fundingFee : ESN_IDS.fundingOrganiser],
     fee,

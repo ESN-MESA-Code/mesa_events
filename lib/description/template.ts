@@ -8,9 +8,7 @@ import { plural } from "@/lib/plural";
 export const CONFIG = {
   BULLET: "•",
   DEFAULT_IMPORTANT_HEADING: "IMPORTANT INFORMATION",
-  WEATHER_NOTE:
-    "🌧️ Depending on the weather conditions, we might have to cancel the event! " +
-    "Make sure to check Telegram and Instagram for updates on this trip!",
+  WEATHER_NOTE: "🌧️ Weather-dependent! Check Telegram and Instagram for updates before you leave.",
   SIGNATURE: ["With lots of love,", "Team ESN MESA", "#MESAlovesYOU 🥨🩷💜"],
   // Hard limit for a whole description (Google Chat and Telegram messages allow 4,096 characters).
   MAX_CHARS: 4096,
@@ -515,41 +513,51 @@ export interface Rendered {
 }
 
 /** Renders the template. Missing parts become [PLACEHOLDERS] so the preview always works. */
-export function renderDescription(d: DescriptionFields): Rendered {
+export function renderDescription(d: DescriptionFields, opts: { title?: boolean } = {}): Rendered {
   const lines: Line[] = [];
   const add = (text: string, bold = false) => lines.push({ text, bold });
   const gap = () => add("");
   const list = (items: string[], placeholder?: string) => (items.length ? items : placeholder ? [placeholder] : []).forEach((i) => add(`${CONFIG.BULLET} ${i}`));
 
+  // Layout "B" (round 2026-11-08): the name on top, then the facts in the
+  // order people need them (meet first, then where it starts), headings
+  // straight above their lists.
+  // Left out where the name is a field of its own (the ESN Activities form).
+  const title = opts.title === false ? "" : oneLine(d.title);
+  if (title) {
+    add(title.toUpperCase(), true);
+    gap();
+  }
   add(`🗓️ ${formatLongDate(d.dateIso) || "[DAY], [DATE] [MONTH] [YEAR]"}`);
-  add(`⏰ ${normalizeTime(d.time).value || "[TIME]"}`);
-  add(`📍 ${oneLine(d.venue) || "[VENUE]"}`);
+  const time = normalizeTime(d.time).value || "[TIME]";
+  const venue = oneLine(d.venue) || "[VENUE]";
   const meeting = oneLine(d.meeting);
   if (meeting) {
     const at = normalizeTime(d.meetingTime).value;
-    add(`🤝 Meeting point: ${meeting}${at && at !== "TBA" ? ` at ${at}` : ""}`);
+    add(at && at !== "TBA" ? `🤝 ${at} · ${meeting}` : `🤝 Meeting point: ${meeting}`);
+    add(`📍 ${time} · ${venue}`);
+  } else {
+    add(`⏰ ${time}`);
+    add(`📍 ${venue}`);
   }
   add(`💸 ${formatPrice(d.price, d.priceNote).value || "[PRICE]"}`);
   gap();
-  add("Dear Internationals,", true);
+  add("Dear Internationals,");
   gap();
-  add(`Are you ready for ${normalizeHook(d.hook) || "[EXCITING HOOK]"}? 🎉`);
+  add(`are you ready for ${normalizeHook(d.hook) || "[EXCITING HOOK]"}? 🎉`);
   gap();
   add(paragraph(d.intro) || "[2–4 SENTENCES DESCRIBING THE EVENT]");
   gap();
-  add("🤔 WHAT DOES THE EVENT LOOK LIKE?", true);
+  add("🗺️ THE PLAN", true);
+  (bullets(d.program).length ? bullets(d.program) : ["[WHAT WILL HAPPEN?]"]).forEach((i) => add(`→ ${i}`));
   gap();
-  list(bullets(d.program), "[WHAT WILL HAPPEN?]");
-  gap();
-  add("🎒 WHAT SHOULD I BRING?", true);
-  gap();
+  add("🎒 BRING ALONG", true);
   list(bullets(d.bring), "[ITEM]");
 
   const important = bullets(d.important);
   if (important.length) {
     gap();
     add(`⚠️ ${importantHeading(d)}`, true);
-    gap();
     list(important);
   }
   if (d.weather === true) {
@@ -564,20 +572,64 @@ export function renderDescription(d: DescriptionFields): Rendered {
   return renderLines(lines);
 }
 
+/**
+ * Web addresses typed into the fields (round 2026-11-08). Telegram and Google
+ * Chat link them by themselves; the preview, the ESN Activities form (HTML)
+ * and pretix (Markdown) need them marked. Trailing punctuation stays text:
+ * "see https://komoot.com/tour/1." links without the full stop.
+ */
+const URL_RE = /\bhttps?:\/\/[^\s<>"]+/gi;
+const count = (s: string, c: string) => s.split(c).length - 1;
+
+export function splitUrls(text: string): Array<{ text: string; url: boolean }> {
+  const parts: Array<{ text: string; url: boolean }> = [];
+  let at = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let url = m[0];
+    // A closing bracket belongs to the address only when it opened one: "(https://x.de/a_(b))".
+    while (/[.,;:!?'’”)\]]$/.test(url)) {
+      const last = url.slice(-1);
+      const open = last === ")" ? "(" : last === "]" ? "[" : null;
+      if (open && count(url, open) >= count(url, last)) break;
+      url = url.slice(0, -1);
+    }
+    if (!/^https?:\/\/[^/?#]+\.[^/?#]/i.test(url) && !/^https?:\/\/localhost\b/i.test(url)) continue;
+    if (m.index! > at) parts.push({ text: text.slice(at, m.index), url: false });
+    parts.push({ text: url, url: true });
+    at = m.index! + url.length;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), url: false });
+  return parts;
+}
+
+const htmlWithLinks = (text: string) =>
+  splitUrls(text)
+    .map((p) => (p.url ? `<a href="${escapeHtml(p.text)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.text)}</a>` : escapeHtml(p.text)))
+    .join("");
+
+const markdownWithLinks = (text: string) =>
+  splitUrls(text)
+    .map((p) => (p.url ? `<${p.text}>` : p.text.replace(/([\\`*_[\]#<>|])/g, "\\$1")))
+    .join("");
+
 export function renderLines(lines: Line[]): Rendered {
   let plain = "";
   let markdown = "";
   const bold: Array<[number, number]> = [];
   const chat: string[] = [];
   const html: string[] = [];
+  const telegram: string[] = [];
   lines.forEach((l, i) => {
     const b = l.bold && l.text;
     if (i) plain += "\n";
     if (b) bold.push([plain.length, plain.length + l.text.length]);
     plain += l.text;
     chat.push(b ? `*${l.text}*` : l.text);
-    html.push(b ? `<b>${escapeHtml(l.text)}</b>` : escapeHtml(l.text));
-    const md = l.text.replace(/([\\`*_[\]#<>|])/g, "\\$1");
+    const h = htmlWithLinks(l.text);
+    html.push(b ? `<b>${h}</b>` : h);
+    // Telegram links bare addresses itself (and its HTML allows no target/rel).
+    telegram.push(b ? `<b>${escapeHtml(l.text)}</b>` : escapeHtml(l.text));
+    const md = markdownWithLinks(l.text);
     if (i) markdown += l.text && lines[i - 1].text ? "  \n" : "\n";
     markdown += b ? `**${md}**` : md;
   });
@@ -586,7 +638,7 @@ export function renderLines(lines: Line[]): Rendered {
     bold,
     chat: chat.join("\n"),
     html: html.join("<br>").replace(/\n/g, "<br>"),
-    telegram: html.join("\n"),
+    telegram: telegram.join("\n"),
     markdown,
   };
 }

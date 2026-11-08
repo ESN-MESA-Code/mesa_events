@@ -27,8 +27,10 @@ const quiz: DescriptionFields = {
 describe("Telegram messages", () => {
   it("one event: the bold title, then the rendered description (HTML escaped)", () => {
     const m = eventMessage(quiz);
-    expect(m.html.startsWith("<b>Pub Quiz &amp; Friends</b>\n\n🗓️ Thursday, 5 November 2026")).toBe(true);
-    expect(m.html).toContain("<b>Dear Internationals,</b>");
+    // The template opens with the title (layout B, round 2026-11-08) – once, not twice.
+    expect(m.html.startsWith("<b>PUB QUIZ &amp; FRIENDS</b>\n\n🗓️ Thursday, 5 November 2026")).toBe(true);
+    expect(m.html.match(/PUB QUIZ|Pub Quiz/gi)).toHaveLength(1);
+    expect(m.html).toContain("\nDear Internationals,\n");
     expect(m.titleHtml).toBe("<b>Pub Quiz &amp; Friends</b>");
     expect(m.length).toBe(m.html.replace(/<[^>]+>/g, "").replace("&amp;", "&").length);
   });

@@ -31,11 +31,11 @@ export const plainText = (html: string) =>
     .replace(/&amp;/g, "&");
 const plainLength = (html: string) => plainText(html).length;
 
-/** One event: <b>Title</b>, a blank line, the description as the template renders it – and where to sign up (its pretix page), when known. */
+/** One event: the description as the template renders it (which opens with the bold title) – and where to sign up (its pretix page), when known. */
 export function eventMessage(d: DescriptionFields, link?: string | null): TelegramText {
   const title = oneLine(d.title);
   const titleHtml = title ? `<b>${escapeHtml(title)}</b>` : "";
-  const html = [titleHtml, renderDescription(d).telegram, link && `🔗 Sign up: ${escapeHtml(link)}`].filter(Boolean).join("\n\n");
+  const html = [renderDescription(d).telegram, link && `🔗 Sign up: ${escapeHtml(link)}`].filter(Boolean).join("\n\n");
   return { html, titleHtml, length: plainLength(html) };
 }
 

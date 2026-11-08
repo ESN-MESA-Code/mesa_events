@@ -33,7 +33,7 @@ export default async function DescriptionPage({ params }: { params: Promise<{ id
       <Panel title="Description" icon={FileText} description={isStaff || isTeam ? "The OC writes it; Comms reviews and publishes it." : undefined} className="max-w-3xl">
           {isStaff || isTeam ? (
             fields ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderDescription(fields).html }} />
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed break-words [&_a]:text-esn [&_a]:underline" dangerouslySetInnerHTML={{ __html: renderDescription(fields).html }} />
             ) : (
               <EmptyState>The OC has not started the description yet.</EmptyState>
             )

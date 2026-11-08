@@ -488,7 +488,7 @@ export function DescriptionEditor({ eventId, viewer, initial, can, pool, templat
             </span>
           </CardHeader>
           <CardContent>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed break-words shadow-inner" data-testid="preview" dangerouslySetInnerHTML={{ __html: rendered.html }} />
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed break-words shadow-inner [&_a]:text-esn [&_a]:underline" data-testid="preview" dangerouslySetInnerHTML={{ __html: rendered.html }} />
             {validation.warnings.length > 0 && (
               <ul className="mt-3 space-y-1 text-xs text-amber-800">
                 {validation.warnings.map((w) => (
