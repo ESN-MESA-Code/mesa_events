@@ -1426,3 +1426,62 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   Home's "pretix pages to set up" leads to the tab.
 - **Storage unchanged** (a published "pretix" post with the link, by and when), so the Telegram
   sign-up link, the stages, Home and the board's warnings read it as before.
+
+## 2026-11-09 (5) – the advertisement schedule is one board (prototype)
+
+- **Why:** the schedule had three ways to look at the same posts (the event list on the left, the
+  month calendar, the "By event" rows). Comms plan per event, so the per-event rows are the one
+  view; the calendar's job (seeing busy days) moved into a row of its own.
+- **One board** (`/team/comms/schedule`, `Board.tsx`): a row per event, the days left to right,
+  each post a marker on its day (square post / reel ringed, round story, light planned, solid
+  posted, dashed unconfirmed Telegram, pink Instagram, blue Telegram, an amber dot for warnings,
+  "+n" when a day holds more than fits), the event's day tinted with 📅, a line from its first
+  post to it (to the edge, "→ 17 Jan", when the event is beyond the window). Weekends shaded,
+  week lines, the month names on top. A **"Without an event"** row stays at the bottom; big events
+  after the window (up to AHEAD_MONTHS) follow under "Later – big events advertised weeks ahead".
+  The month calendar, the event list on the left, the channel chips and the view switch are gone.
+- **Posts per day** row under the dates (1 light, 2 darker, 3 amber, 4+ red; the list on hover),
+  counting what goes out on the chosen channel whatever the other filters; **Today** as a pill,
+  the day circled and a line through every row.
+- **Row labels** carry what the event cards showed: colour dot, category emoji, title, big /
+  draft, 📅 date (amber within a week), a description dot, a mark per channel (✓ posted, ⏰
+  planned, – missing; red with a ring when a required channel is missing for an upcoming
+  non-draft event) and pretix (🎟✓ / 🎟– linking to the pretix pages). Phones show the title,
+  date and a red "!" for "still needs posts". Clicking a label focuses the event (the other rows
+  fade) and opens its **panel** – beside the board on wide screens, a sheet from the bottom on
+  phones – with the date, description (link), each channel, pretix, every post of the event
+  (also outside the window; click to open) and the campaign planner (several posts on several
+  days, or "add it to a post").
+- **Planning on the board:** click, tap or right-click a day on a row – or arrow keys (Shift for a
+  week) and Enter on the focused board – for a popover at that cell (a bottom sheet on phones):
+  the day (changeable) and its lead time, the posts already there (to open), then one or more
+  posts (channel, format, time, optional title; "+ Another post" picks the next channel not used
+  yet, a required missing one first). When the day already has a planned post with events on the
+  chosen channel, a radio offers **"Add to the Telegram post at 10:00 (…)"** – `addToPost` – in
+  place of a new post. On "Without an event" a title is required and Telegram is not offered.
+  New posts of an event go through `planEventPosts`, bundles through `addToPost`.
+- **Moving:** drag a planned marker sideways; the day comes from the drag distance (no drop
+  targets), the column it would land on is shaded and the overlay says "→ Wed 25 Nov (+2 d)".
+  Clicking a marker opens the post dialog as before (Telegram preview / confirm, content,
+  warnings, lead times per event).
+- **Not built: bundling by dragging a marker onto another row's marker.** It would have to merge
+  two posts (which caption, assignees, pictures, Telegram confirmation win?) or delete one; the
+  popover's "Add to the … post" does the same thing explicitly and works on phones and by
+  keyboard.
+- **Filters** above the board: search (titles), channel, status (planned / not confirmed / posted
+  / skipped), category (the ones on the board), Needs posts (with its count), Big events, Mine,
+  Past events (by default a past event only shows while it has posts in view), Clear. Post filters
+  hide markers, event filters hide rows; the focused event always stays. On phones the filters
+  fold behind one button.
+- **The window** replaces the months: from this week's Monday for eight weeks, ← → by four weeks,
+  "This week", "Jump to…" a month (`?from=YYYY-MM-DD`, snapped to a Monday; `?month=YYYY-MM` still
+  works – this month opens on this week, another on the week of its 1st). A link with `?post=` or
+  `?event=` (content list, Comms page) moves the window to show the post, or the event from its
+  first post (or three weeks before it), unless `?from` says otherwise. The page loads events and
+  posts from three months back (the coverage marks look at every post) and hands the board the
+  window's posts plus every post of a listed event.
+- **Regular posts** asks for the month now (this month and the next two), since the window is no
+  longer a month.
+- Realtime refresh and presence, drafts, warnings and the Telegram dialog are unchanged. No
+  migration. Prototype: no unit or e2e tests were added or updated (the e2e specs of the old
+  calendar, chips and tray will fail until rewritten).

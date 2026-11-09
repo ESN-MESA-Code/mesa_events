@@ -11,9 +11,9 @@ import { Button, Input, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
 import { createPost, planRegularPosts, updatePostContent } from "@/app/actions/publishing";
 import { CAPTION_MAX, FORMAT_LABEL, POST_FORMATS, PROGRESS, PROGRESS_LABEL, regularPosts, type PostFormat, type Progress } from "@/lib/publishing";
-import { formatShortDate } from "@/lib/dates";
+import { formatShortDate, monthLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import type { BoardChannel, BoardPost } from "./ScheduleBoard";
+import type { BoardChannel, BoardPost } from "./boardModel";
 
 export interface TeamMember {
   email: string;
@@ -229,9 +229,10 @@ export function NewPostForm({ channels, days, today, onDone }: { channels: Board
   );
 }
 
-/** The month's regular posts in one go: "This week" every Sunday, the next month's calendar. */
-export function RegularPostsForm({ channels, month, today, onDone }: { channels: BoardChannel[]; month: string; today: string; onDone: () => void }) {
+/** A month's regular posts in one go: "This week" every Sunday, the next month's calendar. `months`: the ones to pick from ("2026-11-01"). */
+export function RegularPostsForm({ channels, months, today, onDone }: { channels: BoardChannel[]; months: string[]; today: string; onDone: () => void }) {
   const { run, pending, error } = useAction();
+  const [month, setMonth] = useState(months[0] ?? `${today.slice(0, 7)}-01`);
   const usable = channels.filter((c) => c.key !== "telegram");
   const [ch, setCh] = useState(usable.find((c) => c.key === "instagram")?.key ?? usable[0]?.key ?? "");
   const [weekly, setWeekly] = useState(true);
@@ -251,6 +252,15 @@ export function RegularPostsForm({ channels, month, today, onDone }: { channels:
         <label className="flex items-center gap-1.5">
           <input type="checkbox" className="accent-esn" checked={calendar} onChange={(e) => setCalendar(e.target.checked)} /> Next month&apos;s calendar post
         </label>
+        {months.length > 1 && (
+          <Select aria-label="Month of the regular posts" value={month} onChange={(e) => setMonth(e.target.value)} className="w-auto py-1 text-xs">
+            {months.map((m) => (
+              <option key={m} value={m}>
+                in {monthLabel(m)}
+              </option>
+            ))}
+          </Select>
+        )}
         <Select aria-label="Channel of the regular posts" value={ch} onChange={(e) => setCh(e.target.value)} className="w-auto py-1 text-xs">
           {usable.map((c) => (
             <option key={c.key} value={c.key}>
