@@ -1503,3 +1503,17 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
 - **Rough edges fixed**: markers 14 px in a 24×20 px target; the event panel slides over the
   board on wide screens instead of taking a column; the filters (not the search) are remembered
   on the device (saved when changed).
+
+## 2026-11-09 (7) – Board polish: header, marks, "Without an event" first
+
+- **Header**: month names are blocks whose name sticks next to the event column, so they stay
+  readable when the board scrolls sideways (they slid under it); "Today" is written in today's
+  own day cell instead of a pill that was cut off at the board's left edge.
+- **The "Later – big events" divider** has its own background above the today line (the line
+  showed through it).
+- **An event's marks** follow "in N d" on its second line, in the order the work is done –
+  description, pretix, Telegram, Instagram – as small icons: green done, light green planned (a
+  channel), red still missing, grey no longer relevant; the words in the tooltip and for screen
+  readers. The pretix mark is no longer a link (it sat inside the row's button); the event's
+  panel has pretix.
+- **"Without an event"** is the first row.

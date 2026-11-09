@@ -7,7 +7,7 @@
 // right-click) a day on a row to plan posts there; arrow keys and Enter do
 // the same. Drag a marker sideways to move the post; click it for the post.
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { Camera, FileText, Send, Ticket, type LucideIcon } from "lucide-react";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent, type DragStartEvent } from "@dnd-kit/core";
 import { movePost } from "@/app/actions/publishing";
 import type { ServerAction } from "@/components/ActionButton";
@@ -195,7 +195,8 @@ export function Board({
   const channelName = (key: string) => channels.find((c) => c.key === key)?.name ?? key;
   const required = channels.filter((c) => c.required);
   const emoji = new Map(categories.map((c) => [c.id, c.emoji]));
-  const keys = [...rows.map((e) => e.id), ...(showLoose ? ["none"] : [])];
+  // "Without an event" on top (round 2026-11-09 (7)), then the events.
+  const keys = [...(showLoose ? ["none"] : []), ...rows.map((e) => e.id)];
   const from = days[0];
   const to = days[days.length - 1];
   const col = (d: string) => dayDiff(from, d);
@@ -204,7 +205,7 @@ export function Board({
   const postsOf = (key: string) => posts.filter((p) => (key === "none" ? !p.events.length : p.events.includes(key)));
   const width = days.length * COL;
   // Where each row sits in the grid (the divider above the later events counted), for the bundle lines.
-  const laterIndex = laterFrom ? rows.findIndex((e) => e.id === laterFrom) : -1;
+  const laterIndex = laterFrom ? keys.indexOf(laterFrom) : -1;
   const rowMid = (i: number) => i * ROW_H + (laterIndex >= 0 && i >= laterIndex ? DIVIDER_H : 0) + ROW_H / 2;
   // Posts of several events: a line through their markers, row to row ("posted together").
   const bundles = posts
@@ -384,47 +385,38 @@ export function Board({
                   !
                 </span>
               )}
+              {/* What it needs, in the order it is done: description, pretix, the channels. Green done, red missing. */}
+              <span className="ml-1 hidden items-center gap-0.5 sm:flex" data-testid={`marks-${e.id}`}>
+                <Mark
+                  icon={FileText}
+                  tone={descDone ? "done" : past ? "off" : "missing"}
+                  label={`Description: ${desc?.label ?? e.description}`}
+                  testId={`desc-${e.id}`}
+                />
+                {pretix.enabled && (
+                  <Mark
+                    icon={Ticket}
+                    tone={pretix.done[e.id] ? "done" : past || e.draft ? "off" : "missing"}
+                    label={pretix.done[e.id] ? "pretix page set up" : "pretix page not set up"}
+                    testId={`pretix-${e.id}`}
+                  />
+                )}
+                {channels.map((c) => {
+                  const m = channelMark(coverage, e.id, c.key);
+                  return (
+                    <Mark
+                      key={c.key}
+                      icon={CHANNEL_ICON[c.key] ?? Send}
+                      tone={m.state === "posted" ? "done" : m.state === "planned" ? "planned" : c.required && missing ? "missing" : "off"}
+                      label={`${c.name}: ${m.state === "posted" ? "posted" : m.state === "planned" ? `planned ${dayLabel(berlinDate(m.at!))}` : "not planned"}`}
+                      testId={`mark-${c.key}-${e.id}`}
+                    />
+                  );
+                })}
+              </span>
             </span>
           </span>
         </button>
-        {/* What it needs: the description, each channel, pretix – one row of small marks. */}
-        <span className="pointer-events-none absolute bottom-1 right-1 hidden items-center gap-0.5 sm:flex">
-          <span
-            className={cn("pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3", descDone ? "bg-emerald-100 text-emerald-800" : e.description === "submitted" ? "bg-sky-50 text-sky-800" : past ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-800")}
-            title={`Description: ${desc?.label ?? e.description}`}
-            data-testid={`desc-${e.id}`}
-          >
-            📝{descDone ? "✓" : e.description === "submitted" ? "…" : "–"}
-          </span>
-          {channels.map((c) => {
-            const m = channelMark(coverage, e.id, c.key);
-            const red = m.state === "missing" && c.required && missing;
-            return (
-              <span
-                key={c.key}
-                title={`${c.name}: ${m.state === "posted" ? "posted" : m.state === "planned" ? `planned ${dayLabel(berlinDate(m.at!))}` : "not planned"}`}
-                className={cn(
-                  "pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3",
-                  m.state === "posted" ? "bg-emerald-100 text-emerald-800" : m.state === "planned" ? "bg-sky-50 text-sky-800" : red ? "bg-red-50 text-red-700 ring-1 ring-red-200" : "bg-gray-100 text-gray-500"
-                )}
-                data-testid={`mark-${c.key}-${e.id}`}
-              >
-                {shortOf(c.key, c.name)}
-                {m.state === "posted" ? "✓" : m.state === "planned" ? "⏰" : "–"}
-              </span>
-            );
-          })}
-          {pretix.enabled && (
-            <Link
-              href={`/team/comms/pretix?event=${e.id}#pretix-${e.id}`}
-              title={pretix.done[e.id] ? "pretix page set up" : "pretix page not set up – open the pretix pages"}
-              className={cn("pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3 hover:underline", pretix.done[e.id] ? "bg-emerald-100 text-emerald-800" : !past && !e.draft ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500")}
-              data-testid={`pretix-${e.id}`}
-            >
-              🎟{pretix.done[e.id] ? "✓" : "–"}
-            </Link>
-          )}
-        </span>
       </div>
     );
   };
@@ -559,24 +551,15 @@ export function Board({
           <div ref={header} className="sticky top-0 z-30 border-b border-gray-200 bg-white">
             <div className="flex h-5 text-[10px]">
               <div className="sticky left-0 z-40 shrink-0 border-r border-gray-200 bg-white" style={{ width: "var(--label)" }} />
-              <div className="relative" style={{ width }}>
-                {days.map((d, i) =>
-                  d.endsWith("-01") || i === 0 ? (
-                    <span
-                      key={d}
-                      className="absolute top-0.5 whitespace-nowrap pl-1 font-bold uppercase tracking-wide text-gray-700"
-                      // Not under the "Today" pill.
-                      style={{ left: todayCol >= i && todayCol - i < 3 ? todayCol * COL + COL / 2 + 22 : i * COL }}
-                    >
-                      {monthLabel(`${d.slice(0, 7)}-01`)}
+              {/* Months as blocks, their names sticky – they stay readable when the board is scrolled. */}
+              <div className="flex" style={{ width }}>
+                {monthsIn(days).map((m) => (
+                  <div key={m.month} className={cn("shrink-0", m.first > 0 && "border-l border-gray-300")} style={{ width: m.count * COL }}>
+                    <span className="sticky inline-block whitespace-nowrap px-1 pt-0.5 font-bold uppercase tracking-wide text-gray-700" style={{ left: "var(--label)" }}>
+                      {monthLabel(m.month)}
                     </span>
-                  ) : null
-                )}
-                {todayCol >= 0 && (
-                  <span className="absolute top-0.5 z-10 -translate-x-1/2 rounded-full bg-esn px-1.5 text-[9px] font-bold uppercase leading-4 text-white" style={{ left: todayCol * COL + COL / 2 }} data-testid="today-marker">
-                    Today
-                  </span>
-                )}
+                  </div>
+                ))}
               </div>
             </div>
             <div className="flex h-8">
@@ -592,7 +575,13 @@ export function Board({
                       className={cn("flex shrink-0 flex-col items-center justify-end pb-0.5 text-[10px] leading-3 tabular-nums", dow === 1 && "border-l border-gray-300", dow === 0 || dow === 6 ? "text-gray-400" : "text-gray-600", drag?.to === d && "bg-esn/15")}
                       style={{ width: COL }}
                     >
-                      <span className="text-[9px]">{"SMTWTFS"[dow]}</span>
+                      {d === today ? (
+                        <span className="text-[8px] font-bold uppercase leading-3 tracking-tight text-esn" data-testid="today-marker">
+                          Today
+                        </span>
+                      ) : (
+                        <span className="text-[9px]">{"SMTWTFS"[dow]}</span>
+                      )}
                       <span className={cn("mt-0.5 flex h-4 w-4 items-center justify-center rounded-full", d === today && "bg-esn font-bold text-white")}>{Number(d.slice(8))}</span>
                     </span>
                   );
@@ -645,17 +634,17 @@ export function Board({
             }}
             onBlur={(e) => e.target === e.currentTarget && setGridFocused(false)}
           >
+            {showLoose && row("none", 0, null)}
             {rows.map((e, i) => (
               <div key={e.id} className="contents">
                 {laterFrom === e.id && (
-                  <div className="flex border-t border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500" style={{ height: DIVIDER_H }}>
-                    <span className="sticky left-0 flex items-center whitespace-nowrap px-2">Later – big events advertised weeks ahead</span>
+                  <div className="relative z-[16] flex border-t border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500" style={{ height: DIVIDER_H }}>
+                    <span className="sticky left-0 flex items-center whitespace-nowrap bg-gray-50 px-2">Later – big events advertised weeks ahead</span>
                   </div>
                 )}
-                {row(e.id, i, e)}
+                {row(e.id, i + (showLoose ? 1 : 0), e)}
               </div>
             ))}
-            {showLoose && row("none", rows.length, null)}
             {/* Posted together (round 2026-11-09 (6)): one post of several events – a line through its markers. */}
             {bundles.map((b) => {
               const c = col(berlinDate(b.post.scheduledFor));
@@ -708,5 +697,40 @@ export function Board({
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+const CHANNEL_ICON: Record<string, LucideIcon> = { telegram: Send, instagram: Camera };
+
+/** The months a run of days covers: each with where it starts and how many days it has. */
+function monthsIn(days: string[]): Array<{ month: string; first: number; count: number }> {
+  const out: Array<{ month: string; first: number; count: number }> = [];
+  days.forEach((d, i) => {
+    const m = `${d.slice(0, 7)}-01`;
+    const last = out[out.length - 1];
+    if (last?.month === m) last.count++;
+    else out.push({ month: m, first: i, count: 1 });
+  });
+  return out;
+}
+
+export const MARK_TONE = {
+  done: "bg-emerald-500 text-white",
+  planned: "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300",
+  missing: "bg-red-100 text-red-600 ring-1 ring-inset ring-red-300",
+  off: "bg-gray-100 text-gray-400",
+} as const;
+
+/**
+ * One step an event needs, as a small icon (round 2026-11-09 (7)): green when done, light green
+ * when planned (a channel), red when still missing, grey when it no longer matters. The words are
+ * in the tooltip and for screen readers.
+ */
+export function Mark({ icon: Icon, tone, label, testId }: { icon: LucideIcon; tone: keyof typeof MARK_TONE; label: string; testId?: string }) {
+  return (
+    <span title={label} className={cn("flex h-4 w-4 items-center justify-center rounded", MARK_TONE[tone])} data-testid={testId}>
+      <Icon className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }

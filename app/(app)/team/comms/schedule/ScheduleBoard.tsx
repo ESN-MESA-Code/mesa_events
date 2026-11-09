@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, FileText, Search, Send } from "lucide-react";
 import { PictureButton, UploadedPicture, pictureProblem } from "@/components/PostPicture";
 import { Alert, Badge, Button, Card, Input, Select, buttonVariants } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
@@ -12,7 +12,7 @@ import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel } f
 import { addDays, dayDiff, monthParam } from "@/lib/month";
 import { FORMAT_LABEL, isBigEvent, namesOf } from "@/lib/publishing";
 import { ContentEditor, NewPostForm, RegularPostsForm, type TeamMember } from "./PostContent";
-import { Board, MarkerShape } from "./Board";
+import { Board, Mark, MarkerShape } from "./Board";
 import { EventPanel } from "./EventPanel";
 import {
   BOARD_STEP_WEEKS,
@@ -384,8 +384,11 @@ export function ScheduleBoard({
             <span className="inline-flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> warning
             </span>
-            <span>
-              <span className="rounded bg-red-50 px-0.5 font-semibold text-red-700 ring-1 ring-red-200">TG–</span> required channel missing
+            <span className="inline-flex items-center gap-1" title="Per event, in this order: description, pretix page, Telegram, Instagram">
+              <Mark icon={FileText} tone="done" label="done" />
+              <Mark icon={Send} tone="planned" label="planned" />
+              <Mark icon={Camera} tone="missing" label="missing" />
+              description · pretix · TG · IG: done, planned, missing
             </span>
           </div>
           {editable && (
