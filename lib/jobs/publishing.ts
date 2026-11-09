@@ -57,9 +57,9 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
   // Nothing goes to Telegram that Comms did not confirm (round 2026-10-30).
   if (!post.confirmed_at) return { skipped: "not confirmed" };
 
-  const { data: rows, error: e2 } = await deps.admin.from("publication_post_events").select("position, picture, events(id, title, starts_at, format_id, type)").eq("post_id", post.id).order("position");
+  const { data: rows, error: e2 } = await deps.admin.from("publication_post_events").select("position, picture, events(id, title, starts_at, status, format_id, category_id, type)").eq("post_id", post.id).order("position");
   if (e2) throw new Error(e2.message);
-  const events = (rows ?? []).map((r) => r.events as { id: string; title: string; starts_at: string; format_id: string | null; type: string });
+  const events = (rows ?? []).map((r) => r.events as { id: string; title: string; starts_at: string; status: string; format_id: string | null; category_id: string | null; type: string });
   const ownPicture = new Map((rows ?? []).map((r) => [(r.events as { id: string }).id, r.picture]));
   const { data: descriptions } = await deps.admin.from("descriptions").select("event_id, status, fields, approved_fields").in("event_id", events.map((e) => e.id));
   const byEvent = new Map((descriptions ?? []).map((d) => [d.event_id, d]));
@@ -69,7 +69,7 @@ export const publishTelegramPost: JobHandler = async (job: Job, deps: JobDeps) =
     return { ev, status: d?.status ?? "missing", fields: coerceFields(d?.approved_fields ?? d?.fields ?? {}) };
   });
   if (!items.length) return { skipped: "no events" };
-  const facts: PostEventFacts[] = items.map((i) => ({ id: i.ev.id, title: i.ev.title, startsAt: i.ev.starts_at, description: i.status, price: i.fields.price }));
+  const facts: PostEventFacts[] = items.map((i) => ({ id: i.ev.id, title: i.ev.title, startsAt: i.ev.starts_at, description: i.status, price: i.fields.price, eventStatus: i.ev.status }));
   const refusal = telegramRefusal(facts);
   if (refusal) return refuse(deps, post.id, refusal);
 

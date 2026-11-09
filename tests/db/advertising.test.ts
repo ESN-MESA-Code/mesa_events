@@ -96,6 +96,19 @@ describe("pictures per message and defaults", () => {
     expect((await (await as(USERS.member)).from("advertising_pictures").select("picture").eq("format_id", formatId)).data).toEqual([]);
   });
 
+  it("a category's default picture (round 2026-11-09): one key at a time, removed with an empty picture", async () => {
+    const { data: cat } = await admin.from("event_categories").select("id").order("sort").limit(1).single();
+    const path = `category/${cat!.id}/${crypto.randomUUID()}.png`;
+    expect((await (await as(USERS.comms)).storage.from("advertising-pictures").upload(path, png, { contentType: "image/png" })).error).toBeNull();
+    libraryFiles.push(path);
+    expect(await P.setDefaultPicture(await actionContext(USERS.events), { category_id: cat!.id, picture: `library:${path}` })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.setDefaultPicture(await actionContext(USERS.comms), { category_id: cat!.id, event_type: "standard", picture: `library:${path}` })).toMatchObject({ ok: false });
+    expect((await P.setDefaultPicture(await actionContext(USERS.comms), { category_id: cat!.id, picture: `library:${path}` })).ok).toBe(true);
+    expect((await admin.from("advertising_pictures").select("picture, format_id, event_type").eq("category_id", cat!.id)).data).toEqual([{ picture: `library:${path}`, format_id: null, event_type: null }]);
+    expect((await P.setDefaultPicture(await actionContext(USERS.comms), { category_id: cat!.id, picture: "" })).ok).toBe(true);
+    expect((await admin.from("advertising_pictures").select("id").eq("category_id", cat!.id)).data).toEqual([]);
+  });
+
   it("a post of two events: each message has its own picture, else its format's default", async () => {
     const own = await submitted("Own picture", false);
     const byFormat = await submitted("Format picture", false);

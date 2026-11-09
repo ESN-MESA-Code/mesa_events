@@ -138,11 +138,12 @@ export const setPostEventPicture = defineAction(z.object({ post_id: uuid, event_
   if (gone.length) await ctx.supabase.storage.from("post-pictures").remove(gone);
 }, { revalidate: [PAGES.schedule] });
 
-/** The default picture of a format or an event type (the Pictures tab, round 2026-11-03); an empty picture removes it. */
+/** The default picture of a format, a category (round 2026-11-09) or an event type (the Pictures tab, round 2026-11-03); an empty picture removes it. */
 export const setDefaultPicture = defineAction(
   z
     .object({
       format_id: uuid.optional(),
+      category_id: uuid.optional(),
       event_type: z.enum(["standard", "special", "day_trip", "weekend_trip"]).optional(),
       picture: z
         .string()
@@ -151,12 +152,21 @@ export const setDefaultPicture = defineAction(
         .refine((p) => !p || /^library:[\w/.-]+$/.test(p), "Upload the picture again.")
         .default(""),
     })
-    .refine((i) => !!i.format_id !== !!i.event_type, "A default picture is for a format or for a type."),
+    .refine((i) => [i.format_id, i.category_id, i.event_type].filter(Boolean).length === 1, "A default picture is for a format, a category or a type."),
   async (ctx, i) => {
     requireRole(ctx, "comms");
     const q = ctx.supabase.from("advertising_pictures").select("picture");
-    const { data: before } = await (i.format_id ? q.eq("format_id", i.format_id) : q.eq("event_type", i.event_type!)).maybeSingle();
-    dbError((await ctx.supabase.rpc("set_default_picture", { format: (i.format_id ?? null) as unknown as string, type: (i.event_type ?? null) as unknown as string, picture: i.picture })).error);
+    const { data: before } = await (i.format_id ? q.eq("format_id", i.format_id) : i.category_id ? q.eq("category_id", i.category_id) : q.eq("event_type", i.event_type!)).maybeSingle();
+    dbError(
+      (
+        await ctx.supabase.rpc("set_default_picture", {
+          format: (i.format_id ?? null) as unknown as string,
+          category: i.category_id,
+          type: (i.event_type ?? null) as unknown as string,
+          picture: i.picture,
+        })
+      ).error
+    );
     const old = libraryPath(before?.picture);
     if (old && before?.picture !== i.picture) await ctx.supabase.storage.from("advertising-pictures").remove([old]);
   },

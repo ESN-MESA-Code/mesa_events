@@ -296,10 +296,15 @@ describe("manual channels and the status", () => {
 });
 
 describe("events weeks ahead (round 2026-11-02)", () => {
-  it("a post may go out weeks before its event, in an earlier month; the event may still be in its volunteer form; drafts may not", async () => {
+  it("a post may go out weeks before its event, in an earlier month; the event may still be in its volunteer form; drafts only within six weeks", async () => {
     const trip = await createEvent({ title: "Pub weekend trip", type: "weekend_trip", status: "scheduled", starts_at: hoursFromNow(24 * 60), oc: USERS.oc });
     const draft = await createEvent({ title: "Pub draft", status: "draft", starts_at: hoursFromNow(24 * 60) });
-    created.push(trip.id, draft.id);
+    // Round 2026-11-09: a draft a month away may be advertised already (its cycle is still being planned).
+    const nearDraft = await createEvent({ title: "Pub near draft", status: "draft", starts_at: hoursFromNow(24 * 30) });
+    created.push(trip.id, draft.id, nearDraft.id);
+    const early = await P.createPost(await actionContext(USERS.comms), { channel: "instagram", day: day(48), event_ids: [nearDraft.id] });
+    expect(early.ok).toBe(true);
+    if (early.ok) await admin.from("publication_posts").delete().eq("id", early.data.id);
     // No description yet: it can be planned all the same (the warning says so on the board).
     const id = await post("instagram", [trip.id], 48);
     expect(berlinDate((await row(id)).scheduled_for)).toBe(day(48));

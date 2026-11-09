@@ -32,10 +32,14 @@ export interface PostEventFacts {
   deadline?: string | null;
   /** The pretix page is up (or pretix is off); unknown when left out. */
   pretix?: boolean;
+  /** The event's own status (draft, scheduled, cancelled …); unknown when left out. */
+  eventStatus?: string;
 }
 
-/** Why the platform will not post this to Telegram (the bot's rules): an unapproved description or a TBA price. */
+/** Why the platform will not post this to Telegram (the bot's rules): a cancelled event, an unapproved description or a TBA price. */
 export function telegramRefusal(events: PostEventFacts[]): string | null {
+  const off = events.filter((e) => e.eventStatus === "cancelled" || e.eventStatus === "dropped");
+  if (off.length) return `${off.map((e) => `“${e.title}”`).join(", ")} ${off.length > 1 ? "are" : "is"} cancelled.`;
   const unapproved = events.filter((e) => !["approved", "published"].includes(e.description));
   if (unapproved.length) return `The description of ${unapproved.map((e) => `“${e.title}”`).join(", ")} is not approved yet.`;
   const tba = events.filter((e) => isTbaPrice(e.price));
@@ -54,6 +58,9 @@ export function postWarnings(post: { channel: string; scheduledFor: string; stat
   const out: string[] = [];
   const day = berlinDate(post.scheduledFor);
   for (const e of events) {
+    if (e.eventStatus === "cancelled" || e.eventStatus === "dropped") out.push(`“${e.title}”: cancelled – skip this post`);
+    // Advertised a month ahead (round 2026-11-09): the cycle is still being planned.
+    if (e.eventStatus === "draft") out.push(`“${e.title}”: still a draft – the date may change until the Events team fixes the month`);
     if (!["approved", "published"].includes(e.description)) out.push(`“${e.title}”: description not approved yet${e.deadline ? ` (due ${formatShortDate(e.deadline)})` : ""}`);
     if (day > berlinDate(e.startsAt)) out.push(`“${e.title}”: planned after the event`);
     if (post.channel === "telegram" && isTbaPrice(e.price)) out.push(`“${e.title}”: price still TBA`);
@@ -69,6 +76,19 @@ export const DEFAULT_POST_HOUR = "10:00";
 
 /** The events Comms may post about (private.check_post_event): from the volunteer form on, so next month's and later ones too. */
 export const PUBLISHABLE_STATUSES = ["scheduled", "confirmed", "understaffed", "completed"] as const;
+
+/**
+ * Drafts – their cycle is still being planned – may be advertised once they
+ * are this close (round 2026-11-09, private.check_post_event): an event
+ * early next month is advertised a month ahead, before its volunteer form.
+ */
+export const DRAFT_AHEAD_DAYS = 42;
+
+/** Whether an event may be put on a post: a publishable status, or a draft at most DRAFT_AHEAD_DAYS away. */
+export function advertisable(e: { status: string; startsAt: string }, now: number): boolean {
+  if ((PUBLISHABLE_STATUSES as readonly string[]).includes(e.status)) return true;
+  return e.status === "draft" && Date.parse(e.startsAt) < now + DRAFT_AHEAD_DAYS * 86_400_000;
+}
 
 /** How many months after its own the board lists events (round 2026-11-02): big events are advertised a month or two ahead. */
 export const AHEAD_MONTHS = 3;

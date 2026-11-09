@@ -58,6 +58,8 @@ export interface BoardEvent {
   description: string;
   /** standard, special, day_trip, weekend_trip – the big ones lead a later month in the list. */
   type: string | null;
+  /** Its cycle is still being planned (round 2026-11-09): it may be advertised early, but its date may still change. */
+  draft?: boolean;
   /** Its colour on the board (set by the board): the same dot on the list, its date and its posts. */
   color?: string;
 }
@@ -274,10 +276,13 @@ export function ScheduleBoard({
           onMouseLeave={() => setHover(null)}
           className={cn("block w-full rounded bg-amber-100 px-1 py-0.5 text-left text-[11px] leading-tight text-amber-950 hover:bg-amber-200", focus === e.id && "ring-2 ring-amber-500")}
           aria-pressed={focus === e.id}
+          title={`${e.title}${e.draft ? " (draft – the date may still change)" : ""}`}
           data-testid={`cal-event-${e.id}`}
         >
           <EventDot color={byId.get(e.id)?.color} className="mr-1 align-middle" />
-          📅 <span className="tabular-nums font-semibold">{berlinTime(e.startsAt)}</span> <span className="break-words">{e.title}</span>
+          📅 <span className="tabular-nums font-semibold">{berlinTime(e.startsAt)}</span>
+          {e.draft && <span className="ml-1 rounded bg-white/70 px-0.5 text-[10px] uppercase tracking-wide text-gray-600">draft</span>}
+          <span className={cn("block break-words", !phone && "line-clamp-2")}>{e.title}</span>
         </button>
       ))}
       {postsOn(d).map((p) => (
@@ -422,7 +427,7 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
               ⚠
             </span>
           )}
-          <span className="block break-words">
+          <span className={cn("block break-words", !phone && "line-clamp-2")}>
             {titles.length > 1 ? `${titles.length}: ` : ""}
             {titles.join(", ")}
           </span>
@@ -466,7 +471,8 @@ function EventList({
   const required = channels.filter((c) => c.required);
   const stateOn = (channel: string, eventId: string) => coverage[eventId]?.[channel] ?? null;
   const isDone = (ev: BoardEvent) => required.every((c) => stateOn(c.key, ev.id)) && (!pretix.enabled || !!pretix.done[ev.id]);
-  const open = events.filter((ev) => berlinDate(ev.startsAt) >= today && !isDone(ev));
+  // Drafts may be advertised early; they are not counted as still to do.
+  const open = events.filter((ev) => !ev.draft && berlinDate(ev.startsAt) >= today && !isDone(ev));
   const [own, ...later] = trayGroups(events, month).map((g) => ({ ...g, events: todo ? g.events.filter((ev) => open.includes(ev)) : g.events }));
   const item = (e: BoardEvent) => {
     const past = berlinDate(e.startsAt) < today;
@@ -478,15 +484,22 @@ function EventList({
         onMouseLeave={() => setHover(null)}
         className={cn("rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs transition-shadow hover:shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}
       >
-        <button type="button" className="flex items-center gap-1.5 text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
-          <EventDot color={e.color} />
-          {e.title}
-          {isBigEvent(e.type) && (
-            <Badge tone="amber" className="ml-1 align-middle">
-              big
-            </Badge>
+        <div className="flex items-start gap-1.5">
+          <button type="button" className="flex min-w-0 flex-1 items-start gap-1.5 text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
+            <EventDot color={e.color} className="mt-1" />
+            <span className="min-w-0 break-words">{e.title}</span>
+          </button>
+          {(isBigEvent(e.type) || e.draft) && (
+            <span className="flex shrink-0 gap-1">
+              {e.draft && (
+                <Badge tone="gray" title="Its month is still being planned – the date may change until the Events team fixes it.">
+                  draft
+                </Badge>
+              )}
+              {isBigEvent(e.type) && <Badge tone="amber">big</Badge>}
+            </span>
           )}
-        </button>
+        </div>
         <span className="block text-amber-800">
           📅 {formatShortDate(e.startsAt)}, {berlinTime(e.startsAt)}
         </span>
@@ -534,7 +547,8 @@ function EventList({
             <details key={g.month} open={i === 0 || g.events.some((e) => e.id === focus)} data-testid={`tray-later-${g.month.slice(0, 7)}`}>
               <summary className="cursor-pointer text-xs font-semibold text-gray-700">
                 Coming up: {monthLabel(g.month)} ({g.events.length}
-                {big(g.events) ? `, ${big(g.events)} big` : ""})
+                {big(g.events) ? `, ${big(g.events)} big` : ""}
+                {g.events.some((e) => e.draft) ? `, ${g.events.filter((e) => e.draft).length} draft` : ""})
               </summary>
               <ul className="mt-2 space-y-2">{g.events.map(item)}</ul>
             </details>

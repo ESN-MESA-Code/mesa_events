@@ -13,7 +13,7 @@ export type StageId = "write" | "review" | "approved" | "pretix" | "advertise" |
 export const STAGES: Array<{ id: StageId; label: string }> = [
   { id: "write", label: "To write" },
   { id: "review", label: "In review" },
-  { id: "approved", label: "Approved · in the Chat space" },
+  { id: "approved", label: "In the Chat space" },
   { id: "pretix", label: "pretix page" },
   { id: "advertise", label: "Advertised" },
   { id: "happened", label: "Event happened" },

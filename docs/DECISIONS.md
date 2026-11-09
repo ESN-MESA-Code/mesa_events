@@ -1325,3 +1325,27 @@ Decisions:
   President, from `role_members` (`CHAT_SPACE_ROLES` in `lib/roles.ts`, `chat_space_roster()`).
   HR, newbies and IT are not invited. Joining or leaving one of these roles re-syncs every
   upcoming space; the migration re-synced the upcoming spaces that already existed.
+
+## 2026-11-09 – Comms: category pictures, advertising a month ahead, aligned tracks
+
+- **Default pictures per category** (hike, pub, city tour …) on the Pictures tab, besides format
+  and type. An event's message without its own picture takes its **format's, else its category's,
+  else its type's** (`defaultPictureOf()` in `lib/publishingLoad.ts`; `advertising_pictures.category_id`,
+  `set_default_picture(format, type, picture, category)`). The tab lists category, format, type.
+- **Picture cards** keep the name to two lines (full name on hover) and the note to one, so the
+  pictures in a row line up however long a format's name is.
+- **Drafts may be advertised once they are at most six weeks away** (`DRAFT_AHEAD_DAYS`,
+  `advertisable()`, `private.check_post_event`). Why: a cycle's events stay drafts until its
+  volunteer form opens (around the 10th of the month before), so an event early next month could
+  not be advertised a month ahead. They show on the board with a "draft" badge and the warning
+  "still a draft – the date may change"; they are not counted as "to plan" (Home, the board's
+  "still to plan" line, the month's "to plan" mark). Drafts further out stay off the board.
+- **Cancelled events are never posted to Telegram**: the job refuses a post with a cancelled or
+  dropped event (it did not check the event's status before), and the board warns
+  "cancelled – skip this post".
+- **Long titles on the board**: event and post chips in the calendar show two lines (the full
+  title on hover); the list's cards wrap the title next to its badges.
+- **Comms page stage track**: one column per stage, the same in every row – a bar plus a label
+  with a fixed-width mark (✓ done, ● now, ○ to do) – instead of chips whose "✓ " prefix shifted
+  every following stage. The channel chips sit in fixed columns too. "Approved · in the Chat
+  space" is now "In the Chat space" (it fits its column).

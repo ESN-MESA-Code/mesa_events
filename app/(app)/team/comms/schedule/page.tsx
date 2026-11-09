@@ -4,7 +4,7 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { addMonths, berlinDate, cycleLabel, monthOf, monthStartIso, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
-import { PUBLISHABLE_STATUSES, listedAhead, postWarnings, telegramRefusal, type PostEventFacts } from "@/lib/publishing";
+import { PUBLISHABLE_STATUSES, advertisable, listedAhead, postWarnings, telegramRefusal, type PostEventFacts } from "@/lib/publishing";
 import { coerceFields } from "@/lib/description/template";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -35,8 +35,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const [{ data: eventList }, { data: channelRows }, { data: postRows }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, starts_at, type, descriptions(status)")
-      .in("status", [...PUBLISHABLE_STATUSES])
+      .select("id, title, starts_at, type, status, descriptions(status)")
+      .in("status", ["draft", ...PUBLISHABLE_STATUSES])
       .eq("source", "platform")
       .gte("starts_at", monthStartIso(from))
       .order("starts_at"),
@@ -47,14 +47,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       .gte("scheduled_for", new Date(Date.parse(`${from}T00:00:00Z`) - 86_400_000).toISOString())
       .order("scheduled_for"),
   ]);
-  const rows = (eventList ?? []).map((e) => ({ event_id: e.id, title: e.title, starts_at: e.starts_at, type: e.type, status: e.descriptions?.status ?? "missing" }));
+  // Drafts (their cycle still being planned) only once they are close enough to advertise (round 2026-11-09).
+  const rows = (eventList ?? [])
+    .filter((e) => advertisable({ status: e.status, startsAt: e.starts_at }, now))
+    .map((e) => ({ event_id: e.id, title: e.title, starts_at: e.starts_at, type: e.type, draft: e.status === "draft", status: e.descriptions?.status ?? "missing" }));
   const posts = postRows ?? [];
   const months = [...new Set([...rows.map((r) => monthOf(r.starts_at)), ...posts.map((p) => monthOf(p.scheduled_for))])].sort();
   // Work: events still ahead that are on no schedulable channel yet, or posts waiting.
   // Events of later months are work of this month too: their posts can go out now.
+  // Drafts may be advertised early but are not work yet (round 2026-11-09).
   const planned = new Set(posts.filter((p) => p.status !== "skipped" && p.channel !== "pretix").flatMap((p) => p.publication_post_events.map((x) => x.event_id)));
   const hasWork = (m: string) =>
-    rows.some((r) => Date.parse(r.starts_at) > now && !planned.has(r.event_id) && (monthOf(r.starts_at) === m || (m === thisMonth && listedAhead(monthOf(r.starts_at), m)))) ||
+    rows.some((r) => !r.draft && Date.parse(r.starts_at) > now && !planned.has(r.event_id) && (monthOf(r.starts_at) === m || (m === thisMonth && listedAhead(monthOf(r.starts_at), m)))) ||
     posts.some((p) => monthOf(p.scheduled_for) === m && p.status === "planned");
   const month = pickMonth(months.map((m) => ({ month: m, hasWork: hasWork(m) })), parseMonthParam(sp.month), thisMonth) ?? thisMonth;
 
@@ -71,14 +75,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const ids = [...new Set([...monthEvents.map((r) => r.event_id), ...monthPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id))])];
   const [{ data: eventRows }, { data: descriptions }] = ids.length
     ? await Promise.all([
-        supabase.from("events").select("id, title, starts_at, type, format_id, planning_cycles(description_deadline)").in("id", ids),
+        supabase.from("events").select("id, title, starts_at, type, status, format_id, category_id, planning_cycles(description_deadline)").in("id", ids),
         supabase.from("descriptions").select("event_id, status, fields, approved_fields").in("event_id", ids),
       ])
     : [{ data: [] }, { data: [] }];
   const desc = new Map((descriptions ?? []).map((d) => [d.event_id, d]));
   const fieldsOf = (id: string) => coerceFields(desc.get(id)?.approved_fields ?? desc.get(id)?.fields ?? {});
   const titleOf = (id: string) => (eventRows ?? []).find((e) => e.id === id)?.title ?? "";
-  // The defaults of the Pictures tab (round 2026-11-03): an event's format's, else its type's.
+  // The defaults of the Pictures tab (round 2026-11-03, -09): an event's format's, else its category's, else its type's.
   const defaults = await loadDefaultPictures(supabase, eventRows ?? []);
   // The Telegram messages Comms looks at before confirming – what the job posts, one per event, each with its picture (round 2026-11-03).
   const telegramPreview = (evs: Array<{ event_id: string; picture: string | null }>, note: string, postPicture: string | null): PreviewMessage[] => {
@@ -97,7 +101,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       const d = desc.get(e.id);
       return [
         e.id,
-        { id: e.id, title: e.title, startsAt: e.starts_at, description: d?.status ?? "missing", price: coerceFields(d?.approved_fields ?? d?.fields ?? {}).price, deadline: e.planning_cycles?.description_deadline ?? null, pretix: !pretix.enabled || !!pretix.done[e.id] },
+        { id: e.id, title: e.title, startsAt: e.starts_at, description: d?.status ?? "missing", price: coerceFields(d?.approved_fields ?? d?.fields ?? {}).price, deadline: e.planning_cycles?.description_deadline ?? null, pretix: !pretix.enabled || !!pretix.done[e.id], eventStatus: e.status },
       ];
     })
   );
@@ -142,20 +146,20 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   });
   const boardEvents = monthEvents
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-    .map((r): BoardEvent => ({ id: r.event_id, title: r.title, startsAt: r.starts_at, description: r.status, type: r.type }))
+    .map((r): BoardEvent => ({ id: r.event_id, title: r.title, startsAt: r.starts_at, description: r.status, type: r.type, draft: r.draft }))
     .concat(
       ids
         .filter((id) => !monthEvents.some((r) => r.event_id === id))
         .map((id) => facts.get(id))
         .filter((f): f is PostEventFacts => !!f)
-        .map((f) => ({ id: f.id, title: f.title, startsAt: f.startsAt, description: f.description, type: (eventRows ?? []).find((e) => e.id === f.id)?.type ?? null }))
+        .map((f) => ({ id: f.id, title: f.title, startsAt: f.startsAt, description: f.description, type: (eventRows ?? []).find((e) => e.id === f.id)?.type ?? null, draft: f.eventStatus === "draft" }))
     );
   // ?event=… (from the Comms page): that event is highlighted.
   const focusEvent = /^[0-9a-f-]{36}$/.test(sp.event ?? "") && boardEvents.some((e) => e.id === sp.event) ? sp.event! : null;
 
   return (
     <>
-      <PageHeader title="Comms" description="Tick pretix off, drag an event onto a day, bundle and post – Telegram posts go out by themselves once confirmed. Big events of the next months are in the list too.">
+      <PageHeader title="Comms" description="Tick pretix off, drag an event onto a day, bundle and post – Telegram posts go out by themselves once confirmed. Events of the next months are in the list too, drafts from six weeks ahead.">
         <MonthSelector
           options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
           current={monthParam(month)}

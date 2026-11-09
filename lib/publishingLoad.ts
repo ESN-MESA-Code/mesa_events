@@ -41,13 +41,29 @@ export async function loadStillToPlan(supabase: Db, now: number): Promise<Advert
 }
 
 /**
- * The default picture of each event (round 2026-11-03): its format's, else
- * its type's (the Pictures tab); null when neither has one.
+ * The default picture of each event (round 2026-11-03, -09): its format's,
+ * else its category's (hike, pub, city tour …), else its type's (the
+ * Pictures tab); null when none has one.
  */
-export async function loadDefaultPictures(db: Db, events: Array<{ id: string; format_id: string | null; type: string }>): Promise<Map<string, string | null>> {
+export async function loadDefaultPictures(
+  db: Db,
+  events: Array<{ id: string; format_id: string | null; category_id?: string | null; type: string }>
+): Promise<Map<string, string | null>> {
   if (!events.length) return new Map();
-  const { data } = await db.from("advertising_pictures").select("format_id, event_type, picture");
-  const byFormat = new Map((data ?? []).filter((d) => d.format_id).map((d) => [d.format_id!, d.picture]));
-  const byType = new Map((data ?? []).filter((d) => d.event_type).map((d) => [d.event_type as string, d.picture]));
-  return new Map(events.map((e) => [e.id, (e.format_id ? byFormat.get(e.format_id) : undefined) ?? byType.get(e.type) ?? null]));
+  const { data } = await db.from("advertising_pictures").select("format_id, category_id, event_type, picture");
+  return new Map(events.map((e) => [e.id, defaultPictureOf(e, data ?? [])]));
+}
+
+/** An event's default picture from the Pictures tab's rows: format, else category, else type. Pure. */
+export function defaultPictureOf(
+  e: { format_id: string | null; category_id?: string | null; type: string },
+  rows: Array<{ format_id: string | null; category_id: string | null; event_type: string | null; picture: string }>
+): string | null {
+  const find = (pick: (r: (typeof rows)[number]) => boolean) => rows.find(pick)?.picture;
+  return (
+    (e.format_id ? find((r) => r.format_id === e.format_id) : undefined) ??
+    (e.category_id ? find((r) => r.category_id === e.category_id) : undefined) ??
+    find((r) => r.event_type === e.type) ??
+    null
+  );
 }

@@ -58,7 +58,7 @@ describe("Comms stages", () => {
     const done = stage({ description: "published", startsAt: past, reportIn: true, pretix: true, advertised: true });
     expect(done).toMatchObject({ current: null, filter: "done", position: 7 });
     expect(done.steps.every((s) => s.state === "done")).toBe(true);
-    expect(done.steps.map((s) => s.label)).toEqual(["To write", "In review", "Approved · in the Chat space", "pretix page", "Advertised", "Event happened", "Report"]);
+    expect(done.steps.map((s) => s.label)).toEqual(["To write", "In review", "In the Chat space", "pretix page", "Advertised", "Event happened", "Report"]);
   });
 
   it("highlights the current stage, ticks what is behind it", () => {

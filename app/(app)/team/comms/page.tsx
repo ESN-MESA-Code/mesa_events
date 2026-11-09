@@ -319,7 +319,12 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                             </div>
                           </div>
                           <StageTrack steps={v.steps} label={`Stages of ${r.title}`} position={v.position} testId="stage-track" />
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="channel-chips">
+                          {/* Fixed columns (round 2026-11-09): each channel sits under the same spot in every row. */}
+                          <div
+                            className="flex flex-wrap items-center gap-1.5 text-xs sm:grid sm:gap-1"
+                            style={{ gridTemplateColumns: `${req.length > 0 ? "11rem " : ""}repeat(${channels.length}, minmax(0, 1fr))` }}
+                            data-testid="channel-chips"
+                          >
                             {req.length > 0 && (
                               <Link
                                 href={boardHref}
@@ -338,7 +343,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                                   key={c.key}
                                   title={`${c.name}: ${stateLabel(c.key, state)}${st?.at ? ` ${formatShortDate(st.at)}` : ""}${st?.reason ? ` – ${st.reason}` : ""}`}
                                   className={cn(
-                                    "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
+                                    "inline-flex min-w-0 max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 sm:justify-self-start",
                                     state === "published" && "bg-emerald-50 text-emerald-800",
                                     state === "planned" && "bg-esn/5 text-esn",
                                     state === "skipped" && "bg-gray-100 text-gray-500 line-through",

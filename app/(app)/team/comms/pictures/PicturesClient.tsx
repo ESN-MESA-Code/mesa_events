@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ImageIcon, Layers, Search, Shapes } from "lucide-react";
+import { ImageIcon, Layers, Search, Shapes, Tags } from "lucide-react";
 import { Input } from "@/components/ui";
 import { Panel } from "@/components/Panel";
 import { useAction } from "@/components/ActionButton";
@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase/client";
 export interface PictureSlot {
   key: string;
   formatId?: string;
+  categoryId?: string;
   eventType?: "standard" | "special" | "day_trip" | "weekend_trip";
   name: string;
   note: string;
@@ -23,14 +24,14 @@ export interface PictureSlot {
 function Slot({ slot, editable }: { slot: PictureSlot; editable: boolean }) {
   const { run, pending, error, setError, confirm } = useAction();
   const [uploading, setUploading] = useState(false);
-  const target = slot.formatId ? { format_id: slot.formatId } : { event_type: slot.eventType };
+  const target = slot.formatId ? { format_id: slot.formatId } : slot.categoryId ? { category_id: slot.categoryId } : { event_type: slot.eventType };
 
   async function upload(file: File) {
     setError(null);
     const problem = pictureProblem(file);
     if (problem) return setError(problem);
     setUploading(true);
-    const folder = slot.formatId ? `format/${slot.formatId}` : `type/${slot.eventType}`;
+    const folder = slot.formatId ? `format/${slot.formatId}` : slot.categoryId ? `category/${slot.categoryId}` : `type/${slot.eventType}`;
     const path = `${folder}/${crypto.randomUUID()}.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
     const { error: e } = await supabase.storage.from("advertising-pictures").upload(path, file, { contentType: file.type });
     setUploading(false);
@@ -40,11 +41,16 @@ function Slot({ slot, editable }: { slot: PictureSlot; editable: boolean }) {
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm" data-testid={`picture-${slot.key}`}>
-      <div>
-        <p className="font-semibold text-gray-900">{slot.name}</p>
-        <p className="text-xs text-gray-500">{slot.note}</p>
+      {/* Same height in every card, however long the name: two lines at most, the note on one. */}
+      <div className="min-w-0">
+        <p className="line-clamp-2 min-h-10 break-words font-semibold leading-5 text-gray-900" title={slot.name}>
+          {slot.name}
+        </p>
+        <p className="truncate text-xs text-gray-500" title={slot.note}>
+          {slot.note}
+        </p>
       </div>
-      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-gray-50">
+      <div className="mt-auto flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-gray-50">
         {slot.picture ? <UploadedPicture picture={slot.picture} className="max-h-full" /> : <span className="flex flex-col items-center gap-1 text-xs text-gray-400"><ImageIcon className="h-6 w-6" aria-hidden="true" />No default picture</span>}
       </div>
       {editable && (
@@ -71,28 +77,30 @@ function Slot({ slot, editable }: { slot: PictureSlot; editable: boolean }) {
   );
 }
 
-/** The defaults by event type, then by format (searchable: there are many formats). */
-export function DefaultPictures({ types, formats, editable }: { types: PictureSlot[]; formats: PictureSlot[]; editable: boolean }) {
+/** The defaults: category, format (searchable: there are many), event type – used format, else category, else type. */
+export function DefaultPictures({ types, categories, formats, editable }: { types: PictureSlot[]; categories: PictureSlot[]; formats: PictureSlot[]; editable: boolean }) {
   const [query, setQuery] = useState("");
   const shown = formats.filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()));
   const grid = "grid gap-3 sm:grid-cols-2 lg:grid-cols-4";
+  const count = (list: PictureSlot[]) => (
+    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+      {list.filter((f) => f.picture).length} of {list.length} with a picture
+    </span>
+  );
   return (
     <div className="space-y-6">
-      <Panel title="By event type" icon={Shapes} description="Used when an event has no format picture.">
-        <ul className={grid} data-testid="type-pictures">
-          {types.map((t) => (
-            <Slot key={t.key} slot={t} editable={editable} />
+      <Panel title="By category" icon={Tags} description="Hike, pub, city tour … – used when an event has no format picture." aside={count(categories)}>
+        <ul className={grid} data-testid="category-pictures">
+          {categories.map((c) => (
+            <Slot key={c.key} slot={c} editable={editable} />
           ))}
         </ul>
       </Panel>
       <Panel
         title="By format (event series)"
         icon={Layers}
-        aside={
-          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
-            {formats.filter((f) => f.picture).length} of {formats.length} with a picture
-          </span>
-        }
+        description="A recurring event's own picture – it comes first."
+        aside={count(formats)}
       >
         <div className="space-y-4">
           <div className="relative max-w-sm">
@@ -109,6 +117,13 @@ export function DefaultPictures({ types, formats, editable }: { types: PictureSl
             </ul>
           )}
         </div>
+      </Panel>
+      <Panel title="By event type" icon={Shapes} description="The last fallback: used when an event has neither a format nor a category picture.">
+        <ul className={grid} data-testid="type-pictures">
+          {types.map((t) => (
+            <Slot key={t.key} slot={t} editable={editable} />
+          ))}
+        </ul>
       </Panel>
     </div>
   );

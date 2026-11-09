@@ -1,5 +1,6 @@
 // The same status chips and step displays on every page (review C11).
 import Link from "next/link";
+import { Check, X } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, type EventStatus } from "@/lib/labels";
 import { STATUS_LABELS, type ClaimStatus } from "@/lib/reimbursement";
@@ -60,15 +61,54 @@ export function StageTrack({ steps, label, position, testId }: { steps: StepView
   const current = steps.find((s) => s.state === "current");
   return (
     <div data-testid={testId}>
-      <div className="hidden sm:block">
-        <Stepper steps={steps} label={label} compact />
-      </div>
+      {/* One column per stage, the same in every row (round 2026-11-09): a bar and a label with a
+          fixed-width mark, so done, current and open stages line up from row to row. */}
+      <ol aria-label={label} className="hidden gap-1 sm:grid" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+        {steps.map((s) => (
+          <li key={s.label} className="min-w-0" aria-current={s.state === "current" ? "step" : undefined} data-state={s.state} data-late={s.late || undefined} title={`${s.label}: ${TRACK_WORD[s.state]}`}>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "block h-1.5 rounded-full",
+                s.state === "done" && "bg-emerald-500",
+                s.state === "current" && (s.late ? "bg-red-600" : "bg-esn"),
+                s.state === "todo" && "bg-gray-200",
+                s.state === "failed" && "bg-red-300"
+              )}
+            />
+            <span
+              className={cn(
+                "mt-1 flex items-center gap-1 text-[11px] leading-4",
+                s.state === "done" && "text-emerald-800",
+                s.state === "current" && (s.late ? "font-semibold text-red-700" : "font-semibold text-esn"),
+                s.state === "todo" && "text-gray-500",
+                s.state === "failed" && "text-red-700"
+              )}
+            >
+              <TrackMark state={s.state} />
+              <span className="truncate">{s.label}</span>
+              <span className="sr-only"> – {TRACK_WORD[s.state]}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
       <p className="sm:hidden text-[11px] text-gray-600" data-testid="stage-compact">
         <span className={cn("rounded-full px-2 py-0.5 font-medium", current ? "bg-esn text-white" : "bg-emerald-50 text-emerald-800")}>{current ? current.label : "✓ All done"}</span>{" "}
         {position} of {steps.length}
       </p>
     </div>
   );
+}
+
+const TRACK_WORD: Record<StepView["state"], string> = { done: "done", current: "now", todo: "to do", failed: "failed" };
+
+/** The stage track's mark: always the same width, so the labels never shift. */
+function TrackMark({ state }: { state: StepView["state"] }) {
+  const box = "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full";
+  if (state === "done") return <Check aria-hidden="true" className={cn(box, "bg-emerald-100 p-0.5 text-emerald-700")} strokeWidth={3} />;
+  if (state === "failed") return <X aria-hidden="true" className={cn(box, "bg-red-100 p-0.5 text-red-700")} strokeWidth={3} />;
+  if (state === "current") return <span aria-hidden="true" className={cn(box, "border-2 border-current")}><span className="h-1.5 w-1.5 rounded-full bg-current" /></span>;
+  return <span aria-hidden="true" className={cn(box, "border border-gray-300")} />;
 }
 
 /** Steps in a row (wrapping on phones): done ✓, the current one highlighted; steps with `href` are links. */

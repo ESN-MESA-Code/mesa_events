@@ -21,17 +21,23 @@ export type Database = {
                   ]
                 },"advertising_pictures": {
                   Row: {
-                    "event_type": Database["public"]['Enums']["event_type"] | null,"format_id": string | null,"id": string,"picture": string,"updated_at": string,"updated_by": string | null
+                    "category_id": string | null,"event_type": Database["public"]['Enums']["event_type"] | null,"format_id": string | null,"id": string,"picture": string,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture": string,"updated_at"?: string,"updated_by"?: string | null
+                    "category_id"?: string | null,"event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture": string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture"?: string,"updated_at"?: string,"updated_by"?: string | null
+                    "category_id"?: string | null,"event_type"?: Database["public"]['Enums']["event_type"] | null,"format_id"?: string | null,"id"?: string,"picture"?: string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     {
+      foreignKeyName: "advertising_pictures_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: true
+      referencedRelation: "event_categories"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "advertising_pictures_format_id_fkey"
       columns: ["format_id"]
 isOneToOne: true
@@ -1788,7 +1794,7 @@ isOneToOne: false
 { Args: { "channel": string,"enabled": boolean }; Returns: undefined
                            },
 "set_default_picture":
-{ Args: { "format": string,"picture": string,"type": string }; Returns: undefined
+{ Args: { "category"?: string,"format": string,"picture": string,"type": string }; Returns: undefined
                            },
 "set_esncard_prices":
 { Args: { "external_cents": number,"internal_cents": number }; Returns: undefined

@@ -3,7 +3,8 @@
 // suggests any day before the event, what is still to plan counts the
 // months ahead, and a far-ahead post names when its description is due.
 import { describe, expect, it } from "vitest";
-import { boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, trayGroups, type PostEventFacts } from "@/lib/publishing";
+import { DRAFT_AHEAD_DAYS, advertisable, boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, telegramRefusal, trayGroups, type PostEventFacts } from "@/lib/publishing";
+import { defaultPictureOf } from "@/lib/publishingLoad";
 import { calendarWeeks } from "@/lib/month";
 
 const ev = (id: string, startsAt: string, type: string | null = "standard") => ({ id, startsAt, type });
@@ -86,5 +87,36 @@ describe("warnings on a far-ahead post", () => {
     expect(postWarnings(post, [facts({ deadline: "2026-12-20T22:59:00Z" })], new Map())).toEqual(["“Prague”: description not approved yet (due Sun 20 Dec)"]);
     expect(postWarnings(post, [facts()], new Map())).toEqual(["“Prague”: description not approved yet"]);
     expect(postWarnings(post, [facts({ description: "approved", price: "25" })], new Map())).toEqual([]);
+  });
+});
+
+describe("advertising a month ahead (round 2026-11-09)", () => {
+  const now = Date.parse("2026-11-09T10:00:00Z");
+  const inDays = (d: number) => new Date(now + d * 86_400_000).toISOString();
+  it("drafts only within six weeks; fixed events always; cancelled never", () => {
+    expect(advertisable({ status: "draft", startsAt: inDays(30) }, now)).toBe(true);
+    expect(advertisable({ status: "draft", startsAt: inDays(DRAFT_AHEAD_DAYS + 1) }, now)).toBe(false);
+    expect(advertisable({ status: "scheduled", startsAt: inDays(80) }, now)).toBe(true);
+    expect(advertisable({ status: "cancelled", startsAt: inDays(3) }, now)).toBe(false);
+  });
+  it("a draft is warned about, a cancelled event refused on Telegram", () => {
+    const e: PostEventFacts = { id: "a", title: "Hike", startsAt: inDays(20), description: "approved", price: "5 €", eventStatus: "draft" };
+    expect(postWarnings({ channel: "instagram", scheduledFor: inDays(1), status: "planned" }, [e], new Map())).toEqual([expect.stringContaining("still a draft")]);
+    expect(telegramRefusal([e])).toBeNull();
+    expect(telegramRefusal([{ ...e, eventStatus: "cancelled" }])).toBe("“Hike” is cancelled.");
+  });
+});
+
+describe("default pictures (round 2026-11-09)", () => {
+  const rows = [
+    { format_id: "f1", category_id: null, event_type: null, picture: "library:f1.png" },
+    { format_id: null, category_id: "c1", event_type: null, picture: "library:c1.png" },
+    { format_id: null, category_id: null, event_type: "standard", picture: "library:std.png" },
+  ];
+  it("format, else category, else type", () => {
+    expect(defaultPictureOf({ format_id: "f1", category_id: "c1", type: "standard" }, rows)).toBe("library:f1.png");
+    expect(defaultPictureOf({ format_id: "f2", category_id: "c1", type: "standard" }, rows)).toBe("library:c1.png");
+    expect(defaultPictureOf({ format_id: null, category_id: "c2", type: "standard" }, rows)).toBe("library:std.png");
+    expect(defaultPictureOf({ format_id: null, category_id: null, type: "special" }, rows)).toBeNull();
   });
 });
