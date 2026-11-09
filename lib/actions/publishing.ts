@@ -32,6 +32,36 @@ export const createPost = defineAction(
   { revalidate: [...BOARD, PAGES.content] }
 );
 
+/**
+ * Several posts of one event at once (round 2026-11-09): each its own channel,
+ * day and time, optionally a title ("Save the date", "Sales NOW") and a
+ * format – a whole campaign planned in one go.
+ */
+export const planEventPosts = defineAction(
+  z.object({
+    event_id: uuid,
+    posts: z
+      .array(z.object({ channel, day, time, title: title.default(""), format: z.union([format, z.literal("")]).default("") }))
+      .min(1, "Add a post.")
+      .max(10, "Ten posts at a time at most."),
+  }),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    for (const p of i.posts) {
+      const { error } = await ctx.supabase.rpc("create_post", {
+        channel: p.channel,
+        scheduled_for: at(p.day, p.time),
+        events: [i.event_id],
+        title: p.title || undefined,
+        format: p.format || undefined,
+      });
+      dbError(error);
+    }
+    return { made: i.posts.length };
+  },
+  { revalidate: [...BOARD, PAGES.content] }
+);
+
 /** What a post is, who makes it, how far it is, its caption and design (round 2026-11-09). Telegram's confirmation stays. */
 export const updatePostContent = defineAction(
   z.object({
@@ -60,41 +90,6 @@ export const updatePostContent = defineAction(
     );
   },
   { revalidate: [PAGES.schedule, PAGES.content, PAGES.home] }
-);
-
-/**
- * A promo series for one event (round 2026-11-09, promoSeries()): the
- * ticked steps as titled posts of the event, each on its own day – those not
- * planned yet (same channel, day and title). Not on Telegram: its posts are
- * the event's description.
- */
-export const planPromoSeries = defineAction(
-  z.object({
-    event_id: uuid,
-    channel: channel.refine((c) => c !== "telegram", "Telegram posts are the event's description – pick Instagram or another channel."),
-    steps: z
-      .array(z.object({ title: z.string().trim().min(1).max(120), format: z.enum(POST_FORMATS), day, time }))
-      .min(1, "Tick at least one post.")
-      .max(6),
-  }),
-  async (ctx, i) => {
-    requireRole(ctx, "comms");
-    const { data: existing } = await ctx.supabase
-      .from("publication_posts")
-      .select("scheduled_for, title, publication_post_events!inner(event_id)")
-      .eq("channel", i.channel)
-      .eq("publication_post_events.event_id", i.event_id)
-      .neq("status", "skipped");
-    const have = new Set((existing ?? []).map((p) => `${berlinDate(p.scheduled_for)}|${p.title ?? ""}`));
-    let made = 0;
-    for (const st of i.steps) {
-      if (have.has(`${st.day}|${st.title}`)) continue;
-      dbError((await ctx.supabase.rpc("create_post", { channel: i.channel, scheduled_for: at(st.day, st.time), events: [i.event_id], title: st.title, format: st.format })).error);
-      made++;
-    }
-    return { made };
-  },
-  { revalidate: [...BOARD, PAGES.content] }
 );
 
 /**

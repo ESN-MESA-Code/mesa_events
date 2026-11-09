@@ -1379,10 +1379,32 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   the post on the board (`?post=`).
 - **Kept out (for now)**: the post-ideas and reel-ideas backlogs (inspiration links; fine in a
   shared sheet or an Instagram collection until undated posts exist), and tasks that are not posts
-  (new logo, stickers, website text). - **Promo series** ("Promo series…" under each upcoming event in the board's list, highlighted
-  for big events; `promoSeries()`, `planPromoSeries`): Save the date (three weeks before, or
-  today), "Sales open <day>" two days before ticket sales open and "Sales NOW" at the opening
-  (both only when the sales opening is given – events have no sales date of their own), Last
-  chance two days before, Today! on the day (unticked by default). Each step can be unticked or
-  moved; they become titled posts of the event (post / story) on one non-Telegram channel,
-  Instagram by default, and steps already planned (same channel, day and title) are skipped.
+  (new logo, stickers, website text). A fixed promo series (save the date → sales now → reminder) was
+  tried and dropped as too rigid; instead "Plan…" plans several posts of an event at once.
+
+## 2026-11-09 (3) – Events vs. posts on the board, several posts per event, event cards
+
+- **Events are labels, posts are cards.** On the calendar an event is a line of text (its dot,
+  📅 time, title) with a mark per required channel (green ✓ posted, blue planned, red – still
+  missing while it is ahead); posts are bordered cards with a shadow. A dashed line separates
+  them in a day. "Events" and "Posts" in the header hide either.
+- **Lead time on every post card**: "−3d", "−2w", "day of", red "+1d" after the event – counted
+  to the post's next event (`leadOf()`); the full text on hover.
+- **Clicking an event shows its campaign**: other posts fade, the days from its first post to the
+  event are shaded, the event's day is outlined.
+- **The first days of next month** finish the last week, greyed, with their events (not drop
+  targets: posts there belong to next month's board).
+- **"By event" view** next to the calendar: one row per event (past ones only with posts on the
+  view), days from the month's first to the last listed event (at most 120); each post a marker
+  on its day – square post / reel, round story, light planned, solid posted, dashed unconfirmed
+  Telegram, pink Instagram, blue Telegram – a line from the first post to the event's 📅, "no
+  posts" in red for upcoming events without any, a row for posts without an event. Drop a channel
+  chip on a day column to plan, drag a marker to move the post; clicking an event fades the rest.
+  The page loads the posts of the month and the months the list looks ahead for it.
+- **Several posts per event at once**: "Plan…" holds rows (channel, format, day, time, optional
+  title); "+ Another post" adds one a week later while that is before the event;
+  `planEventPosts` plans them together. Adding the event to an existing post moved below.
+- **Event cards in the list**: the event's colour as a stripe on the left (the same colour as
+  its dot and posts), the title larger, "📅 date, time · in N days" (amber within a week), the
+  description status as a coloured pill, the channel chips under "Channels · drag onto a day"
+  (red dashed while a required one is missing, green once posted), pretix and Plan… in a footer.

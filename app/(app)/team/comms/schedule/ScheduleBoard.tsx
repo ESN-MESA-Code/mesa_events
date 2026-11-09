@@ -28,6 +28,7 @@ import {
   editPost,
   markPostPublished,
   movePost,
+  planEventPosts,
   publishPostNow,
   removeFromPost,
   reorderPost,
@@ -38,8 +39,10 @@ import {
 import { DESCRIPTION_STATUS } from "@/components/status";
 import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
 import { calendarWeeks, dayDiff } from "@/lib/month";
-import { FORMAT_LABEL, defaultPostDay, isBigEvent, namesOf, trayGroups, type PostFormat, type Progress } from "@/lib/publishing";
-import { ContentEditor, NewPostForm, ProgressPill, PromoSeriesForm, RegularPostsForm, initials, type TeamMember } from "./PostContent";
+import { FORMAT_LABEL, POST_FORMATS, defaultPostDay, isBigEvent, namesOf, trayGroups, type PostFormat, type Progress } from "@/lib/publishing";
+import { addDays } from "@/lib/month";
+import { plural } from "@/lib/plural";
+import { ContentEditor, NewPostForm, ProgressPill, RegularPostsForm, initials, type TeamMember } from "./PostContent";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -143,6 +146,31 @@ function leadTime(postDay: string, eventStart: string): { text: string; late: bo
   return { text: `${d} d before`, late: false };
 }
 
+/**
+ * A post's lead time on its card (round 2026-11-09): "−3d", "−2w", "day of",
+ * "+1d" (after – late), counted to its next event (the last one when all are
+ * before the post); null for a post without events.
+ */
+function leadOf(post: BoardPost, byId: Map<string, BoardEvent>): { short: string; text: string; late: boolean } | null {
+  const day = berlinDate(post.scheduledFor);
+  const evs = post.events
+    .map((id) => byId.get(id))
+    .filter((e): e is BoardEvent => !!e)
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  if (!evs.length) return null;
+  const ev = evs.find((e) => berlinDate(e.startsAt) >= day) ?? evs[evs.length - 1];
+  const d = dayDiff(day, berlinDate(ev.startsAt));
+  const short = d === 0 ? "day of" : d < 0 ? `+${-d}d` : d < 14 ? `−${d}d` : `−${Math.round(d / 7)}w`;
+  return { short, text: `${leadTime(day, ev.startsAt).text} – ${ev.title}`, late: d < 0 };
+}
+
+/** The "By event" view's marker colour per channel. */
+const CHANNEL_DOT: Record<string, { solid: string; light: string }> = {
+  telegram: { solid: "bg-sky-500 border-sky-600", light: "bg-sky-100 border-sky-500" },
+  instagram: { solid: "bg-pink-500 border-pink-600", light: "bg-pink-100 border-pink-500" },
+};
+const dotOf = (channel: string) => CHANNEL_DOT[channel] ?? { solid: "bg-gray-500 border-gray-600", light: "bg-gray-100 border-gray-500" };
+
 /** A post under the pointer wins over its day (bundling); the keyboard has no pointer and takes the overlap. */
 const collisions: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
@@ -181,6 +209,7 @@ export function ScheduleBoard({
   channels,
   events,
   posts,
+  timelinePosts,
   editable,
   viewer,
   today,
@@ -194,6 +223,8 @@ export function ScheduleBoard({
   channels: BoardChannel[];
   events: BoardEvent[];
   posts: BoardPost[];
+  /** Posts from this month on, as far as the list looks ahead – the "By event" view. */
+  timelinePosts: BoardPost[];
   editable: boolean;
   viewer: { email: string; name: string };
   /** Berlin date; events before it are no longer advertised. */
@@ -214,6 +245,10 @@ export function ScheduleBoard({
   const [open, setOpen] = useState<string | null>(initialPost);
   const [mine, setMine] = useState(false);
   const [panel, setPanel] = useState<"" | "new" | "regular">("");
+  // Round 2026-11-09: the calendar or one row per event; events and posts can be hidden.
+  const [view, setView] = useState<"calendar" | "timeline">("calendar");
+  const [showEvents, setShowEvents] = useState(true);
+  const [showPosts, setShowPosts] = useState(true);
   const [others, setOthers] = useState<string[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const [hover, setHover] = useState<string | null>(null);
@@ -223,7 +258,16 @@ export function ScheduleBoard({
   const weeks = calendarWeeks(month);
   const days = weeks.flat().filter((d): d is string => !!d);
   const focusDay = focus ? berlinDate(byId.get(focus)?.startsAt ?? "") : null;
-  const opened = posts.find((p) => p.id === open) ?? null;
+  const opened = timelinePosts.find((p) => p.id === open) ?? posts.find((p) => p.id === open) ?? null;
+  // A focused event's campaign: from its first post to its day, shaded on the calendar.
+  const campaignFrom = focus
+    ? timelinePosts
+        .filter((p) => p.events.includes(focus) && p.status !== "skipped")
+        .map((p) => berlinDate(p.scheduledFor))
+        .sort()[0] ?? null
+    : null;
+  const inCampaign = (d: string) => !!focusDay && !!campaignFrom && d >= campaignFrom && d < focusDay;
+  const required = channels.filter((c) => c.required);
 
   // Others' changes (Realtime) and who else is on the board (presence).
   const refresh = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -257,9 +301,10 @@ export function ScheduleBoard({
     setDragging(null);
     if (!e.over || !editable) return;
     // The phone list's twins have their own ids ("mpost", "mday"): a hidden twin with the same id would take the drop.
-    const [kind, a, b] = String(e.active.id).replace(/^mpost\|/, "post|").split("|");
-    const [target, x] = String(e.over.id).replace(/^mpost\|/, "post|").split("|");
-    const postOf = (id: string) => posts.find((p) => p.id === id);
+    // The "By event" view: its markers ("tpost|<post>|<event>") move posts, its columns ("tday|<day>") are days.
+    const [kind, a, b] = String(e.active.id).replace(/^mpost\|/, "post|").replace(/^tpost\|([^|]+)\|.*$/, "post|$1").split("|");
+    const [target, x] = String(e.over.id).replace(/^mpost\|/, "post|").replace(/^tday\|/, "day|").split("|");
+    const postOf = (id: string) => timelinePosts.find((p) => p.id === id) ?? posts.find((p) => p.id === id);
     if (kind === "chan") {
       // a = channel, b = event
       if (target === "day" || target === "mday") run(createPost, { channel: a, day: x, event_ids: [b] });
@@ -281,31 +326,52 @@ export function ScheduleBoard({
   const eventsOn = (d: string) => events.filter((e) => berlinDate(e.startsAt) === d).sort((x, y) => x.startsAt.localeCompare(y.startsAt));
   const postsOn = (d: string) => posts.filter((p) => berlinDate(p.scheduledFor) === d).sort((x, y) => x.scheduledFor.localeCompare(y.scheduledFor));
 
-  const dayContent = (d: string, phone = false) => (
-    <>
-      {eventsOn(d).map((e) => (
-        <button
-          key={e.id}
-          type="button"
-          onClick={() => setFocus(focus === e.id ? null : e.id)}
-          onMouseEnter={() => setHover(e.id)}
-          onMouseLeave={() => setHover(null)}
-          className={cn("block w-full rounded bg-amber-100 px-1 py-0.5 text-left text-[11px] leading-tight text-amber-950 hover:bg-amber-200", focus === e.id && "ring-2 ring-amber-500")}
-          aria-pressed={focus === e.id}
-          title={`${e.title}${e.draft ? " (draft – the date may still change)" : ""}`}
-          data-testid={`cal-event-${e.id}`}
-        >
-          <EventDot color={byId.get(e.id)?.color} className="mr-1 align-middle" />
-          📅 <span className="tabular-nums font-semibold">{berlinTime(e.startsAt)}</span>
-          {e.draft && <span className="ml-1 rounded bg-white/70 px-0.5 text-[10px] uppercase tracking-wide text-gray-600">draft</span>}
-          <span className={cn("block break-words", !phone && "line-clamp-2")}>{e.title}</span>
-        </button>
-      ))}
-      {postsOn(d).map((p) => (
-        <PostChip key={p.id} post={p} byId={byId} editable={editable} focus={hover ?? focus} onOpen={() => setOpen(p.id)} phone={phone} team={team} dim={mine && !p.assignees.includes(viewer.email)} />
-      ))}
-    </>
+  const eventLabel = (e: BoardEvent, phone: boolean, muted = false) => (
+    <EventLabel
+      key={e.id}
+      event={e}
+      color={byId.get(e.id)?.color}
+      required={required}
+      coverage={coverage}
+      today={today}
+      active={focus === e.id}
+      muted={muted}
+      phone={phone}
+      onClick={() => setFocus(focus === e.id ? null : e.id)}
+      onEnter={() => setHover(e.id)}
+      onLeave={() => setHover(null)}
+    />
   );
+  // Round 2026-11-09: events are labels (what is happening), posts are cards (what Comms makes).
+  const dayContent = (d: string, phone = false) => {
+    const evs = showEvents ? eventsOn(d) : [];
+    const ps = showPosts ? postsOn(d) : [];
+    return (
+      <>
+        {evs.map((e) => eventLabel(e, phone))}
+        {evs.length > 0 && ps.length > 0 && <div aria-hidden="true" className="border-t border-dashed border-gray-200" />}
+        {ps.map((p) => (
+          <PostChip
+            key={p.id}
+            post={p}
+            byId={byId}
+            editable={editable}
+            focus={hover ?? focus}
+            onOpen={() => setOpen(p.id)}
+            phone={phone}
+            team={team}
+            dim={(mine && !p.assignees.includes(viewer.email)) || (!!focus && !p.events.includes(focus))}
+          />
+        ))}
+      </>
+    );
+  };
+  // The first days of next month at the end of the grid: their events (greyed), not for dropping.
+  const lastDay = days[days.length - 1];
+  const trailing = (i: number) => {
+    const at = weeks.flat().findIndex((x) => x === lastDay);
+    return i > at ? addDays(lastDay, i - at) : null;
+  };
 
   return (
     <DndContext id="publishing-board" sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
@@ -317,11 +383,35 @@ export function ScheduleBoard({
 
           <Card className="p-4">
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 className="mr-auto text-base font-bold text-gray-900">Month board</h2>
+              <h2 className="text-base font-bold text-gray-900">{view === "calendar" ? "Month board" : "By event"}</h2>
+              <div role="radiogroup" aria-label="View" className="mr-auto flex rounded-lg bg-gray-100 p-0.5 text-xs" data-testid="board-view">
+                {(["calendar", "timeline"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === v}
+                    onClick={() => setView(v)}
+                    className={cn("rounded-md px-2 py-1 font-medium", view === v ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900")}
+                  >
+                    {v === "calendar" ? "Calendar" : "By event"}
+                  </button>
+                ))}
+              </div>
               {pending && <span className="text-xs text-gray-500">Saving…</span>}
               <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700" title="Only the posts you make stand out">
                 <input type="checkbox" className="accent-esn" checked={mine} onChange={(e) => setMine(e.target.checked)} data-testid="only-mine" /> Mine
               </label>
+              {view === "calendar" && (
+                <>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700">
+                    <input type="checkbox" className="accent-esn" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} data-testid="show-events" /> Events
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700">
+                    <input type="checkbox" className="accent-esn" checked={showPosts} onChange={(e) => setShowPosts(e.target.checked)} data-testid="show-posts" /> Posts
+                  </label>
+                </>
+              )}
               {editable && (
                 <>
                   <Button size="sm" variant={panel === "new" ? "default" : "outline"} onClick={() => setPanel(panel === "new" ? "" : "new")} data-testid="new-post">
@@ -333,9 +423,11 @@ export function ScheduleBoard({
                 </>
               )}
               <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600" data-testid="board-legend">
-                <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-900" title="When the event takes place">📅 Event</span>
-                <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-1.5 py-0.5" title="One event: its dot is on its date and on every post advertising it (point at an event to see its posts)">
-                  <EventDot color="bg-rose-500" /> same event
+                <span className="inline-flex items-center gap-1 px-1 py-0.5 text-gray-600" title="When the event takes place – click it to see its posts">
+                  <EventDot color="bg-rose-500" /> 📅 Event
+                </span>
+                <span className="rounded-md bg-gray-50 px-1.5 py-0.5" title="How long before its event a post goes out">
+                  −3d = 3 days before
                 </span>
                 {channels.map((c) => (
                   <span key={c.key} className={cn("rounded-md border px-1.5 py-0.5", chipOf(c.key))} title={`${c.name} post`}>
@@ -357,32 +449,55 @@ export function ScheduleBoard({
                 <RegularPostsForm channels={channels} month={month} today={today} onDone={() => setPanel("")} />
               </div>
             )}
+            {view === "timeline" && (
+              <Timeline
+                month={month}
+                events={colored}
+                posts={timelinePosts}
+                today={today}
+                editable={editable}
+                focus={focus}
+                setFocus={setFocus}
+                onOpen={setOpen}
+                dimmed={(p) => mine && !p.assignees.includes(viewer.email)}
+              />
+            )}
             {/* Desktop and tablet: the whole month at once. */}
-            <div className="hidden sm:block" data-testid="schedule-board">
+            <div className={cn("hidden", view === "calendar" && "sm:block")} data-testid="schedule-board">
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
                 {WEEKDAYS.map((d) => (
                   <span key={d}>{d}</span>
                 ))}
               </div>
               <div className="mt-1 grid grid-cols-7 gap-1">
-                {weeks.flat().map((d, i) =>
-                  d ? (
-                    <Day key={d} id={`day|${d}`} day={d} today={today} highlight={d === focusDay} disabled={!editable}>
-                      {dayContent(d)}
-                    </Day>
+                {weeks.flat().map((d, i) => {
+                  if (d)
+                    return (
+                      <Day key={d} id={`day|${d}`} day={d} today={today} highlight={d === focusDay} campaign={inCampaign(d)} disabled={!editable}>
+                        {dayContent(d)}
+                      </Day>
+                    );
+                  const next = trailing(i);
+                  return next ? (
+                    <div key={next} className="min-h-20 min-w-0 space-y-1 rounded-md border border-dashed border-gray-200 bg-gray-50/60 p-1" data-testid={`next-day-${next}`}>
+                      <p className="text-[11px] font-semibold tabular-nums text-gray-400">
+                        {Number(next.slice(8))} {formatShortDate(`${next}T12:00:00Z`).split(" ").pop()}
+                      </p>
+                      {showEvents && eventsOn(next).map((e) => eventLabel(e, false, true))}
+                    </div>
                   ) : (
                     <div key={`blank-${i}`} aria-hidden="true" />
-                  )
-                )}
+                  );
+                })}
               </div>
             </div>
             {/* Phones: the days with something on them, plus drop targets while dragging (their own ids). */}
-            <ol className="space-y-1 sm:hidden">
+            <ol className={cn("space-y-1 sm:hidden", view === "timeline" && "hidden")}>
               {days
                 .filter((d) => eventsOn(d).length > 0 || postsOn(d).length > 0 || (!!dragging && d >= today))
                 .map((d) => (
                   <li key={d}>
-                    <Day id={`mday|${d}`} day={d} today={today} highlight={d === focusDay} disabled={!editable} wide>
+                    <Day id={`mday|${d}`} day={d} today={today} highlight={d === focusDay} campaign={inCampaign(d)} disabled={!editable} wide>
                       {dayContent(d, true)}
                     </Day>
                   </li>
@@ -395,7 +510,7 @@ export function ScheduleBoard({
                   How the board works
                 </summary>
                 <p className="mt-1 pl-3">
-                  Drag a channel chip of an event from the list onto a day to plan that post (10:00), or onto a post of the same channel to bundle them. Drag a post to another day to move it; click it for the preview, publishing and the rest. Keyboard: focus a chip, Space, arrow keys, Space – or “Plan…”.
+                  Drag a channel chip of an event from the list onto a day to plan that post (10:00), or onto a post of the same channel to bundle them. Drag a post to another day to move it; click it for the preview, publishing and the rest. Click an event to see only its posts and the days from its first post to the event. “By event” shows each event as a row with its posts on their days. Keyboard: focus a chip, Space, arrow keys, Space – or “Plan…”, which plans several posts at once.
                 </p>
               </details>
             )}
@@ -419,7 +534,26 @@ export function ScheduleBoard({
   );
 }
 
-function Day({ id, day, today, highlight, disabled, wide, children }: { id: string; day: string; today: string; highlight: boolean; disabled: boolean; wide?: boolean; children: React.ReactNode }) {
+function Day({
+  id,
+  day,
+  today,
+  highlight,
+  campaign = false,
+  disabled,
+  wide,
+  children,
+}: {
+  id: string;
+  day: string;
+  today: string;
+  highlight: boolean;
+  /** Between the focused event's first post and its day. */
+  campaign?: boolean;
+  disabled: boolean;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled });
   return (
     <div
@@ -429,7 +563,7 @@ function Day({ id, day, today, highlight, disabled, wide, children }: { id: stri
       className={cn(
         "min-w-0 rounded-md border p-1 space-y-1",
         wide ? "flex gap-2 space-y-0" : "min-h-20",
-        isOver ? "border-esn bg-esn/10" : highlight ? "border-amber-400 bg-amber-50" : day < today ? "border-gray-100 bg-gray-50" : "border-gray-200 bg-white"
+        isOver ? "border-esn bg-esn/10" : highlight ? "border-amber-400 bg-amber-50" : campaign ? "border-amber-200 bg-amber-50/50" : day < today ? "border-gray-100 bg-gray-50" : "border-gray-200 bg-white"
       )}
     >
       <p className={cn("text-[11px] font-semibold tabular-nums", wide && "w-14 shrink-0", day === today ? "text-esn" : "text-gray-500")}>{wide ? `${day.slice(8)}.${day.slice(5, 7)}.` : Number(day.slice(8))}</p>
@@ -466,6 +600,7 @@ function PostChip({
   const titles = post.events.map((id) => byId.get(id)?.title ?? "Event");
   const focused = !!focus && post.events.includes(focus);
   const who = post.assignees.map((e) => team.find((m) => m.email === e)?.name ?? e.split("@")[0]);
+  const lead = leadOf(post, byId);
   return (
     <div ref={setNodeRef} data-testid={`post-${post.id}`} className={cn("rounded", isOver && "ring-2 ring-esn", focused && "ring-2 ring-amber-500", dim && "opacity-40")}>
       <Draggable id={id} disabled={!editable || post.status !== "planned"}>
@@ -474,7 +609,7 @@ function PostChip({
           onClick={onOpen}
           title={`${post.title ? `${post.title}\n` : ""}${titles.join(", ")}${who.length ? `\nBy ${who.join(", ")}` : ""}${post.warnings.length ? `\n⚠ ${post.warnings.join("\n⚠ ")}` : ""}`}
           className={cn(
-            "block w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight hover:brightness-95",
+            "block w-full rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm hover:brightness-95",
             chipOf(post.channel),
             post.status === "published" && "border-emerald-400",
             post.status === "skipped" && "opacity-60 line-through",
@@ -493,6 +628,15 @@ function PostChip({
             <span className="text-amber-700" aria-label="Has warnings">
               {" "}
               ⚠
+            </span>
+          )}
+          {lead && (
+            <span
+              className={cn("float-right ml-1 rounded px-0.5 text-[10px] font-semibold tabular-nums", lead.late ? "bg-red-100 text-red-700" : "bg-white/80 text-gray-600")}
+              title={lead.text}
+              data-testid="lead-time"
+            >
+              {lead.short}
             </span>
           )}
           <span className={cn("block break-words", !phone && "line-clamp-2")}>
@@ -558,63 +702,88 @@ function EventList({
   // Drafts may be advertised early; they are not counted as still to do.
   const open = events.filter((ev) => !ev.draft && berlinDate(ev.startsAt) >= today && !isDone(ev));
   const [own, ...later] = trayGroups(events, month).map((g) => ({ ...g, events: todo ? g.events.filter((ev) => open.includes(ev)) : g.events }));
+  // Round 2026-11-09: the event's colour as a stripe, the title first, when and how soon, the
+  // description as a pill, the channel chips to drag, pretix and planning in the footer.
   const item = (e: BoardEvent) => {
     const past = berlinDate(e.startsAt) < today;
+    const inDays = dayDiff(today, berlinDate(e.startsAt));
+    const soon = inDays >= 0 && inDays <= 7;
+    const desc = DESCRIPTION_STATUS[e.description];
     return (
       <li
         key={e.id}
         data-testid={`tray-${e.id}`}
         onMouseEnter={() => setHover(e.id)}
         onMouseLeave={() => setHover(null)}
-        className={cn("rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs transition-shadow hover:shadow-sm", focus === e.id && "ring-2 ring-amber-500", past && "opacity-70")}
+        className={cn(
+          "relative overflow-hidden rounded-xl border border-gray-200 bg-white text-xs shadow-sm transition-shadow hover:shadow-md",
+          focus === e.id && "ring-2 ring-amber-400",
+          past && "opacity-60"
+        )}
       >
-        <div className="flex items-start gap-1.5">
-          <button type="button" className="flex min-w-0 flex-1 items-start gap-1.5 text-left font-medium text-gray-900 hover:text-esn" onClick={() => setFocus(focus === e.id ? null : e.id)}>
-            <EventDot color={e.color} className="mt-1" />
-            <span className="min-w-0 break-words">{e.title}</span>
-          </button>
-          {(isBigEvent(e.type) || e.draft) && (
-            <span className="flex shrink-0 gap-1">
-              {e.draft && (
-                <Badge tone="gray" title="Its month is still being planned – the date may change until the Events team fixes it.">
-                  draft
-                </Badge>
-              )}
-              {isBigEvent(e.type) && <Badge tone="amber">big</Badge>}
+        <span aria-hidden="true" className={cn("absolute inset-y-0 left-0 w-1", e.color ?? "bg-gray-300")} />
+        <div className="space-y-2 py-2.5 pl-3.5 pr-2.5">
+          <div className="flex items-start gap-2">
+            <button type="button" className="group min-w-0 flex-1 text-left" onClick={() => setFocus(focus === e.id ? null : e.id)} aria-pressed={focus === e.id}>
+              <span className="block break-words text-[13px] font-semibold leading-snug text-gray-900 group-hover:text-esn">{e.title}</span>
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-1 text-gray-500">
+                <span className="tabular-nums">
+                  📅 {formatShortDate(e.startsAt)}, {berlinTime(e.startsAt)}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className={cn(soon && "font-semibold text-amber-700", past && "text-gray-400")}>
+                  {past ? "past" : inDays === 0 ? "today" : inDays === 1 ? "tomorrow" : `in ${plural(inDays, "day")}`}
+                </span>
+              </span>
+            </button>
+            {(isBigEvent(e.type) || e.draft) && (
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                {isBigEvent(e.type) && <Badge tone="amber">big</Badge>}
+                {e.draft && (
+                  <Badge tone="gray" title="Its month is still being planned – the date may change until the Events team fixes it.">
+                    draft
+                  </Badge>
+                )}
+              </span>
+            )}
+          </div>
+          <Badge tone={desc?.tone ?? "gray"} className="font-medium">
+            {desc?.label ?? e.description}
+          </Badge>
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{editable ? "Channels · drag onto a day" : "Channels"}</p>
+            <span className="flex flex-wrap gap-1" data-testid={`coverage-${e.id}`}>
+              {channels.map((c) => {
+                const p = stateOn(c.key, e.id);
+                const mark = !p ? "–" : p.status === "published" ? "✓" : `⏰ ${formatShortDate(p.at)}`;
+                return (
+                  <Draggable
+                    key={c.key}
+                    id={`chan|${c.key}|${e.id}`}
+                    disabled={!editable}
+                    testId={`chip-${c.key}-${e.id}`}
+                    className={cn(
+                      "rounded-md border px-1.5 py-0.5 font-medium shadow-sm",
+                      chipOf(c.key),
+                      !p && c.required && !past && "border-dashed border-red-300 bg-red-50 text-red-800",
+                      p?.status === "published" && "border-emerald-400 bg-emerald-50 text-emerald-800"
+                    )}
+                  >
+                    <span title={`${c.name}: ${!p ? "not planned" : p.status === "published" ? "posted" : p.status}`}>
+                      {SHORT[c.key] ?? c.name} {mark}
+                    </span>
+                  </Draggable>
+                );
+              })}
             </span>
+          </div>
+          {(pretix.enabled || editable) && (
+            <div className="space-y-1 border-t border-gray-100 pt-1.5">
+              {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
+              {editable && <PlanMenu event={e} channels={channels} days={days} today={today} posts={posts} byId={byId} />}
+            </div>
           )}
         </div>
-        <span className="block text-amber-800">
-          📅 {formatShortDate(e.startsAt)}, {berlinTime(e.startsAt)}
-        </span>
-        <span className="block text-gray-500">{DESCRIPTION_STATUS[e.description]?.label ?? e.description}</span>
-        <span className="mt-1 flex flex-wrap gap-1" data-testid={`coverage-${e.id}`}>
-          {channels.map((c) => {
-            const p = stateOn(c.key, e.id);
-            const mark = !p ? "–" : p.status === "published" ? "✓" : `⏰ ${formatShortDate(p.at)}`;
-            return (
-              <Draggable
-                key={c.key}
-                id={`chan|${c.key}|${e.id}`}
-                disabled={!editable}
-                testId={`chip-${c.key}-${e.id}`}
-                className={cn("rounded border px-1.5 py-0.5", chipOf(c.key), !p && c.required && "border-red-300 bg-red-50 text-red-800", p?.status === "published" && "border-emerald-400")}
-              >
-                <span title={`${c.name}: ${!p ? "not planned" : p.status === "published" ? "posted" : p.status}`}>
-                  {SHORT[c.key] ?? c.name} {mark}
-                </span>
-              </Draggable>
-            );
-          })}
-        </span>
-        {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
-        {editable && <PlanMenu event={e} channels={channels} days={days} today={today} posts={posts} byId={byId} />}
-        {editable && !past && (
-          <details className="mt-1" open={false}>
-            <summary className={cn("cursor-pointer", isBigEvent(e.type) ? "font-medium text-esn" : "text-esn/80")}>Promo series…</summary>
-            <PromoSeriesForm event={e} channels={channels} today={today} />
-          </details>
-        )}
       </li>
     );
   };
@@ -657,7 +826,7 @@ function PretixTick({ event, state, editable }: { event: BoardEvent; state: { li
   const [ticked, setTicked] = useState<boolean | null>(null);
   const done = error ? !!state : (ticked ?? !!state);
   return (
-    <div className="mt-1 space-y-1" data-testid={`pretix-${event.id}`}>
+    <div className="space-y-1" data-testid={`pretix-${event.id}`}>
       <label className="flex items-center gap-1.5 text-gray-700">
         <input type="checkbox" checked={done} disabled={!editable || pending} aria-label={`pretix page of ${event.title} is up`} onChange={(e) => {
             const ready = e.target.checked;
@@ -687,45 +856,104 @@ function PretixTick({ event, state, editable }: { event: BoardEvent; state: { li
   );
 }
 
-/** The keyboard way to plan: a channel, day and time – or into an existing post (bundle). */
+type PlanRow = { channel: string; day: string; time: string; title: string; format: PostFormat | "" };
+
+/**
+ * The keyboard way to plan – and to plan a campaign (round 2026-11-09):
+ * one or more posts of the event, each with its channel, day, time and
+ * optionally a title and format, planned in one go; or the event added to
+ * an existing post (bundle).
+ */
 function PlanMenu({ event, channels, days, today, posts, byId }: { event: BoardEvent; channels: BoardChannel[]; days: string[]; today: string; posts: BoardPost[]; byId: Map<string, BoardEvent> }) {
   const { run, pending, error } = useAction();
-  const [ch, setCh] = useState(channels[0]?.key ?? "");
   const eventDay = berlinDate(event.startsAt);
+  const minDay = eventDay < today ? undefined : today;
   // Any day up to the event (round 2026-11-02), in this month or a later one.
-  const [day, setDay] = useState(defaultPostDay(days, today, eventDay));
-  const [time, setTime] = useState("10:00");
+  const first: PlanRow = { channel: channels[0]?.key ?? "", day: defaultPostDay(days, today, eventDay), time: "10:00", title: "", format: "" };
+  const [rows, setRows] = useState<PlanRow[]>([first]);
   const [into, setInto] = useState("");
-  const candidates = posts.filter((p) => p.channel === ch && p.status !== "skipped" && !p.events.includes(event.id));
+  const set = (i: number, patch: Partial<PlanRow>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const addRow = () =>
+    setRows((r) => {
+      const last = r[r.length - 1] ?? first;
+      // The next post a week later when that is still before the event, else the same day (to change).
+      const next = addDays(last.day, 7) < eventDay ? addDays(last.day, 7) : last.day;
+      return [...r, { ...last, day: next, title: "", format: last.format }];
+    });
+  const candidates = posts.filter((p) => p.status !== "skipped" && !p.events.includes(event.id));
+  const label = (what: string, i: number) => `${what} for ${event.title}${i ? ` (post ${i + 1})` : ""}`;
+  const plan = () =>
+    run(
+      planEventPosts,
+      { event_id: event.id, posts: rows.map((r) => ({ channel: r.channel, day: r.day, time: r.time, title: r.title.trim(), format: r.channel === "telegram" ? "" : r.format })) },
+      () => setRows([first]),
+      (r) => (r.made === 1 ? "Post planned." : `${r.made} posts planned for ${event.title}.`)
+    );
   return (
     <details className="mt-1">
       <summary className="cursor-pointer text-esn">Plan…</summary>
-      <div className="mt-1 grid gap-1 rounded-md border border-gray-200 bg-white p-2 shadow-sm">
-        <Select aria-label={`Channel for ${event.title}`} value={ch} onChange={(e) => (setCh(e.target.value), setInto(""))}>
-          {channels.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.name}
-            </option>
+      <div className="mt-1 grid min-w-0 gap-1.5 rounded-md border border-gray-200 bg-white p-2 shadow-sm" data-testid={`plan-${event.id}`}>
+        <ol className="space-y-1.5">
+          {rows.map((r, i) => (
+            <li key={i} className={cn("grid min-w-0 gap-1", rows.length > 1 && "rounded border border-gray-100 p-1")}>
+              <span className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1">
+                <Select aria-label={label("Channel", i)} value={r.channel} onChange={(e) => set(i, { channel: e.target.value })} className="h-8 min-w-0 px-1.5 py-1 text-xs">
+                  {channels.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+                <Select aria-label={label("Format", i)} value={r.channel === "telegram" ? "" : r.format} disabled={r.channel === "telegram"} onChange={(e) => set(i, { format: e.target.value as PostFormat | "" })} className="h-8 min-w-0 px-1.5 py-1 text-xs">
+                  <option value="">{r.channel === "telegram" ? "Message" : "Format…"}</option>
+                  {POST_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {FORMAT_LABEL[f]}
+                    </option>
+                  ))}
+                </Select>
+                {rows.length > 1 ? (
+                  <button type="button" aria-label={`Remove post ${i + 1}`} className="px-1 text-gray-400 hover:text-red-600" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
+                    ✕
+                  </button>
+                ) : (
+                  <span />
+                )}
+              </span>
+              <span className="grid grid-cols-[minmax(0,1fr)_4.75rem] gap-1">
+                <Input aria-label={label("Day", i)} type="date" min={minDay} max={eventDay} value={r.day} onChange={(e) => set(i, { day: e.target.value })} className="h-8 min-w-0 px-1 text-xs" />
+                <Input aria-label={label("Time", i)} type="time" value={r.time} onChange={(e) => set(i, { time: e.target.value })} className="h-8 min-w-0 px-1 text-xs" />
+              </span>
+              <Input aria-label={label("Title", i)} placeholder="Title (optional), e.g. Save the date" value={r.title} maxLength={120} onChange={(e) => set(i, { title: e.target.value })} className="h-8 min-w-0 px-1.5 text-xs" />
+              {r.day && !days.includes(r.day) && <span className="text-gray-500">That day is on the {monthLabel(monthOf(`${r.day}T12:00:00Z`))} board.</span>}
+            </li>
           ))}
-        </Select>
-        <Select aria-label={`Post for ${event.title}`} value={into} onChange={(e) => setInto(e.target.value)}>
-          <option value="">A new post</option>
-          {candidates.map((p) => (
-            <option key={p.id} value={p.id}>
-              Add to {formatDateTime(p.scheduledFor)}: {p.events.map((id) => byId.get(id)?.title ?? "…").join(", ")}
-            </option>
-          ))}
-        </Select>
-        {!into && (
-          <div className="flex gap-1">
-            <Input aria-label={`Day for ${event.title}`} type="date" min={eventDay < today ? undefined : today} max={eventDay} value={day} onChange={(e) => setDay(e.target.value)} />
-            <Input aria-label={`Time for ${event.title}`} type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
-          </div>
+        </ol>
+        {rows.length < 10 && (
+          <button type="button" className="justify-self-start text-esn hover:underline" onClick={addRow} data-testid="plan-add-row">
+            + Another post
+          </button>
         )}
-        {!into && day && !days.includes(day) && <span className="text-gray-500">That day is on the {monthLabel(monthOf(`${day}T12:00:00Z`))} board.</span>}
-        <Button type="button" size="sm" disabled={pending} onClick={() => (into ? run(addToPost, { post_id: into, event_id: event.id }) : run(createPost, { channel: ch, day, time, event_ids: [event.id] }))}>
-          {into ? "Add to the post" : "Plan the post"}
+        <Button type="button" size="sm" disabled={pending || rows.some((r) => !r.day || !r.channel)} onClick={plan}>
+          {rows.length === 1 ? "Plan the post" : `Plan ${rows.length} posts`}
         </Button>
+        {candidates.length > 0 && (
+          <span className="flex min-w-0 gap-1 border-t border-gray-100 pt-1.5">
+            <Select aria-label={`Post for ${event.title}`} value={into} onChange={(e) => setInto(e.target.value)} className="h-8 min-w-0 px-1.5 py-1 text-xs">
+              <option value="">…or add it to a post</option>
+              {candidates.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {SHORT[p.channel] ?? p.channel} {formatShortDate(p.scheduledFor)}: {[p.title, ...p.events.map((id) => byId.get(id)?.title ?? "…")].filter(Boolean).join(", ")}
+                </option>
+              ))}
+            </Select>
+            {into && (
+              <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(addToPost, { post_id: into, event_id: event.id }, () => setInto(""))}>
+                Add to the post
+              </Button>
+            )}
+          </span>
+        )}
         {error && <span className="text-red-600">{error}</span>}
       </div>
     </details>
@@ -1023,6 +1251,277 @@ function PostDetails({
         </form>
       )}
       {error && <p className="text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * An event on the calendar (round 2026-11-09): a label, not a card – its
+ * dot, 📅 time and title, and a mark per required channel (✓ posted, the
+ * channel planned, – missing while it is ahead). Click: only its posts.
+ */
+function EventLabel({
+  event,
+  color,
+  required,
+  coverage,
+  today,
+  active,
+  muted,
+  phone,
+  onClick,
+  onEnter,
+  onLeave,
+}: {
+  event: BoardEvent;
+  color?: string;
+  required: BoardChannel[];
+  coverage: Coverage;
+  today: string;
+  active: boolean;
+  muted: boolean;
+  phone: boolean;
+  onClick: () => void;
+  onEnter: () => void;
+  onLeave: () => void;
+}) {
+  const ahead = berlinDate(event.startsAt) >= today;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      aria-pressed={active}
+      title={`${event.title}${event.draft ? " (draft – the date may still change)" : ""} – click to see only its posts`}
+      className={cn(
+        "flex w-full min-w-0 items-start gap-1 rounded px-0.5 py-0.5 text-left text-[11px] leading-tight text-gray-600 hover:bg-amber-50 hover:text-gray-900",
+        active && "bg-amber-100 text-gray-900 ring-1 ring-amber-400",
+        muted && "opacity-60"
+      )}
+      data-testid={`cal-event-${event.id}`}
+    >
+      <EventDot color={color} className="mt-0.5" />
+      <span className="min-w-0 flex-1">
+        <span className="font-semibold tabular-nums text-gray-700">📅 {berlinTime(event.startsAt)}</span>
+        {event.draft && <span className="ml-1 rounded bg-gray-100 px-0.5 text-[10px] uppercase tracking-wide text-gray-600">draft</span>}
+        <span className={cn("block break-words", !phone && "line-clamp-2")}>{event.title}</span>
+        {required.length > 0 && !muted && (
+          <span className="mt-0.5 flex flex-wrap gap-0.5" data-testid={`cal-coverage-${event.id}`}>
+            {required.map((c) => {
+              const st = coverage[event.id]?.[c.key];
+              return (
+                <span
+                  key={c.key}
+                  className={cn(
+                    "rounded px-0.5 text-[9px] font-semibold leading-3",
+                    st?.status === "published" ? "bg-emerald-100 text-emerald-800" : st ? "bg-esn/10 text-esn" : ahead ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500"
+                  )}
+                  title={`${c.name}: ${st?.status === "published" ? "posted" : st ? `planned ${formatShortDate(st.at)}` : "not planned"}`}
+                >
+                  {SHORT[c.key] ?? c.name}
+                  {st?.status === "published" ? " ✓" : st ? "" : " –"}
+                </span>
+              );
+            })}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+const COL = 26;
+const LABEL = 184;
+
+/** A day column of the "By event" view: the drop target for chips and posts. */
+function TimelineColumn({ day, index, today, editable }: { day: string; index: number; today: string; editable: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `tday|${day}`, disabled: !editable });
+  const weekend = [0, 6].includes(new Date(`${day}T12:00:00Z`).getUTCDay());
+  return (
+    <div
+      ref={setNodeRef}
+      aria-hidden="true"
+      className={cn("absolute bottom-0 top-0 border-l", day.endsWith("-01") ? "border-gray-300" : "border-gray-100", isOver ? "bg-esn/10" : day === today ? "bg-esn/5" : weekend ? "bg-gray-50" : "")}
+      style={{ left: LABEL + index * COL, width: COL }}
+    />
+  );
+}
+
+/** A post on the "By event" view: square = post / reel, round = story; solid = posted, light = planned. */
+function TimelineMarker({ post, eventId, editable, onOpen, dim, stack }: { post: BoardPost; eventId: string; editable: boolean; onOpen: () => void; dim: boolean; stack: number }) {
+  const c = dotOf(post.channel);
+  const unconfirmed = post.channel === "telegram" && post.status === "planned" && !post.confirmed;
+  return (
+    <Draggable id={`tpost|${post.id}|${eventId}`} disabled={!editable || post.status !== "planned"} className="absolute" testId={`tl-post-${post.id}-${eventId}`}>
+      <button
+        type="button"
+        onClick={onOpen}
+        title={`${post.title ? `${post.title} · ` : ""}${SHORT[post.channel] ?? post.channel} ${post.format ? FORMAT_LABEL[post.format].toLowerCase() : "post"} ${formatDateTime(post.scheduledFor)} – ${post.status === "published" ? "posted" : post.status === "skipped" ? "skipped" : unconfirmed ? "not confirmed" : "planned"}`}
+        className={cn(
+          "block h-3.5 w-3.5 border",
+          post.format === "story" ? "rounded-full" : "rounded-[3px]",
+          post.status === "published" ? c.solid : post.status === "skipped" ? "border-gray-300 bg-gray-100 opacity-60" : c.light,
+          unconfirmed && "border-dashed",
+          post.format === "reel" && "ring-1 ring-offset-1 ring-gray-400",
+          dim && "opacity-30"
+        )}
+        style={{ transform: `translate(${(COL - 14) / 2}px, ${stack * 5}px)` }}
+      />
+    </Draggable>
+  );
+}
+
+/**
+ * "By event" (round 2026-11-09): one row per event, the days from the
+ * month's first on; each post a marker on its day, the event a 📅 on its
+ * own, a line from the first post to the event. Gaps and events without
+ * posts stand out, and next month's events sit next to this month's posts.
+ * Drop a channel chip on a day to plan, drag a marker to move the post.
+ */
+function Timeline({
+  month,
+  events,
+  posts,
+  today,
+  editable,
+  focus,
+  setFocus,
+  onOpen,
+  dimmed,
+}: {
+  month: string;
+  events: BoardEvent[];
+  posts: BoardPost[];
+  today: string;
+  editable: boolean;
+  focus: string | null;
+  setFocus: (id: string | null) => void;
+  onOpen: (id: string) => void;
+  dimmed: (p: BoardPost) => boolean;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  // Past events only while they have posts on the view.
+  const rows = [...events]
+    .filter((e) => berlinDate(e.startsAt) >= today || posts.some((p) => p.events.includes(e.id)))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const lastMonthDay = calendarWeeks(month).flat().filter((d): d is string => !!d).pop()!;
+  const lastEvent = rows.map((e) => berlinDate(e.startsAt)).sort().pop() ?? lastMonthDay;
+  const end = [lastEvent, lastMonthDay].sort().pop()!;
+  const count = Math.min(dayDiff(month, end) + 1, 120);
+  const days = Array.from({ length: count }, (_, i) => addDays(month, i));
+  const col = (d: string) => days.indexOf(d);
+  const loose = posts.filter((p) => !p.events.length);
+  useEffect(() => {
+    // Open on today when it is on the view.
+    const i = days.indexOf(today);
+    if (i > 7 && scroller.current) scroller.current.scrollLeft = (i - 3) * COL;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, today]);
+
+  const row = (key: string, label: React.ReactNode, own: BoardPost[], ev: BoardEvent | null) => {
+    const evCol = ev ? col(berlinDate(ev.startsAt)) : -1;
+    const cols = own.map((p) => col(berlinDate(p.scheduledFor))).filter((i) => i >= 0);
+    const from = cols.length ? Math.min(...cols) : -1;
+    const perDay = new Map<string, number>();
+    const faded = !!focus && ev?.id !== focus;
+    return (
+      <div key={key} className={cn("relative flex h-9 items-center border-t border-gray-100", faded && "opacity-40")} data-testid={`tl-row-${key}`}>
+        <div className="sticky left-0 z-20 flex h-full shrink-0 items-center border-r border-gray-200 bg-white pr-2" style={{ width: LABEL }}>
+          {label}
+        </div>
+        <div className="relative h-full" style={{ width: days.length * COL }}>
+          {ev && from >= 0 && evCol >= 0 && from < evCol && (
+            <span aria-hidden="true" className={cn("absolute top-1/2 h-1 -translate-y-1/2 rounded-full opacity-30", ev.color ?? "bg-gray-300")} style={{ left: from * COL + COL / 2, width: (evCol - from) * COL }} />
+          )}
+          {ev && evCol >= 0 && (
+            <span className="absolute top-1/2 z-10 -translate-y-1/2 text-[13px] leading-none" style={{ left: evCol * COL + 5 }} title={`${ev.title}: ${formatDateTime(ev.startsAt)}`} aria-hidden="true">
+              📅
+            </span>
+          )}
+          {own.map((p) => {
+            const d = berlinDate(p.scheduledFor);
+            const i = col(d);
+            if (i < 0) return null;
+            const stack = perDay.get(d) ?? 0;
+            perDay.set(d, stack + 1);
+            return (
+              <div key={p.id} className="absolute top-1/2 z-10 -translate-y-1/2" style={{ left: i * COL }}>
+                <TimelineMarker post={p} eventId={ev?.id ?? "none"} editable={editable} onOpen={() => onOpen(p.id)} dim={dimmed(p)} stack={stack} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-2" data-testid="timeline">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-[3px] border border-pink-500 bg-pink-100" /> post
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-full border border-pink-500 bg-pink-100" /> story
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-[3px] border border-pink-600 bg-pink-500" /> posted
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-[3px] border border-sky-500 bg-sky-100" /> Telegram
+        </span>
+        <span>📅 the event · drop a channel chip on a day to plan, drag a marker to move it</span>
+      </p>
+      <div ref={scroller} className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="relative" style={{ width: LABEL + days.length * COL }}>
+          {days.map((d, i) => (
+            <TimelineColumn key={d} day={d} index={i} today={today} editable={editable} />
+          ))}
+          <div className="relative flex h-8 items-end text-[10px] text-gray-500">
+            <div className="sticky left-0 z-20 h-full shrink-0 border-r border-gray-200 bg-white" style={{ width: LABEL }} />
+            {days.map((d) => (
+              <span key={d} className={cn("relative shrink-0 pb-0.5 text-center tabular-nums", d === today && "font-bold text-esn")} style={{ width: COL }}>
+                {(d.endsWith("-01") || d === days[0]) && (
+                  <span className="absolute -top-0.5 left-0.5 whitespace-nowrap font-semibold uppercase text-gray-700">{monthLabel(`${d.slice(0, 7)}-01`).split(" ")[0]}</span>
+                )}
+                {Number(d.slice(8))}
+              </span>
+            ))}
+          </div>
+          {rows.map((e) =>
+            row(
+              e.id,
+              <button
+                type="button"
+                onClick={() => setFocus(focus === e.id ? null : e.id)}
+                className={cn("flex min-w-0 items-center gap-1.5 pl-2 text-left text-xs hover:text-esn", focus === e.id && "font-semibold text-esn")}
+                title={e.title}
+              >
+                <EventDot color={e.color} />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-gray-900">{e.title}</span>
+                  <span className="block text-[10px] text-gray-500">
+                    {formatShortDate(e.startsAt)}
+                    {e.draft ? " · draft" : ""}
+                    {!posts.some((p) => p.events.includes(e.id) && p.status !== "skipped") && berlinDate(e.startsAt) >= today ? <span className="font-semibold text-red-700"> · no posts</span> : null}
+                  </span>
+                </span>
+              </button>,
+              posts.filter((p) => p.events.includes(e.id)),
+              e
+            )
+          )}
+          {loose.length > 0 &&
+            row(
+              "none",
+              <span className="pl-2 text-xs font-medium text-gray-600">Without an event</span>,
+              loose,
+              null
+            )}
+          {!rows.length && !loose.length && <p className="p-4 text-xs text-gray-500">No events or posts to show.</p>}
+        </div>
+      </div>
     </div>
   );
 }

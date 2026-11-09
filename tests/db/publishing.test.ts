@@ -358,21 +358,3 @@ describe("content planning (round 2026-11-09)", () => {
     expect((await row(titled.data.id)).title).toBe("Sales NOW");
   });
 });
-
-describe("promo series (round 2026-11-09)", () => {
-  it("plans the ticked steps as titled posts of the event, once; not on Telegram", async () => {
-    const ctx = await actionContext(USERS.comms);
-    const steps = [
-      { title: "Save the date", format: "post" as const, day: day(48), time: "10:00" },
-      { title: "Sales NOW", format: "story" as const, day: day(72), time: "18:00" },
-    ];
-    expect(await P.planPromoSeries(ctx, { event_id: approved, channel: "telegram", steps })).toMatchObject({ ok: false });
-    expect(await P.planPromoSeries(await actionContext(USERS.events), { event_id: approved, channel: "instagram", steps })).toMatchObject({ ok: false, error: "forbidden" });
-    const r = await P.planPromoSeries(ctx, { event_id: approved, channel: "instagram", steps });
-    expect(r).toMatchObject({ ok: true, data: { made: 2 } });
-    expect(await P.planPromoSeries(ctx, { event_id: approved, channel: "instagram", steps })).toMatchObject({ ok: true, data: { made: 0 } });
-    const { data } = await admin.from("publication_posts").select("id, title, format, publication_post_events!inner(event_id)").eq("channel", "instagram").eq("publication_post_events.event_id", approved).in("title", ["Save the date", "Sales NOW"]);
-    posts.push(...(data ?? []).map((p) => p.id));
-    expect((data ?? []).map((p) => [p.title, p.format]).sort()).toEqual([["Sales NOW", "story"], ["Save the date", "post"]]);
-  });
-});

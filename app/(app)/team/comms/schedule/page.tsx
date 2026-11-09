@@ -4,7 +4,7 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { addMonths, berlinDate, cycleLabel, monthOf, monthStartIso, nowMs } from "@/lib/dates";
 import { hasRole } from "@/lib/roles";
 import { monthParam, parseMonthParam, pickMonth } from "@/lib/month";
-import { PUBLISHABLE_STATUSES, advertisable, listedAhead, postWarnings, telegramRefusal, type PostEventFacts } from "@/lib/publishing";
+import { AHEAD_MONTHS, PUBLISHABLE_STATUSES, advertisable, listedAhead, postWarnings, telegramRefusal, type PostEventFacts } from "@/lib/publishing";
 import { coerceFields } from "@/lib/description/template";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -68,6 +68,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const channels: BoardChannel[] = (channelRows ?? []).filter((c) => c.enabled && c.schedulable).map((c) => ({ key: c.key, name: c.name, kind: c.kind as BoardChannel["kind"], required: c.required }));
   const onBoard = new Set(channels.map((c) => c.key));
   const monthPosts = posts.filter((p) => monthOf(p.scheduled_for) === month && onBoard.has(p.channel));
+  // The "By event" view (round 2026-11-09) runs from the month into the months the list holds ahead.
+  const rangeEnd = addMonths(month, AHEAD_MONTHS + 1);
+  const rangePosts = posts.filter((p) => monthOf(p.scheduled_for) >= month && monthOf(p.scheduled_for) < rangeEnd && onBoard.has(p.channel));
   // pretix is a checklist (round 2026-10-31): ticked = a published pretix post of the event.
   const pretix: PretixChecklist = { enabled: (channelRows ?? []).some((c) => c.key === "pretix" && c.enabled), done: {} };
   for (const p of posts) if (p.channel === "pretix" && p.status === "published") for (const x of p.publication_post_events) pretix.done[x.event_id] ??= { link: p.link };
@@ -75,7 +78,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // The month's events and – while the month is not over – the upcoming ones of the next months.
   const monthEvents = rows.filter((r) => monthOf(r.starts_at) === month || (month >= thisMonth && listedAhead(monthOf(r.starts_at), month) && berlinDate(r.starts_at) >= today));
   // Events on a post of this month that take place in another month are shown too.
-  const ids = [...new Set([...monthEvents.map((r) => r.event_id), ...monthPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id))])];
+  const ids = [...new Set([...monthEvents.map((r) => r.event_id), ...rangePosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id))])];
   const [{ data: eventRows }, { data: descriptions }] = ids.length
     ? await Promise.all([
         supabase.from("events").select("id, title, starts_at, type, status, format_id, category_id, planning_cycles(description_deadline)").in("id", ids),
@@ -125,7 +128,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       }
     }
   }
-  const boardPosts: BoardPost[] = monthPosts.map((p) => {
+  const toBoard = (p: (typeof posts)[number]): BoardPost => {
     const ordered = [...p.publication_post_events].sort((a, b) => a.position - b.position);
     const evs = ordered.map((x) => x.event_id);
     return {
@@ -152,12 +155,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       caption: p.caption ?? "",
       designLink: p.design_link,
     };
-  });
+  };
+  const boardPosts = monthPosts.map(toBoard);
+  const timelinePosts = rangePosts.map(toBoard);
   const boardEvents = monthEvents
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .map((r): BoardEvent => ({ id: r.event_id, title: r.title, startsAt: r.starts_at, description: r.status, type: r.type, draft: r.draft }))
     .concat(
-      ids
+      [...new Set(monthPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id)))]
         .filter((id) => !monthEvents.some((r) => r.event_id === id))
         .map((id) => facts.get(id))
         .filter((f): f is PostEventFacts => !!f)
@@ -166,7 +171,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // ?event=… (from the Comms page): that event is highlighted.
   const focusEvent = /^[0-9a-f-]{36}$/.test(sp.event ?? "") && boardEvents.some((e) => e.id === sp.event) ? sp.event! : null;
   // ?post=… (from the content list): that post opens.
-  const openPost = boardPosts.some((p) => p.id === sp.post) ? sp.post! : null;
+  const openPost = timelinePosts.some((p) => p.id === sp.post) ? sp.post! : null;
 
   return (
     <>
@@ -190,6 +195,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           channels={channels}
           events={boardEvents}
           posts={boardPosts}
+          timelinePosts={timelinePosts}
           editable={editable}
           viewer={{ email: viewer.email, name: viewer.name }}
           today={today}

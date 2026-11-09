@@ -8,12 +8,12 @@ export async function createPost(input: unknown) {
   return run(A.createPost, input);
 }
 
-export async function updatePostContent(input: unknown) {
-  return run(A.updatePostContent, input);
+export async function planEventPosts(input: unknown) {
+  return run(A.planEventPosts, input);
 }
 
-export async function planPromoSeries(input: unknown) {
-  return run(A.planPromoSeries, input);
+export async function updatePostContent(input: unknown) {
+  return run(A.updatePostContent, input);
 }
 
 export async function planRegularPosts(input: unknown) {
