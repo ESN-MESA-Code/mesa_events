@@ -15,7 +15,7 @@ import { addDays, dayDiff } from "@/lib/month";
 import { FORMAT_LABEL, POST_FORMATS, defaultPostDay, isBigEvent, type PostFormat } from "@/lib/publishing";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
-import { EventDot, MarkerShape } from "./Board";
+import { MarkerShape } from "./Board";
 import { STATE_TEXT, channelMark, dayLabel, leadOf, needsPosts, shortOf, stateOf, type BoardCategory, type BoardChannel, type BoardEvent, type BoardPost, type Coverage, type PretixChecklist } from "./boardModel";
 
 export function EventPanel({
@@ -66,7 +66,7 @@ export function EventPanel({
   return (
     <aside
       aria-label={`${event.title} – details and planning`}
-      className="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-gray-200 bg-white p-4 text-sm shadow-2xl lg:sticky lg:top-4 lg:z-auto lg:max-h-[calc(100vh-2rem)] lg:rounded-2xl lg:shadow-sm"
+      className="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-gray-200 bg-white p-4 text-sm shadow-2xl lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-4 lg:max-h-none lg:w-[24rem] lg:rounded-2xl"
       onKeyDown={(e) => {
         if (e.key === "Escape" && !(e.target instanceof HTMLSelectElement)) onClose();
       }}
@@ -74,7 +74,6 @@ export function EventPanel({
     >
       <div className="flex items-start gap-2">
         <h2 ref={heading} tabIndex={-1} className="flex min-w-0 flex-1 items-start gap-1.5 text-base font-bold leading-snug text-gray-900 outline-none">
-          <EventDot color={event.color} className="mt-1.5" />
           <span className="min-w-0 break-words">
             {category?.emoji && <span aria-hidden="true">{category.emoji} </span>}
             {event.title}

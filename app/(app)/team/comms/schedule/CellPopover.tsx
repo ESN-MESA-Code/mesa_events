@@ -16,7 +16,7 @@ import { berlinDate, berlinTime } from "@/lib/dates";
 import { FORMAT_LABEL, POST_FORMATS, type PostFormat } from "@/lib/publishing";
 import { cn } from "@/lib/utils";
 import { STATE_TEXT, dayLabel, leadTime, shortOf, stateOf, type BoardChannel, type BoardEvent, type BoardPost, type Coverage } from "./boardModel";
-import { EventDot, MarkerShape } from "./Board";
+import { MarkerShape } from "./Board";
 
 /** The cell the popover hangs on, in viewport pixels. */
 export type Anchor = { x: number; y: number; w: number; h: number };
@@ -165,7 +165,6 @@ export function CellPopover({
       <div className="mb-2 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-900">
-            {event && <EventDot color={event.color} />}
             <span className="truncate">{event ? event.title : "Post without an event"}</span>
           </p>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-gray-500">

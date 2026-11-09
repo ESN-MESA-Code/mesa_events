@@ -1485,3 +1485,21 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
 - Realtime refresh and presence, drafts, warnings and the Telegram dialog are unchanged. No
   migration. Prototype: no unit or e2e tests were added or updated (the e2e specs of the old
   calendar, chips and tray will fail until rewritten).
+
+## 2026-11-09 (6) – The board: no event colours, clearer event labels, posted together
+
+- **No event colours.** They were needed to match calendar chips to their events; on the board a
+  post sits on its event's row, so the dots and coloured campaign lines are gone (a grey line
+  from the first post to the event stays).
+- **Event labels** (left column, 17rem): a date tile (month, day, weekday; amber within a week,
+  grey once past), the title with big / draft, then category emoji and "in N d"; at the bottom
+  right one row of marks – 📝 description (✓ approved, … in review, – missing), each channel,
+  🎟 pretix. A red edge on the left while an upcoming event still misses a required channel;
+  the focused event's edge is purple.
+- **Posted together**: a post of several events gets a line in its channel's colour through its
+  markers on their rows (dots on each row, "+n" when some of its events have no row in view), a
+  small number on each marker (how many events), and hovering or focusing one marker lights up
+  all of them.
+- **Rough edges fixed**: markers 14 px in a 24×20 px target; the event panel slides over the
+  board on wide screens instead of taking a column; the filters (not the search) are remembered
+  on the device (saved when changed).

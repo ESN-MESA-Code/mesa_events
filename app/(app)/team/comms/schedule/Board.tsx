@@ -25,6 +25,7 @@ import {
   dotOf,
   isUnconfirmed,
   leadOf,
+  lineOf,
   needsPosts,
   shortOf,
   stateOf,
@@ -38,15 +39,12 @@ import {
 
 /** A day's width and a row's height. */
 export const COL = 28;
-const ROW_H = 44;
+export const ROW_H = 50;
+/** The "Later – big events" divider's height. */
+const DIVIDER_H = 24;
 /** Markers in a cell before "+n" (the 📅 takes a place on the event's day). */
 const SLOTS = 3;
 
-const TONE_DOT: Record<string, string> = { gray: "bg-gray-300", blue: "bg-sky-500", amber: "bg-amber-500", green: "bg-emerald-500", purple: "bg-violet-500", red: "bg-red-500" };
-
-export function EventDot({ color, className }: { color?: string; className?: string }) {
-  return <span aria-hidden="true" className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white", color ?? "bg-gray-300", className)} />;
-}
 
 /** A post's shape: square post / reel (ringed), round story; light planned, solid posted, dashed not confirmed. */
 export function MarkerShape({ post, className }: { post: Pick<BoardPost, "channel" | "status" | "format" | "confirmed">; className?: string }) {
@@ -55,7 +53,7 @@ export function MarkerShape({ post, className }: { post: Pick<BoardPost, "channe
     <span
       aria-hidden="true"
       className={cn(
-        "block h-3 w-3 shrink-0 border",
+        "block h-3.5 w-3.5 shrink-0 border",
         post.format === "story" ? "rounded-full" : "rounded-[3px]",
         post.status === "published" ? c.solid : post.status === "skipped" ? "border-gray-300 bg-gray-100 opacity-60" : c.light,
         isUnconfirmed(post) && "border-dashed",
@@ -80,7 +78,24 @@ export function postSummary(post: BoardPost, byId: Map<string, BoardEvent>, chan
     .join("\n");
 }
 
-function Marker({ post, rowKey, editable, onOpen, title }: { post: BoardPost; rowKey: string; editable: boolean; onOpen: () => void; title: string }) {
+function Marker({
+  post,
+  rowKey,
+  editable,
+  onOpen,
+  title,
+  lit,
+  onHover,
+}: {
+  post: BoardPost;
+  rowKey: string;
+  editable: boolean;
+  onOpen: () => void;
+  title: string;
+  /** The pointer is on this post (here or on another row of the same bundle). */
+  lit: boolean;
+  onHover: (id: string | null) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `m|${post.id}|${rowKey}`, disabled: !editable || post.status !== "planned", data: { post } });
   const movable = editable && post.status === "planned";
   return (
@@ -92,12 +107,26 @@ function Marker({ post, rowKey, editable, onOpen, title }: { post: BoardPost; ro
       onClick={(e) => (e.stopPropagation(), onOpen())}
       title={title}
       aria-label={title.split("\n")[0]}
+      onMouseEnter={() => onHover(post.id)}
+      onMouseLeave={() => onHover(null)}
+      onFocus={() => onHover(post.id)}
+      onBlur={() => onHover(null)}
       data-marker=""
       data-testid={`tl-post-${post.id}-${rowKey}`}
-      className={cn("relative flex h-3.5 w-5 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-esn", movable && "cursor-grab touch-none active:cursor-grabbing", isDragging && "opacity-30")}
+      className={cn(
+        "relative flex h-5 w-6 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-esn",
+        movable && "cursor-grab touch-none active:cursor-grabbing",
+        isDragging && "opacity-30",
+        lit && "bg-white ring-2 ring-esn"
+      )}
     >
       <MarkerShape post={post} />
-      {post.warnings.length > 0 && post.status === "planned" && <span aria-hidden="true" className="absolute -right-0 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-white" />}
+      {post.warnings.length > 0 && post.status === "planned" && <span aria-hidden="true" className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-white" />}
+      {post.events.length > 1 && (
+        <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 rounded-full bg-gray-800 px-[3px] text-[8px] font-bold leading-[10px] text-white ring-1 ring-white">
+          {post.events.length}
+        </span>
+      )}
     </button>
   );
 }
@@ -160,6 +189,8 @@ export function Board({
   const [hover, setHover] = useState<{ key: string; col: number } | null>(null);
   const [cell, setCell] = useState<Cell | null>(null);
   const [drag, setDrag] = useState<{ post: BoardPost; to: string } | null>(null);
+  // The post under the pointer: its markers on every row light up (bundles).
+  const [litPost, setLitPost] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const channelName = (key: string) => channels.find((c) => c.key === key)?.name ?? key;
   const required = channels.filter((c) => c.required);
@@ -172,6 +203,17 @@ export function Board({
   const todayCol = inView(today) ? col(today) : -1;
   const postsOf = (key: string) => posts.filter((p) => (key === "none" ? !p.events.length : p.events.includes(key)));
   const width = days.length * COL;
+  // Where each row sits in the grid (the divider above the later events counted), for the bundle lines.
+  const laterIndex = laterFrom ? rows.findIndex((e) => e.id === laterFrom) : -1;
+  const rowMid = (i: number) => i * ROW_H + (laterIndex >= 0 && i >= laterIndex ? DIVIDER_H : 0) + ROW_H / 2;
+  // Posts of several events: a line through their markers, row to row ("posted together").
+  const bundles = posts
+    .filter((p) => p.events.length > 1 && p.status !== "skipped" && inView(berlinDate(p.scheduledFor)))
+    .map((p) => {
+      const idx = p.events.map((id) => keys.indexOf(id)).filter((i) => i >= 0).sort((a, b) => a - b);
+      return { post: p, top: idx[0], bottom: idx[idx.length - 1], rows: idx, hidden: p.events.length - idx.length };
+    })
+    .filter((b) => b.rows.length > 0);
 
   // ?event=…: its row in view, from its first post on.
   useEffect(() => {
@@ -291,48 +333,69 @@ export function Board({
   };
   const at = (c: number): React.CSSProperties => ({ left: `calc(var(--label) + ${c * COL}px)` });
 
+  // The event on the left (round 2026-11-09 (6)): a date tile, the title on top, below what it
+  // needs – category, how soon, the description, the channels, pretix. A red edge: posts missing.
   const label = (e: BoardEvent) => {
     const d = berlinDate(e.startsAt);
     const inDays = dayDiff(today, d);
     const desc = DESCRIPTION_STATUS[e.description];
     const missing = needsPosts(e, required, coverage, today);
+    const past = inDays < 0;
+    const soon = inDays >= 0 && inDays <= 7;
+    const [weekday, dayNo, month] = dayLabel(d).split(" ");
+    const descDone = e.description === "approved" || e.description === "published";
     return (
-      <div className="relative h-full min-w-0">
+      <div className={cn("relative flex h-full min-w-0", focus === e.id && "bg-amber-50")}>
+        <span aria-hidden="true" className={cn("w-1 shrink-0", focus === e.id ? "bg-esn" : missing ? "bg-red-400" : "bg-transparent")} />
         <button
           type="button"
           onClick={() => onLabel(e.id)}
           aria-pressed={focus === e.id}
-          aria-label={`${e.title}, ${dayLabel(d)} – details and planning`}
-          title={`${e.title}\n${formatDateTime(e.startsAt)}${e.draft ? "\nDraft – the date may still change" : ""}`}
-          className={cn("flex h-full w-full min-w-0 flex-col justify-center gap-0.5 pl-2 pr-1.5 text-left hover:bg-amber-50", focus === e.id && "bg-amber-50")}
+          aria-label={`${e.title}, ${dayLabel(d)}${missing ? ", still needs posts" : ""} – details and planning`}
+          title={`${e.title}\n${formatDateTime(e.startsAt)}${e.draft ? "\nDraft – the date may still change" : ""}\nDescription: ${desc?.label ?? e.description}`}
+          className="flex min-w-0 flex-1 items-center gap-2 py-1 pl-1.5 pr-1 text-left hover:bg-amber-50/70"
           data-testid={`row-label-${e.id}`}
         >
-          <span className="flex min-w-0 items-center gap-1">
-            <EventDot color={e.color} />
-            {e.categoryId && emoji.get(e.categoryId) && (
-              <span aria-hidden="true" className="text-[11px] leading-none">
-                {emoji.get(e.categoryId)}
-              </span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex w-8 shrink-0 flex-col items-center rounded-md py-0.5 leading-none",
+              past ? "bg-gray-50 text-gray-400" : soon ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"
             )}
-            <span className={cn("truncate text-xs font-semibold text-gray-900", focus === e.id && "text-esn")}>{e.title}</span>
-            {isBigEvent(e.type) && <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-bold uppercase text-amber-900">big</span>}
-            {e.draft && <span className="shrink-0 rounded bg-gray-100 px-1 text-[9px] font-bold uppercase text-gray-600">draft</span>}
+          >
+            <span className="text-[8px] font-semibold uppercase tracking-wide">{month}</span>
+            <span className="text-sm font-bold tabular-nums">{dayNo}</span>
+            <span className="text-[8px] uppercase">{weekday}</span>
           </span>
-          <span className="flex min-w-0 items-center gap-1 text-[10px] text-gray-500">
-            <span className={cn("whitespace-nowrap tabular-nums", inDays >= 0 && inDays <= 7 && "font-semibold text-amber-700", inDays < 0 && "text-gray-400")}>
-              📅 {dayLabel(d)}
-              {!inView(d) && (d > to ? " →" : " ←")}
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-1">
+              <span className={cn("truncate text-xs font-semibold leading-4 text-gray-900", focus === e.id && "text-esn", past && "text-gray-500")}>{e.title}</span>
+              {isBigEvent(e.type) && <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-bold uppercase leading-3 text-amber-900">big</span>}
+              {e.draft && <span className="shrink-0 rounded bg-gray-100 px-1 text-[9px] font-bold uppercase leading-3 text-gray-600">draft</span>}
             </span>
-            {missing && (
-              <span className="font-bold text-red-700 sm:hidden" title="Still needs posts">
-                !
+            <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-gray-500">
+              {e.categoryId && emoji.get(e.categoryId) && <span aria-hidden="true">{emoji.get(e.categoryId)}</span>}
+              <span className={cn("whitespace-nowrap", soon && "font-semibold text-amber-700")}>
+                {past ? "past" : inDays === 0 ? "today" : inDays === 1 ? "tomorrow" : `in ${inDays} d`}
+                {!inView(d) && (d > to ? " →" : " ←")}
               </span>
-            )}
+              {missing && (
+                <span className="font-bold text-red-700 sm:hidden" title="Still needs posts">
+                  !
+                </span>
+              )}
+            </span>
           </span>
         </button>
-        {/* What the event cards showed: description, the channels, pretix. */}
-        <span className="pointer-events-none absolute bottom-1 right-1.5 hidden items-center gap-0.5 sm:flex">
-          <span className={cn("h-2 w-2 rounded-full", TONE_DOT[desc?.tone ?? "gray"])} title={`Description: ${desc?.label ?? e.description}`} />
+        {/* What it needs: the description, each channel, pretix – one row of small marks. */}
+        <span className="pointer-events-none absolute bottom-1 right-1 hidden items-center gap-0.5 sm:flex">
+          <span
+            className={cn("pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3", descDone ? "bg-emerald-100 text-emerald-800" : e.description === "submitted" ? "bg-sky-50 text-sky-800" : past ? "bg-gray-100 text-gray-500" : "bg-amber-50 text-amber-800")}
+            title={`Description: ${desc?.label ?? e.description}`}
+            data-testid={`desc-${e.id}`}
+          >
+            📝{descDone ? "✓" : e.description === "submitted" ? "…" : "–"}
+          </span>
           {channels.map((c) => {
             const m = channelMark(coverage, e.id, c.key);
             const red = m.state === "missing" && c.required && missing;
@@ -355,7 +418,7 @@ export function Board({
             <Link
               href={`/team/comms/pretix?event=${e.id}#pretix-${e.id}`}
               title={pretix.done[e.id] ? "pretix page set up" : "pretix page not set up – open the pretix pages"}
-              className={cn("pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3 hover:underline", pretix.done[e.id] ? "bg-emerald-100 text-emerald-800" : inDays >= 0 && !e.draft ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500")}
+              className={cn("pointer-events-auto rounded px-0.5 text-[9px] font-semibold leading-3 hover:underline", pretix.done[e.id] ? "bg-emerald-100 text-emerald-800" : !past && !e.draft ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500")}
               data-testid={`pretix-${e.id}`}
             >
               🎟{pretix.done[e.id] ? "✓" : "–"}
@@ -388,7 +451,7 @@ export function Board({
           {ev ? (
             label(ev)
           ) : (
-            <div className="flex h-full flex-col justify-center pl-2 pr-1.5">
+            <div className="flex h-full flex-col justify-center pl-3 pr-1.5">
               <span className="truncate text-xs font-semibold text-gray-700">Without an event</span>
               <span className="truncate text-[10px] text-gray-500">calendar, “This week”, recaps …</span>
             </div>
@@ -419,7 +482,7 @@ export function Board({
           {lineFrom !== null && lineTo !== null && (
             <span
               aria-hidden="true"
-              className={cn("absolute top-1/2 h-1 -translate-y-1/2 rounded-full opacity-35", ev?.color ?? "bg-gray-300")}
+              className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-gray-300/80"
               style={{ left: lineFrom * COL + COL / 2, width: (lineTo - lineFrom) * COL - (evCol! >= days.length ? COL / 2 : 0) }}
             />
           )}
@@ -448,7 +511,7 @@ export function Board({
             return (
               <div
                 key={d}
-                className={cn("absolute inset-y-0 flex flex-col items-center justify-center gap-0.5", isEvent && "rounded-sm bg-amber-100/70 ring-1 ring-inset ring-amber-300")}
+                className={cn("absolute inset-y-0 z-[7] flex flex-col items-center justify-center gap-0.5", isEvent && "rounded-sm bg-amber-100/70 ring-1 ring-inset ring-amber-300")}
                 style={{ left: c * COL, width: COL }}
               >
                 {isEvent && (
@@ -457,7 +520,7 @@ export function Board({
                   </span>
                 )}
                 {shown.map((p) => (
-                  <Marker key={p.id} post={p} rowKey={key} editable={editable} onOpen={() => onOpenPost(p.id)} title={postSummary(p, byId, channelName)} />
+                  <Marker key={p.id} post={p} rowKey={key} editable={editable} onOpen={() => onOpenPost(p.id)} title={postSummary(p, byId, channelName)} lit={litPost === p.id} onHover={setLitPost} />
                 ))}
                 {more > 0 && (
                   <button type="button" data-marker="" className="rounded bg-gray-700 px-0.5 text-[9px] font-bold leading-3 text-white" onClick={(e) => (e.stopPropagation(), openCell(key, c, false, e.currentTarget.closest("[data-track]")))} aria-label={`${more} more posts on ${dayLabel(d)}`}>
@@ -490,7 +553,7 @@ export function Board({
 
   return (
     <DndContext id="schedule-board" sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={() => setDrag(null)}>
-      <div ref={scroller} className="relative max-h-[75vh] overflow-auto overscroll-x-contain rounded-lg border border-gray-200 [--label:8.5rem] sm:[--label:16rem]" data-testid="timeline">
+      <div ref={scroller} className="relative max-h-[75vh] overflow-auto overscroll-x-contain rounded-lg border border-gray-200 [--label:9.5rem] sm:[--label:17rem]" data-testid="timeline">
         <div className="relative" style={{ width: `calc(var(--label) + ${width}px)` }}>
           {/* The header: months, days, and the posts per day. */}
           <div ref={header} className="sticky top-0 z-30 border-b border-gray-200 bg-white">
@@ -585,7 +648,7 @@ export function Board({
             {rows.map((e, i) => (
               <div key={e.id} className="contents">
                 {laterFrom === e.id && (
-                  <div className="flex h-6 border-t border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  <div className="flex border-t border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500" style={{ height: DIVIDER_H }}>
                     <span className="sticky left-0 flex items-center whitespace-nowrap px-2">Later – big events advertised weeks ahead</span>
                   </div>
                 )}
@@ -593,6 +656,26 @@ export function Board({
               </div>
             ))}
             {showLoose && row("none", rows.length, null)}
+            {/* Posted together (round 2026-11-09 (6)): one post of several events – a line through its markers. */}
+            {bundles.map((b) => {
+              const c = col(berlinDate(b.post.scheduledFor));
+              const lit = litPost === b.post.id;
+              return (
+                <div key={b.post.id} aria-hidden="true" className="pointer-events-none absolute z-[6]" style={{ ...at(c), width: COL, top: rowMid(b.top), height: rowMid(b.bottom) - rowMid(b.top) }}>
+                  {b.top !== b.bottom && (
+                    <span className={cn("absolute right-[3px] top-0 h-full rounded-full", lineOf(b.post.channel), lit ? "w-[3px] opacity-100" : "w-0.5 opacity-50")} />
+                  )}
+                  {b.rows.map((r) => (
+                    <span key={r} className={cn("absolute right-[1px] h-[7px] w-[7px] -translate-y-1/2 rounded-full ring-1 ring-white", lineOf(b.post.channel), !lit && "opacity-70")} style={{ top: rowMid(r) - rowMid(b.top) }} />
+                  ))}
+                  {b.hidden > 0 && (
+                    <span className="absolute -bottom-3 right-0 whitespace-nowrap rounded bg-gray-700 px-0.5 text-[8px] font-bold leading-3 text-white" style={{ top: rowMid(b.bottom) - rowMid(b.top) + 6 }}>
+                      +{b.hidden}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
             {!keys.length && <p className="p-4 text-xs text-gray-500">No events match the filters.</p>}
           </div>
         </div>

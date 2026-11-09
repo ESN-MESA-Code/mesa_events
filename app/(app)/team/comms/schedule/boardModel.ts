@@ -27,8 +27,6 @@ export interface BoardEvent {
   categoryId?: string | null;
   /** It gets a row (the server's pick for the window); the others are on posts only, for their titles. */
   listed?: boolean;
-  /** Its colour on the board (set by the board): the dot on its row and its campaign line. */
-  color?: string;
 }
 
 export interface BoardCategory {
@@ -100,18 +98,16 @@ export const dayLabel = (day: string) => formatShortDate(`${day}T12:00:00Z`);
 export const SHORT: Record<string, string> = { telegram: "TG", instagram: "IG" };
 export const shortOf = (channel: string, name?: string) => SHORT[channel] ?? name ?? channel;
 
-/**
- * An event's colour (round 2026-11-03): its dot and its campaign line, so a
- * row reads at a glance. By date order, so neighbours differ.
- */
-export const EVENT_COLORS = ["bg-rose-500", "bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-violet-500", "bg-orange-500", "bg-teal-500", "bg-fuchsia-500", "bg-lime-600", "bg-indigo-500"];
-
 /** A marker's colour per channel: solid once posted, light while planned. */
 const CHANNEL_DOT: Record<string, { solid: string; light: string }> = {
   telegram: { solid: "bg-sky-500 border-sky-600", light: "bg-sky-100 border-sky-500" },
   instagram: { solid: "bg-pink-500 border-pink-600", light: "bg-pink-100 border-pink-500" },
 };
 export const dotOf = (channel: string) => CHANNEL_DOT[channel] ?? { solid: "bg-gray-500 border-gray-600", light: "bg-gray-100 border-gray-500" };
+
+/** The line joining the markers of one post across rows ("posted together"), per channel. */
+const CHANNEL_LINE: Record<string, string> = { telegram: "bg-sky-500", instagram: "bg-pink-500" };
+export const lineOf = (channel: string) => CHANNEL_LINE[channel] ?? "bg-gray-500";
 
 /** The status filter's buckets. */
 export type PostState = "planned" | "unconfirmed" | "posted" | "skipped";

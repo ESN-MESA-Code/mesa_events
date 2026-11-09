@@ -12,11 +12,10 @@ import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel } f
 import { addDays, dayDiff, monthParam } from "@/lib/month";
 import { FORMAT_LABEL, isBigEvent, namesOf } from "@/lib/publishing";
 import { ContentEditor, NewPostForm, RegularPostsForm, type TeamMember } from "./PostContent";
-import { Board, EventDot, MarkerShape } from "./Board";
+import { Board, MarkerShape } from "./Board";
 import { EventPanel } from "./EventPanel";
 import {
   BOARD_STEP_WEEKS,
-  EVENT_COLORS,
   STATE_TEXT,
   leadTime,
   needsPosts,
@@ -45,6 +44,7 @@ interface Filters {
   /** Past events without posts in view too. */
   past: boolean;
 }
+const FILTERS_KEY = "mesa:schedule:filters";
 const NO_FILTERS: Filters = { channel: "", state: "", mine: false, needs: false, big: false, category: "", q: "", past: false };
 
 /** A toggle in the filter bar. */
@@ -115,10 +115,29 @@ export function ScheduleBoard({
   const [open, setOpen] = useState<string | null>(initialPost);
   const [form, setForm] = useState<"" | "new" | "regular">("");
   const [f, setFilters] = useState<Filters>(NO_FILTERS);
+  // The filters are remembered on this device (round 2026-11-09 (6)); storage may be blocked.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) ?? "null") as Partial<Filters> | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the browser's storage once
+      if (saved) setFilters({ ...NO_FILTERS, ...saved, q: "" });
+    } catch {
+      // Nothing remembered.
+    }
+  }, []);
+  // Saved when Comms change them – not from an effect, which would store the defaults before they are read.
+  const update = (next: Filters) => {
+    setFilters(next);
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({ ...next, q: "" }));
+    } catch {
+      // Not remembered this time.
+    }
+  };
   const [others, setOthers] = useState<string[]>([]);
   // Phones: the filters folded away behind one button.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const set = (patch: Partial<Filters>) => setFilters((x) => ({ ...x, ...patch }));
+  const set = (patch: Partial<Filters>) => update({ ...f, ...patch });
 
   const days = Array.from({ length: dayDiff(range.from, range.to) + 1 }, (_, i) => addDays(range.from, i));
   const inView = (iso: string) => {
@@ -126,10 +145,7 @@ export function ScheduleBoard({
     return d >= range.from && d <= range.to;
   };
   const listed = events.filter((e) => e.listed);
-  // An event's colour: its dot and its campaign line, by date so neighbours differ.
-  const colors = new Map(listed.map((e, i) => [e.id, EVENT_COLORS[i % EVENT_COLORS.length]]));
-  const colored = events.map((e) => ({ ...e, color: colors.get(e.id) }));
-  const byId = new Map(colored.map((e) => [e.id, e]));
+  const byId = new Map(events.map((e) => [e.id, e]));
   const channelOf = new Map(channels.map((c) => [c.key, c]));
   const required = channels.filter((c) => c.required);
   const q = f.q.trim().toLowerCase();
@@ -168,7 +184,7 @@ export function ScheduleBoard({
   const shown = posts.filter(postShown);
   const hasPostsInView = (id: string) => posts.some((p) => p.events.includes(id) && p.status !== "skipped" && inView(p.scheduledFor));
   const needing = listed.filter((e) => needsPosts(e, required, coverage, today));
-  const rows = colored.filter((e) => {
+  const rows = events.filter((e) => {
     if (!e.listed) return false;
     if (e.id === focus) return true;
     if (berlinDate(e.startsAt) < today && !f.past && !hasPostsInView(e.id)) return false;
@@ -200,7 +216,7 @@ export function ScheduleBoard({
     <div className="space-y-3">
       {others.length > 0 && <p className="text-xs text-gray-500">Also on the board: {others.join(", ")}</p>}
       {action.error && <Alert tone="error">{action.error}</Alert>}
-      <div className={cn("grid gap-4", focused && "lg:grid-cols-[minmax(0,1fr)_22rem]")}>
+      <div className="grid gap-4">
         <Card className="min-w-0 p-3 sm:p-4">
           {/* The weeks shown: ← → by four weeks, back to this week, or a month. */}
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -299,7 +315,7 @@ export function ScheduleBoard({
               Past events
             </Toggle>
             {filtered && (
-              <button type="button" className="px-1 text-xs text-esn hover:underline" onClick={() => setFilters(NO_FILTERS)}>
+              <button type="button" className="px-1 text-xs text-esn hover:underline" onClick={() => update(NO_FILTERS)}>
                 Clear
               </button>
             )}
@@ -357,6 +373,14 @@ export function ScheduleBoard({
               <MarkerShape post={{ channel: "telegram", status: "planned", format: null, confirmed: true }} /> confirmed
             </span>
             <span>📅 the event</span>
+            <span className="inline-flex items-center gap-1" title="One post advertising several events: a line joins its markers, the number says how many">
+              <span className="relative inline-block h-4 w-1.5">
+                <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-sky-500/60" />
+                <span className="absolute left-0 top-0 h-1.5 w-1.5 rounded-full bg-sky-500" />
+                <span className="absolute bottom-0 left-0 h-1.5 w-1.5 rounded-full bg-sky-500" />
+              </span>
+              posted together
+            </span>
             <span className="inline-flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> warning
             </span>
@@ -482,7 +506,6 @@ function TelegramPanel({ post, postName, editable, byId }: { post: BoardPost; po
           <li key={i} className="space-y-1.5 rounded bg-white p-1.5 shadow-sm" data-testid="telegram-message">
             {messages.length > 1 && (
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-gray-400">
-                {m.eventId && <EventDot color={byId.get(m.eventId)?.color} />}
                 Message {i + 1}
                 {m.eventId ? ` · ${byId.get(m.eventId)?.title ?? "Event"}` : " · heading"}
               </p>
