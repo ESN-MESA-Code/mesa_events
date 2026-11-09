@@ -87,7 +87,7 @@ export function StageTrack({ steps, label, position, testId }: { steps: StepView
             >
               <TrackMark state={s.state} />
               <span className="truncate">{s.label}</span>
-              <span className="sr-only"> – {TRACK_WORD[s.state]}</span>
+              {s.state !== "current" && <span className="sr-only"> – {TRACK_WORD[s.state]}</span>}
             </span>
           </li>
         ))}
