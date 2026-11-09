@@ -43,6 +43,7 @@ import { demoPassword } from "@/lib/staging/password";
 import { importArchive } from "@/scripts/bot-archive.mjs";
 import { applySuggestedSorting } from "@/lib/formatsApply";
 import { eventMessage } from "@/lib/telegram/messages";
+import { regularPosts } from "@/lib/publishing";
 import { EVENTS, FIRST_NAMES, LAST_NAMES, NATIONALITIES, PROGRAMS, UNIVERSITIES, type EventKey, type EventType } from "@/lib/staging/content";
 import { removeInternalStaging, seedInternalStaging, type InternalSummary } from "@/lib/staging/internal";
 
@@ -1073,6 +1074,10 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
 
   // 13. The publishing schedule: posts published, skipped, planned and overdue
   // on Telegram, Instagram and pretix, one Telegram post bundling two events.
+  // Round 2026-11-09: the content planning on them – titles, post / story /
+  // reel, who makes them, how far they are, captions and Canva links – posts
+  // without an event ("This week", the month's calendar, a recap), a trip's
+  // whole campaign weeks ahead, and pretix pages ticked for some upcoming events.
   // Planned Telegram posts publish themselves (a job at their time, as the
   // schedule board enqueues it); published ones are in the fake channel.
   const tenAm = (date: string, hour = "10:00") => Date.parse(berlinInputToIso(`${date}T${hour}`));
@@ -1083,7 +1088,7 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
   let telegramId = TELEGRAM_IDS[0];
   const post = (channel: string, when: number, keys: string[], status: "planned" | "published" | "skipped", extra: Record<string, unknown> = {}) => {
     const id = rng.uuid();
-    const by = comms[0]!;
+    const by = ((extra.assignees as string[] | undefined) ?? [])[0] ?? comms[0]!;
     const row: Database["public"]["Tables"]["publication_posts"]["Insert"] = {
       id, channel, scheduled_for: iso(when), status, created_by: by, created_at: iso(Math.min(when, now) - 2 * DAY), updated_at: iso(Math.min(when, now)),
       ...(status === "published" ? { published_at: iso(when), published_by: by } : {}),
@@ -1101,25 +1106,70 @@ export async function seedStaging(db: Db, opts: SeedOptions): Promise<SeedSummar
     }
     posts.push(row);
     keys.forEach((k, position) => postEvents.push({ post_id: id, event_id: byKey.get(k)!.id, position }));
+    return id;
   };
+  const [sofia, kenji] = comms as [string, string];
+  const canva = (name: string) => `https://www.canva.com/design/staging-${name}/edit`;
+  // Not before now for planned ones (the board would show them overdue).
+  const ahead = (date: string, hour = "10:00") => Math.max(now + 2 * HOUR, tenAm(date, hour));
   const slug = (key: string) => byKey.get(key)!.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   post("pretix", tenAm(eventDay("pubQuiz", -8)), ["pubQuiz"], "published", { link: `https://pretix.eu/esnmesa/${slug("pubQuiz")}/` });
-  post("instagram", tenAm(eventDay("pubQuiz", -5)), ["pubQuiz"], "published", { link: "https://www.instagram.com/p/staging-pub-quiz/" });
+  post("instagram", tenAm(eventDay("pubQuiz", -5)), ["pubQuiz"], "published", {
+    link: "https://www.instagram.com/p/staging-pub-quiz/", format: "post", assignees: [kenji], progress: "ready",
+    caption: "🧠 Pub quiz night is back! Teams of up to five, prizes for the top three. Sign up via the link in our bio.", design_link: canva("pub-quiz"),
+  });
   post("telegram", tenAm(eventDay("pubQuiz", -4)), ["pubQuiz"], "published");
   post("pretix", tenAm(eventDay("languageCafePast", -5)), ["languageCafePast"], "skipped", { skip_reason: "No pretix for free events" });
   post("telegram", tenAm(eventDay("bouldering", -3)), ["bouldering"], "published");
-  post("instagram", tenAm(eventDay("brunchMarket", -6)), ["brunchMarket"], "published", { link: "https://www.instagram.com/p/staging-sunday-brunch/" });
+  post("instagram", tenAm(eventDay("brunchMarket", -6)), ["brunchMarket"], "published", { link: "https://www.instagram.com/p/staging-sunday-brunch/", format: "post", assignees: [sofia], progress: "ready" });
   post("telegram", Math.min(now - HOUR, tenAm(eventDay("movieNight", 0), "09:00")), ["movieNight"], "published");
-  post("instagram", Math.min(now - HOUR, tenAm(eventDay("movieNight", -1))), ["movieNight"], "published", { link: "https://www.instagram.com/p/staging-movie-night/" });
+  post("instagram", Math.min(now - HOUR, tenAm(eventDay("movieNight", -1))), ["movieNight"], "published", { link: "https://www.instagram.com/p/staging-movie-night/", format: "story", title: "Tonight!", assignees: [sofia], progress: "ready" });
   post("pretix", tenAm(eventDay("pubCrawl", -7)), ["pubCrawl"], "published", { link: `https://pretix.eu/esnmesa/${slug("pubCrawl")}/` });
   // Overdue: planned for yesterday morning, not posted yet.
-  post("instagram", tenAm(plusDays(today, -1)), ["boardGames"], "planned");
+  post("instagram", tenAm(plusDays(today, -1)), ["boardGames"], "planned", { format: "post", assignees: [kenji], progress: "in_progress", design_link: canva("board-games") });
   // Planned this week, one of them a bundle.
-  post("instagram", tenAm(plusDays(today, 1), "12:00"), ["pubCrawl"], "planned", { note: "Costume ideas carousel" });
+  post("instagram", ahead(plusDays(today, 1), "12:00"), ["pubCrawl"], "planned", {
+    note: "Costume ideas carousel", title: "Costume ideas", format: "reel", assignees: [sofia, kenji], progress: "in_progress",
+    caption: "👻 Need a costume for the pub crawl? Five last-minute ideas – which one are you?", design_link: canva("pub-crawl-costumes"),
+  });
   post("telegram", Math.max(now + 3 * HOUR, tenAm(plusDays(today, 1))), ["boardGames", "pubCrawl"], "planned", { note: "This week at ESN MESA" });
   // Next month, planned before the description is approved (the board warns).
   post("telegram", tenAm(eventDay("stammtisch", -3)), ["stammtisch"], "planned");
-  post("instagram", tenAm(eventDay("thanksgiving", -7)), ["thanksgiving"], "planned");
+  post("instagram", tenAm(eventDay("thanksgiving", -7)), ["thanksgiving"], "planned", { format: "post", assignees: [kenji] });
+  // Next month's events posted together in one Instagram story.
+  post("instagram", ahead(eventDay("swing", -5), "18:00"), ["swing", "escapeRoom"], "planned", { title: "Coming up", format: "story", assignees: [sofia] });
+
+  // A trip's campaign, weeks ahead (several posts of one event, planned in one go).
+  const tripPosts: Array<[string, number, "post" | "story" | "reel" | null, string, Record<string, unknown>]> = [
+    ["instagram", -24, "post", "Save the date", { progress: "ready", caption: "🇨🇿 Prague, here we come! Save the weekend – tickets go on sale soon.", design_link: canva("prague-save-the-date") }],
+    ["instagram", -16, "story", "Sales open soon", { progress: "in_progress" }],
+    ["instagram", -14, "story", "Sales NOW", { progress: "todo" }],
+    ["telegram", -14, null, "", {}],
+    ["instagram", -3, "story", "Last chance", { progress: "todo" }],
+  ];
+  for (const [channel, before, format, title, extra] of tripPosts) {
+    post(channel, ahead(eventDay("prague", before), title === "Sales NOW" ? "18:00" : "10:00"), ["prague"], "planned", {
+      ...(title ? { title } : {}), ...(format ? { format } : {}), ...(channel === "instagram" ? { assignees: [sofia] } : {}), ...extra,
+    });
+  }
+  // pretix pages Comms set up for upcoming events (the others are still to do on the pretix tab).
+  for (const k of ["prague", "nuremberg", "boardGames"]) post("pretix", Math.min(now - HOUR, tenAm(plusDays(today, -2))), [k], "published", { link: `https://pretix.eu/esnmesa/${slug(k)}/` });
+
+  // Posts without an event: the month's "This week" stories, next month's calendar, last month's recap.
+  // The same titles "Regular posts" gives, so planning them again leaves these alone.
+  for (const r of regularPosts(monthOf(iso(now)), today)) {
+    const calendar = r.kind === "calendar";
+    post("instagram", ahead(r.day, calendar ? "17:00" : "18:00"), [], "planned", {
+      title: r.title, format: r.format, assignees: calendar ? [sofia, kenji] : [kenji], progress: calendar ? "in_progress" : "todo",
+      ...(calendar ? { caption: `📅 You got plans for ${r.title.split(" ")[0]}? We certainly do! Save the dates 💙`, design_link: canva("month-calendar") } : {}),
+    });
+  }
+  const lastMonth = addMonths(monthOf(iso(now)), -1);
+  const lastName = new Date(`${lastMonth}T12:00:00Z`).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
+  post("instagram", Math.min(now - DAY, tenAm(plusDays(monthOf(iso(now)), 1))), [], "published", {
+    title: `${lastName} recap`, format: "reel", assignees: [sofia], progress: "ready", link: "https://www.instagram.com/p/staging-recap/",
+    caption: `A little look back at our ${lastName} moments ✨ #MESAlovesyou`,
+  });
   check(await db.from("publication_posts").insert(posts, { defaultToNull: false }), "publication posts");
   check(await db.from("publication_post_events").insert(postEvents), "publication post events");
   if (telegramMessages.length) check(await db.from("fake_telegram_messages").insert(telegramMessages), "fake Telegram messages");
@@ -1278,6 +1328,11 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
   const demoIds = DEMO_PEOPLE.map((p) => p.id);
   const demoEmails = DEMO_PEOPLE.map((p) => demoEmail(p, domain));
 
+  // Posts without an event (round 2026-11-09) are not found through the events: the demo Comms team's go.
+  const theirs = check(await db.from("publication_posts").select("id, publication_post_events(event_id)").in("created_by", demoEmails), "old posts without events");
+  const loose = theirs.filter((p) => !p.publication_post_events.length).map((p) => p.id);
+  if (loose.length) check(await db.from("publication_posts").delete().in("id", loose), "old posts without events");
+
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100);
     const evs = check(await db.from("events").select("chat_space_name").in("id", chunk).not("chat_space_name", "is", null), "old spaces");
@@ -1323,6 +1378,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
   check(await db.from("event_ideas").delete().in("proposer_id", demoIds), "old ideas");
   check(await db.from("event_ideas").delete().like("title", "[demo]%"), "old demo ideas");
   check(await db.from("esn_access_tokens").delete().in("profile_id", demoIds), "old tokens");
+  // Someone trying the blacklist on staging must not stop the next run (the seed assigns these people).
+  check(await db.from("volunteer_blacklist").delete().in("profile_id", demoIds), "old blacklist entries");
   if (cycles.length) {
     check(await db.from("activity_log").delete().in("cycle_id", cycles), "old cycle log");
     check(await db.from("planning_cycles").delete().in("id", cycles), "old cycles");

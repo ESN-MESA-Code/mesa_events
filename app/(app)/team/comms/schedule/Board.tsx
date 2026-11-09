@@ -453,20 +453,20 @@ export function Board({
           data-track={key}
           className={cn("relative shrink-0", editable && "cursor-cell", faded && "opacity-40")}
           style={grid}
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest("[data-marker]") || Date.now() - dragEnded < 300) return;
-            const c = colAt(e);
+          onClick={(ev) => {
+            if ((ev.target as HTMLElement).closest("[data-marker]") || Date.now() - dragEnded < 300) return;
+            const c = colAt(ev);
             const here = own.filter((p) => berlinDate(p.scheduledFor) === days[c]);
-            if (editable || here.length) openCell(key, c, false, e.currentTarget);
+            if (editable || here.length) openCell(key, c, false, ev.currentTarget);
           }}
-          onContextMenu={(e) => {
-            if (!editable || (e.target as HTMLElement).closest("[data-marker]")) return;
-            e.preventDefault();
-            openCell(key, colAt(e), false, e.currentTarget);
+          onContextMenu={(ev) => {
+            if (!editable || (ev.target as HTMLElement).closest("[data-marker]")) return;
+            ev.preventDefault();
+            openCell(key, colAt(ev), false, ev.currentTarget);
           }}
-          onMouseMove={(e) => {
+          onMouseMove={(ev) => {
             if (!editable) return;
-            const c = colAt(e);
+            const c = colAt(ev);
             if (hover?.key !== key || hover.col !== c) setHover({ key, col: c });
           }}
           onMouseLeave={() => setHover(null)}

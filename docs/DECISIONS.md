@@ -1517,3 +1517,16 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   readers. The pretix mark is no longer a link (it sat inside the row's button); the event's
   panel has pretix.
 - **"Without an event"** is the first row.
+
+## 2026-11-09 (8) – Demo data for the Comms pages
+
+- **The seed shows the content planning**: titles, post / story / reel, who makes a post, how far
+  it is, captions and Canva links on its posts; posts without an event (the month's "This week"
+  stories and next month's calendar with the same titles "Regular posts" gives, last month's
+  recap); next month's trip (Prague) with a whole campaign (save the date, sales open, sales
+  now, Telegram, last chance); an Instagram story bundling two of next month's events; pretix
+  ticked for three upcoming events, the rest left for the pretix tab. Planned posts never land
+  before now (they would show overdue).
+- **Re-runs**: the demo Comms team's posts without an event are removed with the rest (they are
+  not found through events), and so are blacklist entries of demo members – one added by hand on
+  staging stopped the seed ("Aisha Bello is on the blacklist").
