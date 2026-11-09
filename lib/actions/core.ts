@@ -85,6 +85,7 @@ export const PAGES = {
   schedule: "/team/comms/schedule",
   pictures: "/team/comms/pictures",
   content: "/team/comms/content",
+  pretix: "/team/comms/pretix",
   finance: ["/team/finance", "layout"],
   internal: "/team/internal",
   internalEvent: ["/internal/[id]", "page"],

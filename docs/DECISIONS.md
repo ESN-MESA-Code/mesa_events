@@ -1408,3 +1408,21 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   its dot and posts), the title larger, "📅 date, time · in N days" (amber within a week), the
   description status as a coloured pill, the channel chips under "Channels · drag onto a day"
   (red dashed while a required one is missing, green once posted), pretix and Plan… in a footer.
+
+## 2026-11-09 (4) – pretix pages apart from the advertising
+
+- **Why:** setting up an event's pretix page is a chore Comms does once per event, not
+  advertising – it sat on the schedule as a tick in every event's card.
+- **"pretix pages" tab** (`/team/comms/pretix`, after "Events by stage"): the upcoming events the
+  schedule lists (this month and the months ahead, drafts from six weeks on), "To set up" first,
+  **due before the event's first post** (the posts link to it): red when that day has come or
+  passed, amber within three days, "No post planned yet" otherwise. Each row: date, title, big /
+  draft, how soon, the description's status (its title links to the description); a link field
+  and **Mark set up**; once set up "✓ Set up by <name>, <day>", open, Undo, and a warning when the
+  link is missing (the Telegram posts then have no "Sign up"). "Done" and "All" filters; a link
+  naming an event (`?event=`) highlights it and shows it even when it is further ahead.
+- **Elsewhere:** the schedule's event cards show only "pretix page ✓" or "pretix page not set
+  up →" linking there; "Events by stage" says **Set up pretix** (to the tab, not the board);
+  Home's "pretix pages to set up" leads to the tab.
+- **Storage unchanged** (a published "pretix" post with the link, by and when), so the Telegram
+  sign-up link, the stages, Home and the board's warnings read it as before.

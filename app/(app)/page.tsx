@@ -477,7 +477,7 @@ async function CommsQueue() {
       <Figure label="Awaiting review" value={review.length} href={link(review, "review")} />
       <Figure label="Late" value={late.length} tone="red" href={link(late, "write")} />
       {/* Approved descriptions go to the Chat space by themselves; then pretix, then the advertising (round 2026-11-03). */}
-      <Figure label="pretix pages to set up" value={work.pretix.length} tone="amber" href="/team/comms/schedule" />
+      <Figure label="pretix pages to set up" value={work.pretix.length} tone="amber" href="/team/comms/pretix" />
       <Figure label="Upcoming events still to advertise" value={work.toPlan.length} tone="amber" href="/team/comms/schedule" />
       <Figure label="Posts planned this week" value={thisWeek} href="/team/comms/schedule" />
       <Figure label="Overdue posts" value={overdue} tone="red" href="/team/comms/schedule" />

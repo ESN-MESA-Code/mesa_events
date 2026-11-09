@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, CalendarRange, ClipboardList, Image as ImageIcon, ListChecks } from "lucide-react";
+import { ArrowUpRight, CalendarRange, ClipboardList, Image as ImageIcon, ListChecks, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,13 +8,15 @@ import { cn } from "@/lib/utils";
  * advertisement schedule (round 2026-11-03: "publish" is the description in
  * the Chat space, "advertise" the posts on the channels) and the default
  * pictures, keeping the month. Round 2026-11-09: the content list (every
- * post of the month as a task: who, how far, caption, design). ESN Activities is the executive board's
+ * post of the month as a task: who, how far, caption, design) and the pretix
+ * pages (a chore per event, apart from the advertising). ESN Activities is the executive board's
  * page; executives get a link to it.
  */
-export function CommsTabs({ current, month, executive }: { current: "stages" | "schedule" | "content" | "pictures"; month: string | null; executive: boolean }) {
+export function CommsTabs({ current, month, executive }: { current: "stages" | "pretix" | "schedule" | "content" | "pictures"; month: string | null; executive: boolean }) {
   const q = month ? `?month=${month}` : "";
   const tabs = [
     { id: "stages", label: "Events by stage", href: `/team/comms${q}`, icon: ListChecks },
+    { id: "pretix", label: "pretix pages", href: "/team/comms/pretix", icon: Ticket },
     { id: "schedule", label: "Advertisement schedule", href: `/team/comms/schedule${q}`, icon: CalendarRange },
     { id: "content", label: "Content list", href: `/team/comms/content${q}`, icon: ClipboardList },
     { id: "pictures", label: "Pictures", href: `/team/comms/pictures${q}`, icon: ImageIcon },

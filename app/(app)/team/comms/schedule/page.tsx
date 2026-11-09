@@ -175,7 +175,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Comms" description="Tick pretix off, drag an event onto a day, bundle and post – Telegram posts go out by themselves once confirmed. Events of the next months are in the list too, drafts from six weeks ahead.">
+      <PageHeader title="Comms" description="Drag an event onto a day, bundle and post – Telegram posts go out by themselves once confirmed. Events of the next months are in the list too, drafts from six weeks ahead.">
         <MonthSelector
           options={months.map((m) => ({ value: monthParam(m), label: cycleLabel(m), note: hasWork(m) ? "to plan" : undefined }))}
           current={monthParam(month)}

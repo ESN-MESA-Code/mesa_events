@@ -305,8 +305,8 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                                 </Link>
                               )}
                               {v.current === "pretix" && (
-                                <Link href={boardHref} className={buttonVariants({ size: "sm" })}>
-                                  Tick pretix
+                                <Link href={`/team/comms/pretix?event=${r.event_id}#pretix-${r.event_id}`} className={buttonVariants({ size: "sm" })}>
+                                  Set up pretix
                                 </Link>
                               )}
                               {v.current === "advertise" && (

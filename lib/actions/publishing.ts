@@ -202,7 +202,7 @@ export const setPretixReady = defineAction(
     requireRole(ctx, "comms");
     dbError((await ctx.supabase.rpc("set_pretix_ready", { event: i.event_id, ready: i.ready, link: i.link })).error);
   },
-  { revalidate: BOARD }
+  { revalidate: [...BOARD, PAGES.pretix] }
 );
 
 export const deletePost = defineAction(z.object({ post_id: uuid }), async (ctx, i) => {

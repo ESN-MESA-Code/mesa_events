@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -33,7 +34,6 @@ import {
   removeFromPost,
   reorderPost,
   setPostEventPicture,
-  setPretixReady,
   skipPost,
 } from "@/app/actions/publishing";
 import { DESCRIPTION_STATUS } from "@/components/status";
@@ -198,7 +198,7 @@ function Draggable({ id, disabled, className, children, testId }: { id: string; 
  * post, onto a post of the same channel to bundle the event into it, a
  * post to another day to move it. Click a post for its details (Telegram's preview,
  * confirm, publish, skip …), an event to highlight its date and posts.
- * pretix is not scheduled: a tick per event once its page is up.
+ * pretix is not scheduled: its own page (round 2026-11-09), linked from each event.
  * Round 2026-11-02: below the month's events the list holds the upcoming
  * events of later months, by month and big ones first; their chips are
  * dropped on this month's days like any other (a post may sit on any day
@@ -779,7 +779,16 @@ function EventList({
           </div>
           {(pretix.enabled || editable) && (
             <div className="space-y-1 border-t border-gray-100 pt-1.5">
-              {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
+              {/* pretix is a chore of its own (round 2026-11-09): its page, linked from here. */}
+              {pretix.enabled && (
+                <Link
+                  href={`/team/comms/pretix?event=${e.id}#pretix-${e.id}`}
+                  className={cn("inline-flex items-center gap-1 hover:underline", pretix.done[e.id] ? "text-emerald-700" : past ? "text-gray-400" : "font-medium text-red-700")}
+                  data-testid={`pretix-${e.id}`}
+                >
+                  {pretix.done[e.id] ? "pretix page ✓" : "pretix page not set up →"}
+                </Link>
+              )}
               {editable && <PlanMenu event={e} channels={channels} days={days} today={today} posts={posts} byId={byId} />}
             </div>
           )}
@@ -815,44 +824,6 @@ function EventList({
         )}
       </div>
     </Card>
-  );
-}
-
-/** pretix: ticked once the event's pretix page is up; the link (optional) goes under the event's Telegram message ("Sign up"). */
-function PretixTick({ event, state, editable }: { event: BoardEvent; state: { link: string | null } | null; editable: boolean }) {
-  const { run, pending, error } = useAction();
-  const [link, setLink] = useState(state?.link ?? "");
-  // The tick shows at once; it goes back if saving fails.
-  const [ticked, setTicked] = useState<boolean | null>(null);
-  const done = error ? !!state : (ticked ?? !!state);
-  return (
-    <div className="space-y-1" data-testid={`pretix-${event.id}`}>
-      <label className="flex items-center gap-1.5 text-gray-700">
-        <input type="checkbox" checked={done} disabled={!editable || pending} aria-label={`pretix page of ${event.title} is up`} onChange={(e) => {
-            const ready = e.target.checked;
-            setTicked(ready);
-            run(setPretixReady, { event_id: event.id, ready, link: ready ? link.trim() : "" }, () => setTicked(null));
-          }}
-        />
-        <span className={cn(done && "text-emerald-800")}>pretix page is up{done && " ✓"}</span>
-        {done && state?.link && (
-          <a href={state.link} target="_blank" rel="noopener noreferrer" className="ml-auto text-esn hover:underline">
-            open
-          </a>
-        )}
-      </label>
-      {done && editable && (
-        <form className="flex gap-1" onSubmit={(e) => (e.preventDefault(), run(setPretixReady, { event_id: event.id, ready: true, link: link.trim() }))}>
-          <Input aria-label={`pretix link of ${event.title}`} placeholder="https://pretix.eu/… (optional)" className="h-7 text-xs" value={link} onChange={(e) => setLink(e.target.value)} />
-          {link.trim() !== (state?.link ?? "") && (
-            <Button size="sm" variant="outline" disabled={pending} className="h-7">
-              Save
-            </Button>
-          )}
-        </form>
-      )}
-      {error && <p className="text-red-600">{error}</p>}
-    </div>
   );
 }
 

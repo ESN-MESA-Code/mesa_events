@@ -64,13 +64,18 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
   await drag(page, page.getByTestId(`chip-telegram-${hike.id}`), igPost);
   await expect(page.getByText("That post is on Instagram", { exact: false })).toBeVisible();
 
-  // pretix is a tick, not a post.
+  // pretix is not a post: it has its own page (round 2026-11-09), linked from the event's card.
   await expect(page.getByTestId("schedule-board")).not.toContainText("pretix");
-  await list.getByLabel(`pretix page of ${hike.title} is up`).check();
-  await expect(list.getByTestId(`pretix-${hike.id}`)).toContainText("pretix page is up ✓");
-  await list.getByLabel(`pretix link of ${hike.title}`).fill("https://pretix.eu/esnmesa/e2e-hike/");
-  await list.getByTestId(`pretix-${hike.id}`).getByRole("button", { name: "Save" }).click();
-  await expect(list.getByTestId(`pretix-${hike.id}`).getByRole("link", { name: "open" })).toHaveAttribute("href", "https://pretix.eu/esnmesa/e2e-hike/");
+  await expect(list.getByTestId(`pretix-${hike.id}`)).toContainText("pretix page not set up");
+  await list.getByTestId(`pretix-${hike.id}`).click();
+  await expect(page).toHaveURL(new RegExp(`/team/comms/pretix\?event=${hike.id}`));
+  const pretixRow = page.getByTestId(`pretix-row-${hike.id}`);
+  await pretixRow.getByLabel(`pretix link of ${hike.title}`).fill("https://pretix.eu/esnmesa/e2e-hike/");
+  await pretixRow.getByRole("button", { name: "Mark set up" }).click();
+  await expect(pretixRow.getByTestId("pretix-done-by")).toContainText("Set up by");
+  await expect(pretixRow.getByRole("link", { name: "open" })).toHaveAttribute("href", "https://pretix.eu/esnmesa/e2e-hike/");
+  await page.goto(`/team/comms/schedule?month=${month}`);
+  await expect(list.getByTestId(`pretix-${hike.id}`)).toContainText("pretix page ✓");
 
   // Instagram is published by hand: the link.
   await igPost.locator("button").click();

@@ -1,6 +1,6 @@
 // Comms and Events one month at a time (brief 2026-10-29, C): switching
 // months (arrows, list, remembered choice), the stage filters with counts,
-// the inline actions (Review, Tick pretix, Advertise – round 2026-11-03;
+// the inline actions (Review, Set up pretix, Advertise – round 2026-11-03;
 // reminders are automatic), late as a mark, the phone track, and the Events
 // page's month with its events.
 import { USERS, admin, createEvent, hoursFromNow, TEST_TAG } from "../helpers/local";
@@ -82,7 +82,7 @@ test("Comms: a month by stage, filters, inline actions, switching months", async
   await expect(row(approved.id).locator('[aria-current="step"]')).toHaveText(/pretix page$/);
   await expect(row(approved.id).getByRole("button", { name: "Publish" })).toHaveCount(0);
   await expect(row(approved.id).getByTestId("stage-track")).not.toContainText("ESN Activities");
-  await expect(row(pretixOne.id).getByRole("link", { name: "Tick pretix", exact: true })).toHaveAttribute("href", new RegExp(`/team/comms/schedule\\?month=.*&event=${pretixOne.id}$`));
+  await expect(row(pretixOne.id).getByRole("link", { name: "Set up pretix", exact: true })).toHaveAttribute("href", `/team/comms/pretix?event=${pretixOne.id}#pretix-${pretixOne.id}`);
   await expect(row(advertiseOne.id).locator('[aria-current="step"]')).toHaveText(/Advertised$/);
   await expect(row(advertiseOne.id).getByRole("link", { name: "Advertise", exact: true })).toBeVisible();
 
