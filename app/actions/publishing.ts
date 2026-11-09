@@ -12,6 +12,10 @@ export async function updatePostContent(input: unknown) {
   return run(A.updatePostContent, input);
 }
 
+export async function planPromoSeries(input: unknown) {
+  return run(A.planPromoSeries, input);
+}
+
 export async function planRegularPosts(input: unknown) {
   return run(A.planRegularPosts, input);
 }

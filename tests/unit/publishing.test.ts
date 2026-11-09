@@ -3,7 +3,7 @@
 // suggests any day before the event, what is still to plan counts the
 // months ahead, and a far-ahead post names when its description is due.
 import { describe, expect, it } from "vitest";
-import { DRAFT_AHEAD_DAYS, advertisable, regularPosts, boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, telegramRefusal, trayGroups, type PostEventFacts } from "@/lib/publishing";
+import { DRAFT_AHEAD_DAYS, advertisable, promoSeries, regularPosts, boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, telegramRefusal, trayGroups, type PostEventFacts } from "@/lib/publishing";
 import { defaultPictureOf } from "@/lib/publishingLoad";
 import { calendarWeeks } from "@/lib/month";
 
@@ -132,5 +132,24 @@ describe("regular posts (round 2026-11-09)", () => {
       { day: "2026-11-29", title: "December calendar", format: "post", kind: "calendar" },
     ]);
     expect(regularPosts("2026-11-01", "2026-11-20").map((p) => p.day)).toEqual(["2026-11-22", "2026-11-29", "2026-11-29"]);
+  });
+});
+
+describe("promo series (round 2026-11-09)", () => {
+  const trip = "2026-12-12T07:00:00Z"; // Sat 12 Dec, Berlin
+  it("save the date three weeks ahead, the sales date two days before sales, sales NOW at its time, the last call two days before", () => {
+    expect(promoSeries(trip, "2026-11-28T18:00", "2026-11-09").map((s) => [s.key, s.day, s.time, s.format, s.on])).toEqual([
+      ["save_the_date", "2026-11-21", "10:00", "post", true],
+      ["sales_date", "2026-11-26", "10:00", "story", true],
+      ["sales_now", "2026-11-28", "18:00", "story", true],
+      ["last_chance", "2026-12-10", "10:00", "story", true],
+      ["today", "2026-12-12", "09:00", "story", false],
+    ]);
+    expect(promoSeries(trip, "2026-11-28T18:00", "2026-11-09")[1].title).toBe("Sales open Sat 28 Nov");
+  });
+  it("without a sales opening no sales steps; nothing before today; save the date today when later than three weeks ahead", () => {
+    expect(promoSeries(trip, "", "2026-11-09").map((s) => s.key)).toEqual(["save_the_date", "last_chance", "today"]);
+    expect(promoSeries(trip, "", "2026-11-30")[0]).toMatchObject({ key: "save_the_date", day: "2026-11-30" });
+    expect(promoSeries(trip, "", "2026-12-11").map((s) => s.key)).toEqual(["save_the_date", "today"]);
   });
 });

@@ -1379,6 +1379,10 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   the post on the board (`?post=`).
 - **Kept out (for now)**: the post-ideas and reel-ideas backlogs (inspiration links; fine in a
   shared sheet or an Instagram collection until undated posts exist), and tasks that are not posts
-  (new logo, stickers, website text). Promo series for big events (save the date → sales now →
-  reminder → today) are planned as single titled posts; a one-click series is a possible next
-  step.
+  (new logo, stickers, website text). - **Promo series** ("Promo series…" under each upcoming event in the board's list, highlighted
+  for big events; `promoSeries()`, `planPromoSeries`): Save the date (three weeks before, or
+  today), "Sales open <day>" two days before ticket sales open and "Sales NOW" at the opening
+  (both only when the sales opening is given – events have no sales date of their own), Last
+  chance two days before, Today! on the day (unticked by default). Each step can be unticked or
+  moved; they become titled posts of the event (post / story) on one non-Telegram channel,
+  Instagram by default, and steps already planned (same channel, day and title) are skipped.

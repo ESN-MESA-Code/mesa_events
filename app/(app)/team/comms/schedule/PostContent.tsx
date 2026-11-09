@@ -9,9 +9,10 @@ import { useState } from "react";
 import { CalendarPlus, Check, Copy, ExternalLink, Repeat } from "lucide-react";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import { createPost, planRegularPosts, updatePostContent } from "@/app/actions/publishing";
-import { CAPTION_MAX, FORMAT_LABEL, POST_FORMATS, PROGRESS, PROGRESS_LABEL, regularPosts, type PostFormat, type Progress } from "@/lib/publishing";
+import { createPost, planPromoSeries, planRegularPosts, updatePostContent } from "@/app/actions/publishing";
+import { CAPTION_MAX, FORMAT_LABEL, POST_FORMATS, PROGRESS, PROGRESS_LABEL, promoSeries, regularPosts, type PostFormat, type Progress, type PromoStep } from "@/lib/publishing";
 import { formatShortDate } from "@/lib/dates";
+import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 import type { BoardChannel, BoardPost } from "./ScheduleBoard";
 
@@ -273,6 +274,75 @@ export function RegularPostsForm({ channels, month, today, onDone }: { channels:
       </Button>
       <p className="text-xs text-gray-500">Already planned ones (same channel, day and title) are left as they are.</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
+    </form>
+  );
+}
+
+/**
+ * A promo series for a trip or big event (round 2026-11-09): save the date,
+ * the sales date and "sales NOW" (once the sales opening is given), the last
+ * call, the day itself – each a titled post of the event on its own day,
+ * ticked, moved or left out before planning.
+ */
+export function PromoSeriesForm({ event, channels, today }: { event: { id: string; title: string; startsAt: string }; channels: BoardChannel[]; today: string }) {
+  const { run, pending, error } = useAction();
+  const usable = channels.filter((c) => c.key !== "telegram");
+  const [ch, setCh] = useState(usable.find((c) => c.key === "instagram")?.key ?? usable[0]?.key ?? "");
+  const [sales, setSales] = useState("");
+  // Comms' changes per step (ticked, day, time) over the suggestion.
+  const [edits, setEdits] = useState<Record<string, Partial<Pick<PromoStep, "on" | "day" | "time">>>>({});
+  const steps = promoSeries(event.startsAt, sales, today).map((s) => ({ ...s, ...edits[s.key] }));
+  const chosen = steps.filter((s) => s.on);
+  const edit = (key: string, patch: Partial<Pick<PromoStep, "on" | "day" | "time">>) => setEdits((e) => ({ ...e, [key]: { ...e[key], ...patch } }));
+  if (!usable.length) return <p className="mt-1 text-gray-500">The promo series goes on Instagram or another manual channel – none is switched on.</p>;
+  return (
+    <form
+      className="mt-1 grid min-w-0 gap-1.5 rounded-md border border-gray-200 bg-white p-2 shadow-sm"
+      onSubmit={(e) => (
+        e.preventDefault(),
+        run(
+          planPromoSeries,
+          { event_id: event.id, channel: ch, steps: chosen.map((s) => ({ title: s.title, format: s.format, day: s.day, time: s.time })) },
+          () => setEdits({}),
+          (r) => (r.made ? `${r.made} promo posts planned for ${event.title}.` : "They were all planned already.")
+        )
+      )}
+      data-testid={`promo-form-${event.id}`}
+    >
+      <label className="grid min-w-0 gap-0.5 text-gray-600">
+        Ticket sales open (optional)
+        <Input aria-label={`Ticket sales open for ${event.title}`} type="datetime-local" value={sales} max={`${event.startsAt.slice(0, 10)}T23:59`} onChange={(e) => setSales(e.target.value)} className="h-8 min-w-0 px-1.5 text-xs" />
+      </label>
+      <Select aria-label={`Channel of the promo series for ${event.title}`} value={ch} onChange={(e) => setCh(e.target.value)} className="h-8 py-1 text-xs">
+        {usable.map((c) => (
+          <option key={c.key} value={c.key}>
+            on {c.name}
+          </option>
+        ))}
+      </Select>
+      <ul className="space-y-1">
+        {steps.map((s) => (
+          <li key={s.key} className={cn("rounded border border-gray-100 p-1", !s.on && "opacity-60")}>
+            <label className="flex min-w-0 items-center gap-1.5 font-medium text-gray-800">
+              <input type="checkbox" className="accent-esn" checked={s.on} onChange={(e) => edit(s.key, { on: e.target.checked })} />
+              <span className="min-w-0 truncate">{s.title}</span>
+              <span className="ml-auto text-[10px] uppercase text-gray-500">{FORMAT_LABEL[s.format]}</span>
+            </label>
+            {s.on && (
+              <span className="mt-1 grid grid-cols-[minmax(0,1fr)_4.75rem] gap-1">
+                <Input aria-label={`Day of ${s.title}`} type="date" min={today} max={event.startsAt.slice(0, 10)} value={s.day} onChange={(e) => edit(s.key, { day: e.target.value })} className="h-7 min-w-0 px-1 text-xs" />
+                <Input aria-label={`Time of ${s.title}`} type="time" value={s.time} onChange={(e) => edit(s.key, { time: e.target.value })} className="h-7 min-w-0 px-1 text-xs" />
+              </span>
+            )}
+          </li>
+        ))}
+        {!steps.length && <li className="text-gray-500">Too late for a series – plan single posts instead.</li>}
+      </ul>
+      {!sales && <p className="text-gray-500">Give the sales opening for &ldquo;Sales open&rdquo; and &ldquo;Sales NOW&rdquo;.</p>}
+      <Button type="submit" size="sm" disabled={pending || !chosen.length}>
+        Plan {plural(chosen.length, "promo post")}
+      </Button>
+      {error && <span className="text-red-600">{error}</span>}
     </form>
   );
 }

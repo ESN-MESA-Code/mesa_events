@@ -39,7 +39,7 @@ import { DESCRIPTION_STATUS } from "@/components/status";
 import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
 import { calendarWeeks, dayDiff } from "@/lib/month";
 import { FORMAT_LABEL, defaultPostDay, isBigEvent, namesOf, trayGroups, type PostFormat, type Progress } from "@/lib/publishing";
-import { ContentEditor, NewPostForm, ProgressPill, RegularPostsForm, initials, type TeamMember } from "./PostContent";
+import { ContentEditor, NewPostForm, ProgressPill, PromoSeriesForm, RegularPostsForm, initials, type TeamMember } from "./PostContent";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -609,6 +609,12 @@ function EventList({
         </span>
         {pretix.enabled && <PretixTick event={e} state={pretix.done[e.id] ?? null} editable={editable} />}
         {editable && <PlanMenu event={e} channels={channels} days={days} today={today} posts={posts} byId={byId} />}
+        {editable && !past && (
+          <details className="mt-1" open={false}>
+            <summary className={cn("cursor-pointer", isBigEvent(e.type) ? "font-medium text-esn" : "text-esn/80")}>Promo series…</summary>
+            <PromoSeriesForm event={e} channels={channels} today={today} />
+          </details>
+        )}
       </li>
     );
   };

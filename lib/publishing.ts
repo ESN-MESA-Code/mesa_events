@@ -192,3 +192,27 @@ export function regularPosts(month: string, from = ""): Array<{ day: string; tit
 
 /** "Ana, Ben" – the people on a post, by their names. */
 export const namesOf = (emails: string[], team: Array<{ email: string; name: string }>) => emails.map((e) => team.find((t) => t.email === e)?.name ?? e.split("@")[0]).join(", ");
+
+/**
+ * A promo series for a trip or big event (round 2026-11-09, as Comms ran
+ * them in their sheet: "Prague PROMO – sales date", "sales NOW", the last
+ * call): the posts with their suggested day and time. `sales` is when
+ * ticket sales open ("2026-11-20T18:00", Berlin), empty when not known –
+ * then the two sales steps are left out. Steps before `today` or after the
+ * event are left out. `on`: ticked by default.
+ */
+export type PromoStep = { key: "save_the_date" | "sales_date" | "sales_now" | "last_chance" | "today"; title: string; format: PostFormat; day: string; time: string; on: boolean };
+export function promoSeries(eventStart: string, sales: string, today: string): PromoStep[] {
+  const eventDay = berlinDate(eventStart);
+  const salesDay = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(sales) ? sales.slice(0, 10) : null;
+  const steps: PromoStep[] = [
+    { key: "save_the_date", title: "Save the date", format: "post", day: addDays(eventDay, -21) < today ? today : addDays(eventDay, -21), time: DEFAULT_POST_HOUR, on: true },
+  ];
+  if (salesDay) {
+    steps.push({ key: "sales_date", title: `Sales open ${formatShortDate(`${salesDay}T12:00:00Z`)}`, format: "story", day: addDays(salesDay, -2), time: DEFAULT_POST_HOUR, on: true });
+    steps.push({ key: "sales_now", title: "Sales NOW", format: "story", day: salesDay, time: sales.slice(11, 16), on: true });
+  }
+  steps.push({ key: "last_chance", title: "Last chance", format: "story", day: addDays(eventDay, -2), time: DEFAULT_POST_HOUR, on: true });
+  steps.push({ key: "today", title: "Today!", format: "story", day: eventDay, time: "09:00", on: false });
+  return steps.filter((s) => s.day >= today && s.day <= eventDay).sort((a, b) => a.day.localeCompare(b.day) || a.time.localeCompare(b.time));
+}
