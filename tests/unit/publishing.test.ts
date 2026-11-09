@@ -3,7 +3,7 @@
 // suggests any day before the event, what is still to plan counts the
 // months ahead, and a far-ahead post names when its description is due.
 import { describe, expect, it } from "vitest";
-import { DRAFT_AHEAD_DAYS, advertisable, boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, telegramRefusal, trayGroups, type PostEventFacts } from "@/lib/publishing";
+import { DRAFT_AHEAD_DAYS, advertisable, regularPosts, boardMonthFor, defaultPostDay, isBigEvent, listedAhead, postWarnings, stillToPlan, telegramRefusal, trayGroups, type PostEventFacts } from "@/lib/publishing";
 import { defaultPictureOf } from "@/lib/publishingLoad";
 import { calendarWeeks } from "@/lib/month";
 
@@ -118,5 +118,19 @@ describe("default pictures (round 2026-11-09)", () => {
     expect(defaultPictureOf({ format_id: "f2", category_id: "c1", type: "standard" }, rows)).toBe("library:c1.png");
     expect(defaultPictureOf({ format_id: null, category_id: "c2", type: "standard" }, rows)).toBe("library:std.png");
     expect(defaultPictureOf({ format_id: null, category_id: null, type: "special" }, rows)).toBeNull();
+  });
+});
+
+describe("regular posts (round 2026-11-09)", () => {
+  it("a This week story every Sunday for the coming week, next month's calendar two days before the month ends", () => {
+    expect(regularPosts("2026-11-01")).toEqual([
+      { day: "2026-11-01", title: "This week 2–8 Nov", format: "story", kind: "weekly" },
+      { day: "2026-11-08", title: "This week 9–15 Nov", format: "story", kind: "weekly" },
+      { day: "2026-11-15", title: "This week 16–22 Nov", format: "story", kind: "weekly" },
+      { day: "2026-11-22", title: "This week 23–29 Nov", format: "story", kind: "weekly" },
+      { day: "2026-11-29", title: "This week 30 Nov – 6 Dec", format: "story", kind: "weekly" },
+      { day: "2026-11-29", title: "December calendar", format: "post", kind: "calendar" },
+    ]);
+    expect(regularPosts("2026-11-01", "2026-11-20").map((p) => p.day)).toEqual(["2026-11-22", "2026-11-29", "2026-11-29"]);
   });
 });

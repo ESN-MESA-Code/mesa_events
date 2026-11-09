@@ -326,3 +326,35 @@ describe("events weeks ahead (round 2026-11-02)", () => {
     expect(await row(tg)).toMatchObject({ status: "planned", last_error: "The description of “Pub weekend trip” is not approved yet." });
   });
 });
+
+describe("content planning (round 2026-11-09)", () => {
+  it("a post without events needs a title and is not on Telegram; who, how far, caption and design; the last event leaves a titled post", async () => {
+    const ctx = await actionContext(USERS.comms);
+    expect(await P.createPost(ctx, { channel: "instagram", day: day(48), event_ids: [] })).toMatchObject({ ok: false });
+    expect(await P.createPost(ctx, { channel: "telegram", day: day(48), event_ids: [], title: "December calendar" })).toMatchObject({ ok: false });
+    const r = await P.createPost(ctx, { channel: "instagram", day: day(48), event_ids: [], title: "December calendar", format: "post" });
+    if (!r.ok) throw new Error(r.message);
+    posts.push(r.data.id);
+    expect(await row(r.data.id)).toMatchObject({ title: "December calendar", format: "post", progress: "todo", assignees: [] });
+
+    const content = { post_id: r.data.id, title: "December calendar", format: "post", progress: "in_progress", caption: "New month, new events", design_link: "https://www.canva.com/design/x" };
+    expect(await P.updatePostContent(await actionContext(USERS.events), { ...content, assignees: [USERS.comms.email] })).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await P.updatePostContent(ctx, { ...content, assignees: [USERS.member.email] })).toMatchObject({ ok: false });
+    expect(await P.updatePostContent(ctx, { ...content, title: "", assignees: [] })).toMatchObject({ ok: false });
+    const before = await row(r.data.id);
+    expect((await P.updatePostContent(ctx, { ...content, assignees: [USERS.comms.email.toUpperCase()] })).ok).toBe(true);
+    const after = await row(r.data.id);
+    expect(after).toMatchObject({ assignees: [USERS.comms.email], progress: "in_progress", caption: "New month, new events", design_link: "https://www.canva.com/design/x" });
+    // Not a change to what is sent: the version stays.
+    expect(after.version).toBe(before.version);
+    // The team to pick from.
+    expect(((await (await as(USERS.comms)).rpc("comms_team")).data ?? []).map((m) => m.email)).toContain(USERS.comms.email);
+
+    // A titled post of an event stays when its event is removed.
+    const titled = await P.createPost(ctx, { channel: "instagram", day: day(48), event_ids: [approved], title: "Sales NOW" });
+    if (!titled.ok) throw new Error(titled.message);
+    posts.push(titled.data.id);
+    expect((await P.removeFromPost(ctx, { post_id: titled.data.id, event_id: approved })).ok).toBe(true);
+    expect((await row(titled.data.id)).title).toBe("Sales NOW");
+  });
+});

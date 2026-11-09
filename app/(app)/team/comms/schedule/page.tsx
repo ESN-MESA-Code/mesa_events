@@ -23,7 +23,7 @@ export const metadata: Metadata = { title: "Advertisement schedule" };
 // executives look on. Round 2026-11-02: the month is the month the posts
 // go out; the list also holds the upcoming events of later months (big
 // ones first), so a party or trip weeks ahead is advertised from now on.
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ month?: string; event?: string }> }) {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ month?: string; event?: string; post?: string }> }) {
   const viewer = await requirePageRole(["comms", "events"], { executiveMayRead: true, page: "Advertisement schedule" });
   const editable = hasRole(viewer.roles, "comms");
   const sp = await searchParams;
@@ -32,7 +32,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const thisMonth = monthOf(new Date(now).toISOString());
   const from = addMonths(thisMonth, -3);
 
-  const [{ data: eventList }, { data: channelRows }, { data: postRows }] = await Promise.all([
+  const [{ data: eventList }, { data: channelRows }, { data: postRows }, { data: team }] = await Promise.all([
     supabase
       .from("events")
       .select("id, title, starts_at, type, status, descriptions(status)")
@@ -43,9 +43,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     supabase.from("publication_channels").select("key, name, kind, schedulable, enabled, required").order("position"),
     supabase
       .from("publication_posts")
-      .select("id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, confirmed_at, publication_post_events(event_id, position, picture)")
+      .select(
+        "id, channel, scheduled_for, status, link, picture, note, skip_reason, last_error, published_at, confirmed_at, title, format, assignees, progress, caption, design_link, publication_post_events(event_id, position, picture)"
+      )
       .gte("scheduled_for", new Date(Date.parse(`${from}T00:00:00Z`) - 86_400_000).toISOString())
       .order("scheduled_for"),
+    supabase.rpc("comms_team"),
   ]);
   // Drafts (their cycle still being planned) only once they are close enough to advertise (round 2026-11-09).
   const rows = (eventList ?? [])
@@ -142,6 +145,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       refusal: p.channel === "telegram" && p.status === "planned" ? telegramRefusal(evs.map((id) => facts.get(id)!).filter(Boolean)) : null,
       warnings: postWarnings({ channel: p.channel, scheduledFor: p.scheduled_for, status: p.status }, evs.map((id) => facts.get(id)!).filter(Boolean), counts.get(p.channel) ?? new Map()),
       preview: p.channel === "telegram" && evs.length ? telegramPreview(ordered, p.note, p.picture) : null,
+      title: p.title,
+      format: p.format as BoardPost["format"],
+      assignees: p.assignees ?? [],
+      progress: (p.progress ?? "todo") as BoardPost["progress"],
+      caption: p.caption ?? "",
+      designLink: p.design_link,
     };
   });
   const boardEvents = monthEvents
@@ -156,6 +165,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     );
   // ?event=… (from the Comms page): that event is highlighted.
   const focusEvent = /^[0-9a-f-]{36}$/.test(sp.event ?? "") && boardEvents.some((e) => e.id === sp.event) ? sp.event! : null;
+  // ?post=… (from the content list): that post opens.
+  const openPost = boardPosts.some((p) => p.id === sp.post) ? sp.post! : null;
 
   return (
     <>
@@ -183,6 +194,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           viewer={{ email: viewer.email, name: viewer.name }}
           today={today}
           initialFocus={focusEvent}
+          initialPost={openPost}
+          team={team ?? []}
           coverage={coverage}
           pretix={pretix}
         />

@@ -38,7 +38,8 @@ import {
 import { DESCRIPTION_STATUS } from "@/components/status";
 import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
 import { calendarWeeks, dayDiff } from "@/lib/month";
-import { defaultPostDay, isBigEvent, trayGroups } from "@/lib/publishing";
+import { FORMAT_LABEL, defaultPostDay, isBigEvent, namesOf, trayGroups, type PostFormat, type Progress } from "@/lib/publishing";
+import { ContentEditor, NewPostForm, ProgressPill, RegularPostsForm, initials, type TeamMember } from "./PostContent";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,13 @@ export interface BoardPost {
   refusal: string | null;
   /** Telegram: the messages as they will be posted, one per event, each with its picture (round 2026-11-03). */
   preview: PreviewMessage[] | null;
+  /** Content planning (round 2026-11-09): a title (needed without events), post / story / reel, who, how far, caption, design. */
+  title: string | null;
+  format: PostFormat | null;
+  assignees: string[];
+  progress: Progress;
+  caption: string;
+  designLink: string | null;
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -178,7 +186,9 @@ export function ScheduleBoard({
   today,
   coverage,
   pretix,
+  team,
   initialFocus = null,
+  initialPost = null,
 }: {
   month: string;
   channels: BoardChannel[];
@@ -192,12 +202,18 @@ export function ScheduleBoard({
   pretix: PretixChecklist;
   /** An event to highlight (?event=… from the Comms page). */
   initialFocus?: string | null;
+  /** Who can make posts (the Comms team). */
+  team: TeamMember[];
+  /** A post to open (?post=… from the content list). */
+  initialPost?: string | null;
 }) {
   const router = useRouter();
   const { run, pending, error, setError } = useAction();
   const [dragging, setDragging] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(initialFocus);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initialPost);
+  const [mine, setMine] = useState(false);
+  const [panel, setPanel] = useState<"" | "new" | "regular">("");
   const [others, setOthers] = useState<string[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const [hover, setHover] = useState<string | null>(null);
@@ -286,7 +302,7 @@ export function ScheduleBoard({
         </button>
       ))}
       {postsOn(d).map((p) => (
-        <PostChip key={p.id} post={p} byId={byId} editable={editable} focus={hover ?? focus} onOpen={() => setOpen(p.id)} phone={phone} />
+        <PostChip key={p.id} post={p} byId={byId} editable={editable} focus={hover ?? focus} onOpen={() => setOpen(p.id)} phone={phone} team={team} dim={mine && !p.assignees.includes(viewer.email)} />
       ))}
     </>
   );
@@ -303,6 +319,19 @@ export function ScheduleBoard({
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="mr-auto text-base font-bold text-gray-900">Month board</h2>
               {pending && <span className="text-xs text-gray-500">Saving…</span>}
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700" title="Only the posts you make stand out">
+                <input type="checkbox" className="accent-esn" checked={mine} onChange={(e) => setMine(e.target.checked)} data-testid="only-mine" /> Mine
+              </label>
+              {editable && (
+                <>
+                  <Button size="sm" variant={panel === "new" ? "default" : "outline"} onClick={() => setPanel(panel === "new" ? "" : "new")} data-testid="new-post">
+                    + Post without event
+                  </Button>
+                  <Button size="sm" variant={panel === "regular" ? "default" : "outline"} onClick={() => setPanel(panel === "regular" ? "" : "regular")} data-testid="regular-posts">
+                    Regular posts
+                  </Button>
+                </>
+              )}
               <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600" data-testid="board-legend">
                 <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-900" title="When the event takes place">📅 Event</span>
                 <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-1.5 py-0.5" title="One event: its dot is on its date and on every post advertising it (point at an event to see its posts)">
@@ -318,6 +347,16 @@ export function ScheduleBoard({
                 </span>
               </p>
             </div>
+            {panel === "new" && (
+              <div className="mb-3">
+                <NewPostForm channels={channels} days={days} today={today} onDone={() => setPanel("")} />
+              </div>
+            )}
+            {panel === "regular" && (
+              <div className="mb-3">
+                <RegularPostsForm channels={channels} month={month} today={today} onDone={() => setPanel("")} />
+              </div>
+            )}
             {/* Desktop and tablet: the whole month at once. */}
             <div className="hidden sm:block" data-testid="schedule-board">
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
@@ -364,8 +403,15 @@ export function ScheduleBoard({
         </div>
       </div>
       {opened && (
-        <PostDialog onClose={() => setOpen(null)} title={`${channelOf.get(opened.channel)?.name ?? opened.channel} post, ${formatDateTime(opened.scheduledFor)}`}>
-          <PostDetails post={opened} channel={channelOf.get(opened.channel) ?? { key: opened.channel, name: opened.channel, kind: "manual", required: false }} byId={byId} editable={editable} />
+        <PostDialog onClose={() => setOpen(null)} title={`${opened.title ? `${opened.title} – ` : ""}${channelOf.get(opened.channel)?.name ?? opened.channel} ${opened.format ? FORMAT_LABEL[opened.format].toLowerCase() : "post"}, ${formatDateTime(opened.scheduledFor)}`}>
+          <PostDetails
+            post={opened}
+            channel={channelOf.get(opened.channel) ?? { key: opened.channel, name: opened.channel, kind: "manual", required: false }}
+            byId={byId}
+            editable={editable}
+            team={team}
+            viewerEmail={viewer.email}
+          />
         </PostDialog>
       )}
       <DragOverlay>{overlayText ? <div className="rounded-md border border-esn bg-white px-2 py-1 text-xs shadow-md">{overlayText}</div> : null}</DragOverlay>
@@ -393,20 +439,40 @@ function Day({ id, day, today, highlight, disabled, wide, children }: { id: stri
 }
 
 /** A post on the calendar: drop a chip of its channel on it to bundle, drag it to move it, click it for the details. */
-function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardPost; byId: Map<string, BoardEvent>; editable: boolean; focus: string | null; onOpen: () => void; phone: boolean }) {
+function PostChip({
+  post,
+  byId,
+  editable,
+  focus,
+  onOpen,
+  phone,
+  team,
+  dim,
+}: {
+  post: BoardPost;
+  byId: Map<string, BoardEvent>;
+  editable: boolean;
+  focus: string | null;
+  onOpen: () => void;
+  phone: boolean;
+  team: TeamMember[];
+  /** "Mine" is on and the viewer does not make this post. */
+  dim: boolean;
+}) {
   const id = `${phone ? "mpost" : "post"}|${post.id}`;
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !editable || post.status === "skipped" });
   const unconfirmed = post.channel === "telegram" && post.status === "planned" && !post.confirmed;
   const mark = post.status === "published" ? "✓" : post.status === "skipped" ? "⨯" : unconfirmed ? "⏸" : "⏰";
   const titles = post.events.map((id) => byId.get(id)?.title ?? "Event");
   const focused = !!focus && post.events.includes(focus);
+  const who = post.assignees.map((e) => team.find((m) => m.email === e)?.name ?? e.split("@")[0]);
   return (
-    <div ref={setNodeRef} data-testid={`post-${post.id}`} className={cn("rounded", isOver && "ring-2 ring-esn", focused && "ring-2 ring-amber-500")}>
+    <div ref={setNodeRef} data-testid={`post-${post.id}`} className={cn("rounded", isOver && "ring-2 ring-esn", focused && "ring-2 ring-amber-500", dim && "opacity-40")}>
       <Draggable id={id} disabled={!editable || post.status !== "planned"}>
         <button
           type="button"
           onClick={onOpen}
-          title={`${titles.join(", ")}${post.warnings.length ? `\n⚠ ${post.warnings.join("\n⚠ ")}` : ""}`}
+          title={`${post.title ? `${post.title}\n` : ""}${titles.join(", ")}${who.length ? `\nBy ${who.join(", ")}` : ""}${post.warnings.length ? `\n⚠ ${post.warnings.join("\n⚠ ")}` : ""}`}
           className={cn(
             "block w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight hover:brightness-95",
             chipOf(post.channel),
@@ -420,7 +486,9 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
               <EventDot key={id} color={byId.get(id)?.color} />
             ))}
           </span>
-          <span className="font-semibold">{SHORT[post.channel] ?? post.channel}</span> <span className="tabular-nums">{berlinTime(post.scheduledFor)}</span> {mark}
+          <span className="font-semibold">{SHORT[post.channel] ?? post.channel}</span>
+          {post.format && post.format !== "post" && <span className="ml-0.5 rounded bg-white/70 px-0.5 text-[10px] uppercase">{FORMAT_LABEL[post.format]}</span>}{" "}
+          <span className="tabular-nums">{berlinTime(post.scheduledFor)}</span> {mark}
           {post.warnings.length > 0 && (
             <span className="text-amber-700" aria-label="Has warnings">
               {" "}
@@ -428,9 +496,25 @@ function PostChip({ post, byId, editable, focus, onOpen, phone }: { post: BoardP
             </span>
           )}
           <span className={cn("block break-words", !phone && "line-clamp-2")}>
+            {post.title ? <span className="font-semibold">{post.title}</span> : null}
+            {post.title && titles.length ? " · " : ""}
             {titles.length > 1 ? `${titles.length}: ` : ""}
             {titles.join(", ")}
           </span>
+          {(who.length > 0 || post.progress !== "todo") && post.status === "planned" && (
+            <span className="mt-0.5 flex items-center gap-1">
+              {post.progress !== "todo" && <ProgressPill post={post} className="px-1 py-0 text-[10px]" />}
+              {who.length > 0 && (
+                <span className="ml-auto flex -space-x-1" aria-label={`By ${who.join(", ")}`}>
+                  {who.map((n) => (
+                    <span key={n} className="flex h-4 w-4 items-center justify-center rounded-full bg-white text-[8px] font-bold text-gray-700 ring-1 ring-gray-300">
+                      {initials(n)}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+          )}
         </button>
       </Draggable>
     </div>
@@ -781,10 +865,24 @@ function TelegramPanel({ post, postName, editable, byId }: { post: BoardPost; po
   );
 }
 
-function PostDetails({ post, channel, byId, editable }: { post: BoardPost; channel: BoardChannel; byId: Map<string, BoardEvent>; editable: boolean }) {
+function PostDetails({
+  post,
+  channel,
+  byId,
+  editable,
+  team,
+  viewerEmail,
+}: {
+  post: BoardPost;
+  channel: BoardChannel;
+  byId: Map<string, BoardEvent>;
+  editable: boolean;
+  team: TeamMember[];
+  viewerEmail: string;
+}) {
   const { run, pending, error, confirm } = useAction();
   // What a confirm dialog names (usability review #8).
-  const postName = `the ${channel.name} post of ${formatDateTime(post.scheduledFor)} (${post.events.map((id) => byId.get(id)?.title ?? "?").join(", ")})`;
+  const postName = `the ${channel.name} post of ${formatDateTime(post.scheduledFor)} (${[post.title, ...post.events.map((id) => byId.get(id)?.title ?? "?")].filter(Boolean).join(", ")})`;
   const [mode, setMode] = useState<"" | "move" | "publish" | "skip">("");
   const [day, setDay] = useState(berlinDate(post.scheduledFor));
   const [time, setTime] = useState(berlinTime(post.scheduledFor));
@@ -811,6 +909,7 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
       <div className="flex items-center gap-2">
         <Badge tone={badge.tone}>{badge.text}</Badge>
         {post.events.length > 1 && <span className="text-xs text-gray-500">{post.events.length} events</span>}
+        {post.assignees.length > 0 && <span className="ml-auto truncate text-xs text-gray-500">By {namesOf(post.assignees, team)}</span>}
       </div>
       <ol className="space-y-1">
         {post.events.map((id, i) => {
@@ -859,6 +958,8 @@ function PostDetails({ post, channel, byId, editable }: { post: BoardPost; chann
           ⚠ {w}
         </p>
       ))}
+      {/* What Comms kept in their sheet (round 2026-11-09); Telegram's text comes from the descriptions. */}
+      <ContentEditor key={`${post.id}:${post.progress}:${post.assignees.join()}`} post={post} team={team} editable={editable} viewerEmail={viewerEmail} />
       {/* Telegram: the preview first, with the picture and the buttons to post (round 2026-11-03). */}
       {telegram && post.status !== "skipped" && <TelegramPanel key={`${post.id}:${post.note}`} post={post} postName={postName} editable={editable} byId={byId} />}
       {editable && post.status !== "skipped" && (channel.kind === "manual" || post.status === "planned") && (

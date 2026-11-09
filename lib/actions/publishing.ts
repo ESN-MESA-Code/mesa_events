@@ -4,8 +4,9 @@
 // database checks again. Admins switch channels on and off.
 import { z } from "zod";
 import { ActionError, dbError, defineAction, PAGES, requireRole, uuid } from "@/lib/actions/core";
-import { berlinInputToIso } from "@/lib/dates";
-import { DEFAULT_POST_HOUR } from "@/lib/publishing";
+import { berlinDate, berlinInputToIso } from "@/lib/dates";
+import { addDays } from "@/lib/month";
+import { CAPTION_MAX, DEFAULT_POST_HOUR, POST_FORMATS, PROGRESS, regularPosts } from "@/lib/publishing";
 import { libraryPath, uploadPath } from "@/lib/telegram/picture";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a day");
@@ -14,12 +15,83 @@ const channel = z.string().regex(/^[a-z][a-z0-9_]{1,30}$/);
 const at = (d: string, t?: string) => berlinInputToIso(`${d}T${t ?? DEFAULT_POST_HOUR}`);
 const BOARD = [PAGES.schedule, PAGES.comms, PAGES.home, PAGES.event];
 
-export const createPost = defineAction(z.object({ channel, day, time: time.optional(), event_ids: z.array(uuid).min(1).max(20) }), async (ctx, i) => {
-  requireRole(ctx, "comms");
-  const { data, error } = await ctx.supabase.rpc("create_post", { channel: i.channel, scheduled_for: at(i.day, i.time), events: i.event_ids });
-  dbError(error);
-  return { id: data as string };
-}, { revalidate: BOARD });
+const format = z.enum(POST_FORMATS);
+const title = z.string().trim().max(120);
+
+/** A post of events – or, with a title, one without (the month's calendar, "This week", a recap …; round 2026-11-09). */
+export const createPost = defineAction(
+  z
+    .object({ channel, day, time: time.optional(), event_ids: z.array(uuid).max(20).default([]), title: title.default(""), format: format.optional() })
+    .refine((i) => i.event_ids.length > 0 || i.title.length > 0, "Give the post a title (or drag an event onto the day)."),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    const { data, error } = await ctx.supabase.rpc("create_post", { channel: i.channel, scheduled_for: at(i.day, i.time), events: i.event_ids, title: i.title || undefined, format: i.format });
+    dbError(error);
+    return { id: data as string };
+  },
+  { revalidate: [...BOARD, PAGES.content] }
+);
+
+/** What a post is, who makes it, how far it is, its caption and design (round 2026-11-09). Telegram's confirmation stays. */
+export const updatePostContent = defineAction(
+  z.object({
+    post_id: uuid,
+    title: title.default(""),
+    format: z.union([format, z.literal("")]).default(""),
+    assignees: z.array(z.email().toLowerCase()).max(3, "Three people at most").default([]),
+    progress: z.enum(PROGRESS).default("todo"),
+    caption: z.string().trim().max(CAPTION_MAX, `Instagram takes ${CAPTION_MAX} characters at most`).default(""),
+    design_link: z.union([z.literal(""), z.url({ protocol: /^https?$/, error: "Paste a link (Canva, Drive …)" }).max(500)]).default(""),
+  }),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    dbError(
+      (
+        await ctx.supabase.rpc("update_post_content", {
+          post: i.post_id,
+          title: i.title,
+          format: i.format,
+          assignees: i.assignees,
+          progress: i.progress,
+          caption: i.caption,
+          design_link: i.design_link,
+        })
+      ).error
+    );
+  },
+  { revalidate: [PAGES.schedule, PAGES.content, PAGES.home] }
+);
+
+/**
+ * The posts Comms makes every month (regularPosts()): the Sunday "This week"
+ * stories and the next month's calendar post, on one channel – those not
+ * planned yet (same channel, day and title), from today on.
+ */
+export const planRegularPosts = defineAction(
+  z.object({ channel, month: day, weekly: z.boolean().default(true), calendar: z.boolean().default(true) }),
+  async (ctx, i) => {
+    requireRole(ctx, "comms");
+    const today = berlinDate(new Date().toISOString());
+    const wanted = regularPosts(i.month, today).filter((p) => (p.kind === "weekly" ? i.weekly : i.calendar));
+    if (!wanted.length) throw new ActionError("failed", "Nothing left to plan in this month.");
+    const { data: existing } = await ctx.supabase
+      .from("publication_posts")
+      .select("scheduled_for, title")
+      .eq("channel", i.channel)
+      .neq("status", "skipped")
+      .gte("scheduled_for", at(addDays(wanted[0].day, -1), "00:00"))
+      .lte("scheduled_for", at(addDays(wanted[wanted.length - 1].day, 1), "23:59"));
+    const have = new Set((existing ?? []).map((p) => `${berlinDate(p.scheduled_for)}|${p.title ?? ""}`));
+    let made = 0;
+    for (const p of wanted) {
+      if (have.has(`${p.day}|${p.title}`)) continue;
+      dbError((await ctx.supabase.rpc("create_post", { channel: i.channel, scheduled_for: at(p.day), events: [], title: p.title, format: p.format })).error);
+      made++;
+    }
+    return { made };
+  },
+  { revalidate: [PAGES.schedule, PAGES.content] }
+);
 
 /** One event on every required channel on the schedule (Telegram, Instagram) it is not on yet, on one day. */
 export const planEverywhere = defineAction(z.object({ event_id: uuid, day, time: time.optional() }), async (ctx, i) => {

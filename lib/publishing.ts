@@ -1,7 +1,7 @@
 // Publishing (brief 2026-10-29, E): the rules of the schedule board and the
 // per-event channel status. Pure (tests/unit/publishing.test.ts).
-import { addMonths, berlinDate, formatShortDate, monthOf } from "@/lib/dates";
-import { addDays } from "@/lib/month";
+import { addMonths, berlinDate, formatShortDate, monthLabel, monthOf } from "@/lib/dates";
+import { addDays, calendarWeeks } from "@/lib/month";
 import { isTbaPrice } from "@/lib/description/template";
 
 export type ChannelState = "published" | "planned" | "skipped" | "not_planned";
@@ -152,3 +152,43 @@ export function stillToPlan<E extends { id: string; startsAt: string }>(events: 
   const on = new Set(posts.filter((p) => p.status !== "skipped").flatMap((p) => p.events.map((id) => `${id}|${p.channel}`)));
   return events.filter((ev) => berlinDate(ev.startsAt) >= today && required.some((c) => !on.has(`${ev.id}|${c}`)));
 }
+
+// ── Content planning (round 2026-11-09): what Comms kept in a spreadsheet ──
+
+/** What kind of content a post is (Instagram mostly): a feed post, a story, a reel. */
+export const POST_FORMATS = ["post", "story", "reel"] as const;
+export type PostFormat = (typeof POST_FORMATS)[number];
+export const FORMAT_LABEL: Record<PostFormat, string> = { post: "Post", story: "Story", reel: "Reel" };
+
+/** How far a planned post is: to do → in progress → ready (then posted, the post's status). */
+export const PROGRESS = ["todo", "in_progress", "ready"] as const;
+export type Progress = (typeof PROGRESS)[number];
+export const PROGRESS_LABEL: Record<Progress, string> = { todo: "To do", in_progress: "In progress", ready: "Ready" };
+
+/** Instagram's caption limit. */
+export const CAPTION_MAX = 2200;
+
+/**
+ * The posts Comms makes every month (their planning sheet): a "This week"
+ * story every Sunday with the coming Monday to Sunday, and the next month's
+ * calendar post two days before the month ends. Days of `month`
+ * ("2026-11-01"); `from` (a Berlin date) leaves out the days before it.
+ */
+export function regularPosts(month: string, from = ""): Array<{ day: string; title: string; format: PostFormat; kind: "weekly" | "calendar" }> {
+  const days = calendarWeeks(month).flat().filter((d): d is string => !!d);
+  const short = (d: string) => `${Number(d.slice(8))} ${formatShortDate(`${d}T12:00:00Z`).split(" ").pop()}`;
+  const out: Array<{ day: string; title: string; format: PostFormat; kind: "weekly" | "calendar" }> = [];
+  for (const d of days) {
+    if (new Date(`${d}T12:00:00Z`).getUTCDay() !== 0) continue;
+    const mon = addDays(d, 1);
+    const sun = addDays(d, 7);
+    const span = mon.slice(5, 7) === sun.slice(5, 7) ? `${Number(mon.slice(8))}–${short(sun)}` : `${short(mon)} – ${short(sun)}`;
+    out.push({ day: d, title: `This week ${span}`, format: "story", kind: "weekly" });
+  }
+  const next = addMonths(month, 1);
+  out.push({ day: addDays(next, -2), title: `${monthLabel(next).split(" ")[0]} calendar`, format: "post", kind: "calendar" });
+  return out.filter((p) => p.day >= from).sort((a, b) => a.day.localeCompare(b.day));
+}
+
+/** "Ana, Ben" – the people on a post, by their names. */
+export const namesOf = (emails: string[], team: Array<{ email: string; name: string }>) => emails.map((e) => team.find((t) => t.email === e)?.name ?? e.split("@")[0]).join(", ");

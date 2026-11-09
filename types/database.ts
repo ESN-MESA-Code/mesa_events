@@ -1037,14 +1037,14 @@ isOneToOne: false
                   ]
                 },"publication_posts": {
                   Row: {
-                    "channel": string,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"created_by": string | null,"id": string,"last_error": string | null,"link": string | null,"note": string,"picture": string | null,"published_at": string | null,"published_by": string | null,"scheduled_for": string,"skip_reason": string | null,"status": string,"telegram": Json | null,"updated_at": string,"version": number
+                    "assignees": (string)[],"caption": string,"channel": string,"confirmed_at": string | null,"confirmed_by": string | null,"created_at": string,"created_by": string | null,"design_link": string | null,"format": string | null,"id": string,"last_error": string | null,"link": string | null,"note": string,"picture": string | null,"progress": string,"published_at": string | null,"published_by": string | null,"scheduled_for": string,"skip_reason": string | null,"status": string,"telegram": Json | null,"title": string | null,"updated_at": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "channel": string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for": string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                    "assignees"?: (string)[],"caption"?: string,"channel": string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"design_link"?: string | null,"format"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"progress"?: string,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for": string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"title"?: string | null,"updated_at"?: string,"version"?: number
                   }
                   Update: {
-                    "channel"?: string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for"?: string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"updated_at"?: string,"version"?: number
+                    "assignees"?: (string)[],"caption"?: string,"channel"?: string,"confirmed_at"?: string | null,"confirmed_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"design_link"?: string | null,"format"?: string | null,"id"?: string,"last_error"?: string | null,"link"?: string | null,"note"?: string,"picture"?: string | null,"progress"?: string,"published_at"?: string | null,"published_by"?: string | null,"scheduled_for"?: string,"skip_reason"?: string | null,"status"?: string,"telegram"?: Json | null,"title"?: string | null,"updated_at"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -1420,6 +1420,11 @@ isOneToOne: false
 "close_volunteer_form":
 { Args: { "cycle": string }; Returns: undefined
                            },
+"comms_team":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "email": string,"name": string
+            }[]
+                           },
 "complete_job":
 { Args: { "job_id": number,"job_result"?: Json }; Returns: undefined
                            },
@@ -1442,7 +1447,7 @@ isOneToOne: false
 { Args: { "label": string,"valid_days"?: number }; Returns: string
                            },
 "create_post":
-{ Args: { "channel": string,"events": (string)[],"scheduled_for": string }; Returns: string
+{ Args: { "channel": string,"events": (string)[],"format"?: string,"scheduled_for": string,"title"?: string }; Returns: string
                            },
 "cycle_deadline_limits":
 { Args: { "cycle": string }; Returns: {
@@ -1873,6 +1878,9 @@ isOneToOne: false
                            },
 "unmark_esn_uploaded":
 { Args: { "event": string }; Returns: undefined
+                           },
+"update_post_content":
+{ Args: { "assignees": (string)[],"caption": string,"design_link": string,"format": string,"post": string,"progress": string,"title": string }; Returns: undefined
                            },
 "withdraw_internal":
 { Args: { "internal_event": string }; Returns: undefined

@@ -8,6 +8,14 @@ export async function createPost(input: unknown) {
   return run(A.createPost, input);
 }
 
+export async function updatePostContent(input: unknown) {
+  return run(A.updatePostContent, input);
+}
+
+export async function planRegularPosts(input: unknown) {
+  return run(A.planRegularPosts, input);
+}
+
 export async function planEverywhere(input: unknown) {
   return run(A.planEverywhere, input);
 }

@@ -28,7 +28,7 @@ describe("generated actions", () => {
 
 describe("revalidation", () => {
   it("finds every action", () => {
-    expect(actions.length).toBe(80);
+    expect(actions.length).toBe(82);
   });
 
   it("autosave revalidates nothing", () => {

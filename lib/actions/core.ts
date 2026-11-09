@@ -84,6 +84,7 @@ export const PAGES = {
   esn: "/team/esn-activities",
   schedule: "/team/comms/schedule",
   pictures: "/team/comms/pictures",
+  content: "/team/comms/content",
   finance: ["/team/finance", "layout"],
   internal: "/team/internal",
   internalEvent: ["/internal/[id]", "page"],

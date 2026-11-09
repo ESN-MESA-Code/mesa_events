@@ -1349,3 +1349,36 @@ Decisions:
   with a fixed-width mark (✓ done, ● now, ○ to do) – instead of chips whose "✓ " prefix shifted
   every following stage. The channel chips sit in fixed columns too. "Approved · in the Chat
   space" is now "In the Chat space" (it fits its column).
+
+## 2026-11-09 (2) – Comms content planning: the planning sheet in the app
+
+Comms planned in a spreadsheet next to the app ("Planning WiSe26"): a task list (task, post /
+story / reel / other, deadline, one or two people, status, caption and Canva link), a calendar per
+month by content type (event stories, trip promos "sales date" → "sales NOW", office hours, big
+events, posts, extras; a "This week 9–15" story every Sunday and the next month's calendar post at
+the month's end), a post-ideas backlog and a list of reel ideas. What moved into the app:
+
+- **Posts without an event**: a post may have no event when it has a title – the month's
+  calendar, "This week", awareness, recaps, the survival guide. Not on Telegram (its messages are
+  made from event descriptions). An event post may have a title too ("Sales NOW"); removing its
+  last event keeps a titled post. "+ Post without event" on the board.
+- **What, who, how far** on every post (`publication_posts.title`, `format` post / story / reel,
+  `assignees` up to three Comms members, `progress` to do → in progress → ready, `caption` up to
+  Instagram's 2,200 characters with a Copy button, `design_link`), edited in the post's dialog
+  ("Content") through `update_post_content()`. It does not bump the post's version or take
+  Telegram's confirmation back – none of it goes into a Telegram message. `comms_team()` lists who
+  can be assigned. Chips on the calendar show the format (STORY / REEL), the progress and the
+  people's initials; "Mine" on the board fades everyone else's posts.
+- **Regular posts in one go** ("Regular posts" on the board, `regularPosts()`): a "This week"
+  story every Sunday for the coming Monday–Sunday and the next month's calendar post two days
+  before the month ends, on one channel (Instagram by default), from today on; ones already
+  planned (same channel, day and title) are left alone.
+- **Content list** tab (`/team/comms/content`): the sheet's task list – every post of the month
+  with when, what, where (channel and format), who, status (changed in place), caption and design
+  links; "Still to post", "Mine", "All"; overdue posts in red; "N without anyone yet". A row opens
+  the post on the board (`?post=`).
+- **Kept out (for now)**: the post-ideas and reel-ideas backlogs (inspiration links; fine in a
+  shared sheet or an Instagram collection until undated posts exist), and tasks that are not posts
+  (new logo, stickers, website text). Promo series for big events (save the date → sales now →
+  reminder → today) are planned as single titled posts; a one-click series is a possible next
+  step.
