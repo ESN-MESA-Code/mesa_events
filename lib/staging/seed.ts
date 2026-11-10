@@ -46,6 +46,7 @@ import { eventMessage } from "@/lib/telegram/messages";
 import { regularPosts } from "@/lib/publishing";
 import { EVENTS, FIRST_NAMES, LAST_NAMES, NATIONALITIES, PROGRAMS, UNIVERSITIES, type EventKey, type EventType } from "@/lib/staging/content";
 import { removeInternalStaging, seedInternalStaging, type InternalSummary } from "@/lib/staging/internal";
+import { removeMockPictures, seedMockPictures } from "@/lib/staging/pictures";
 
 type Db = SupabaseClient<Database>;
 type EventStatus = Database["public"]["Enums"]["event_status"];
@@ -1198,6 +1199,12 @@ We can’t wait to ${plan.closing}! ✨`;
   // the history, as "Save all" on /team/events/formats would; ideas follow.
   await applySuggestedSorting(db, { createdBy: TAG, proposers: DEMO_PEOPLE.map((p) => p.id) });
 
+  // 14c. Mock default pictures (round 2026-11-10; lib/staging/pictures.ts): every event type, every
+  // category and every second format – so the Pictures tab and the Telegram previews show the
+  // defaults and how they fall back (format, else category, else type).
+  const pictures = await seedMockPictures(db);
+  log(`Mock default pictures: ${pictures.types} event types, ${pictures.categories} categories, ${pictures.formats} formats.`);
+
   // 15. Internal events, office hours, cash boxes, the ledger, personal settings.
   const internal = await seedInternalStaging(db, {
     rng, now, months, email, pid, ibans: IBANS,
@@ -1367,6 +1374,8 @@ export async function removeStagingData(db: Db, domain = "esnmesa.org"): Promise
   check(await db.from("finance_entries").delete().in("created_by", tags), "old ledger entries");
   // Cash box history, extra boxes, saved payout details, calendar links.
   await removeInternalStaging(db, demoEmails, demoIds, tags);
+  // The mock default pictures (lib/staging/pictures.ts); the ones Comms chose stay.
+  await removeMockPictures(db);
   // The seed's messages in the fake Telegram channel.
   check(await db.from("fake_telegram_messages").delete().eq("chat_id", TELEGRAM_CHAT).gte("message_id", TELEGRAM_IDS[0]).lte("message_id", TELEGRAM_IDS[1]), "old Telegram messages");
   // Event folders of an earlier run that stopped half-way.

@@ -140,7 +140,7 @@ own page, not the link's – use the banner's links after signing in.
 | Member | Hannah Becker | Home | Volunteer form banner (not answered yet), calendar, own ideas, open slots to claim |
 | OC (organiser) | Chloé Dubois | Home | Her events today (attendance and cash box open), hand-ins (photos missing, list and cash box to sign off), claims needing Belege; descriptions: one to write for next month, one sent back, one with Comms; an office hour she leads next week; saved bank details, a calendar link |
 | Helper | Kwame Mensah | Home | Events he helps at, a drop-out, a slot he claimed, his claims, an office hour shift |
-| Comms team | Sofia Marino | Comms | Each event by stage (To write → In review → Approved · in the Chat space → pretix page → Advertised → Event happened → Report), the Advertisement schedule (Telegram previews with pictures, posts planned weeks ahead), default pictures, ESN Activities (with her access tokens) |
+| Comms team | Sofia Marino | Comms | Each event by stage (To write → In review → Approved · in the Chat space → pretix page → Advertised → Event happened → Report), the Advertisement schedule (Telegram previews with pictures, posts planned weeks ahead), default pictures (mock ones for every event type and category and every second format – labelled placeholders, so the fallback format → category → type can be seen), ESN Activities (with her access tokens) |
 | Finance team | Priya Raman | Finance | Claims in every status, the open payout batch, paid batches, an early payout; cash boxes with history (money in and out, a recount, a removed box), cash reports counting, to sign off, to check, to book; the ledger with missing Belege |
 | Treasurer | Mateo Álvarez | Finance | Finance plus rules and the pre-approval waiting for him |
 | HR | Ines Kraft | Internal | Office hours every Wednesday, Stammtisch every Thursday, Tuesday Talks, board meetings and internal events: staffed, a helper or the OC missing, cancelled, a full sign-up list |
@@ -172,9 +172,10 @@ today, hand-ins and claims. Keep the **Demo outbox** open in a second tab for st
 5. **(1 min) The description.** **OC**: "Waiting for you" → the "Panel: Life after Erasmus"
    description Comms sent back: the comment, the live preview, the 4,096 counter → submit.
 6. **(2 min) Comms.** **Comms team** → Comms by stage → the Erasmus panel in review → "Approve": it
-   goes to the Chat space by itself (**Demo outbox**: the post with @all). Advertisement schedule:
-   tick pretix for an event with an approved description, drag its Telegram chip onto a day, the
-   preview with the picture, confirm; big events of the next months are planned weeks ahead.
+   goes to the Chat space by itself (**Demo outbox**: the post with @all). pretix pages: tick an
+   event with an approved description. Advertisement schedule: click a day on its row, plan a
+   Telegram post, open it – the preview with its (mock) default picture – and confirm; the events
+   the Events team marked big are listed weeks ahead ("Mark big" on the month's schedule).
 7. **(1.5 min) Event day.** **OC**: today's Language Café – attendance open (QR code, kiosk, live
    names), the cash box counted. **Helper**: drop out of an upcoming event; the slot is open to all
    members and the OC is told (**Demo outbox**).
