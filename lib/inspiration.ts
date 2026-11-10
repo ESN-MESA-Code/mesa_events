@@ -6,9 +6,9 @@
 // Pure (tests/unit/inspiration.test.ts).
 import { berlinDate } from "@/lib/dates";
 import { normalizeHook, paragraph } from "@/lib/description/template";
-import { searchEntry, searchTemplates, type SearchEntry } from "@/lib/description/search";
+import { searchEntry, searchFold, searchTemplates, type SearchEntry } from "@/lib/description/search";
 import type { EventType } from "@/lib/labels";
-import { formatName } from "@/lib/formats";
+import { formatKey, formatName, type Format } from "@/lib/formats";
 
 /** A row of public.inspiration_events(). */
 export interface PastEvent {
@@ -145,5 +145,88 @@ export function ideaFromEvent(e: PastEvent, earlier: PastEvent[], earliestDay: s
     type_suggestion: e.type,
     category_id: e.category_id,
     format_id: e.format_id,
+  };
+}
+
+/**
+ * An earlier event the idea form's title offers (round 2026-11-10): the title
+ * and "Is this a new run of …?" are one field – typing searches the earlier
+ * events, picking one names the idea after it, links its format and fills the
+ * rest in from its last run. Runs of a format are one entry; past events
+ * without a format meet by formatKey() (and join a format of the same key).
+ */
+export interface EarlierEvent {
+  /** "f:<format id>" or "t:<formatKey>". */
+  key: string;
+  name: string;
+  /** The format a new run links to (active formats only). */
+  format: Pick<Format, "id" | "type" | "helpers_needed" | "category_id"> | null;
+  category_id: string | null;
+  /** Newest first; empty for a format that has not run yet. */
+  runs: PastEvent[];
+  /** Folded name and run titles (both umlaut spellings), for the search. */
+  hay: string;
+}
+
+export function earlierEvents(pool: readonly PastEvent[], formats: readonly Pick<Format, "id" | "name" | "type" | "helpers_needed" | "category_id" | "active">[]): EarlierEvent[] {
+  const byId = new Map(formats.map((f) => [f.id, f]));
+  const byKey = new Map<string, (typeof formats)[number]>();
+  for (const f of formats) if (f.active || !byKey.has(formatKey(f.name))) byKey.set(formatKey(f.name), f);
+  const groups = new Map<string, { format: (typeof formats)[number] | null; runs: PastEvent[] }>();
+  for (const e of [...pool].sort((a, b) => (a.starts_at < b.starts_at ? 1 : -1))) {
+    const k = formatKey(e.title);
+    const format = (e.format_id ? byId.get(e.format_id) : undefined) ?? byKey.get(k) ?? null;
+    const key = format ? `f:${format.id}` : `t:${k}`;
+    const g = groups.get(key) ?? { format, runs: [] };
+    g.runs.push(e);
+    groups.set(key, g);
+  }
+  for (const f of formats) if (f.active && !groups.has(`f:${f.id}`)) groups.set(`f:${f.id}`, { format: f, runs: [] });
+  return [...groups.entries()]
+    .map(([key, { format, runs }]) => {
+      const counts = new Map<string, number>();
+      for (const e of runs) counts.set(formatName(e.title), (counts.get(formatName(e.title)) ?? 0) + 1);
+      // The format's name, else the most used cleaned title (the newest on a tie).
+      const name = format?.name ?? [...counts.entries()].reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0];
+      const text = [name, ...new Set(runs.map((e) => e.title))].join(" ");
+      return {
+        key,
+        name,
+        format: format?.active ? format : null,
+        category_id: format?.category_id ?? runs.find((e) => e.category_id)?.category_id ?? null,
+        runs,
+        hay: `${searchFold(text)} ${searchFold(text, true)}`,
+      };
+    })
+    .sort((a, b) => (b.runs[0]?.starts_at ?? "").localeCompare(a.runs[0]?.starts_at ?? "") || a.name.localeCompare(b.name));
+}
+
+/** The earlier events matching what the member typed (every word somewhere): the name starting with it first, then the most runs, the most recent. Without a query, the most recent. */
+export function searchEarlier(list: readonly EarlierEvent[], query: string, limit = 8): EarlierEvent[] {
+  const words = searchFold(query, true).split(" ").filter(Boolean);
+  if (!words.length) return list.slice(0, limit);
+  const q = words.join(" ");
+  const starts = (g: EarlierEvent) => searchFold(g.name, true).startsWith(q) || searchFold(g.name).startsWith(q);
+  return list
+    .filter((g) => words.every((w) => g.hay.includes(w)))
+    .map((g, i) => ({ g, i, s: starts(g) ? 0 : 1 }))
+    .sort((a, b) => a.s - b.s || b.g.runs.length - a.g.runs.length || a.i - b.i)
+    .slice(0, limit)
+    .map((x) => x.g);
+}
+
+/** The idea filled in from an earlier event: its last run (as "Propose this again"), the format's type, helpers and category when it has one. */
+export function ideaFromEarlier(g: EarlierEvent, earliestDay: string): IdeaPrefill {
+  const f = g.format;
+  const base: IdeaPrefill = g.runs[0]
+    ? ideaFromEvent(g.runs[0], g.runs.slice(1), earliestDay, g.name)
+    : { title: g.name, proposed_date: "", pitch: "", helpers_needed: f?.helpers_needed ?? 2, type_suggestion: f?.type ?? "standard", category_id: null, format_id: null };
+  return {
+    ...base,
+    title: g.name,
+    helpers_needed: f?.helpers_needed ?? base.helpers_needed,
+    type_suggestion: f?.type ?? base.type_suggestion,
+    category_id: g.category_id ?? base.category_id,
+    format_id: f?.id ?? null,
   };
 }

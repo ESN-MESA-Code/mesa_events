@@ -1,7 +1,7 @@
 // "Get inspired" (brief 2026-10-29, D): filters, the bot's search with
 // repeats grouped, the teaser, a fresh date, the prefilled idea.
 import { describe, expect, it } from "vitest";
-import { freshDate, ideaFromEvent, matchesFilters, searchInspiration, teaser, type PastEvent } from "@/lib/inspiration";
+import { earlierEvents, freshDate, ideaFromEarlier, ideaFromEvent, matchesFilters, searchEarlier, searchInspiration, teaser, type PastEvent } from "@/lib/inspiration";
 
 const ev = (id: string, title: string, starts_at: string, extra: Partial<PastEvent> = {}): PastEvent => ({
   event_id: id,
@@ -98,5 +98,44 @@ describe("Propose this again", () => {
     });
     expect(ideaFromEvent(q.event, q.earlier, "2026-10-29")).toMatchObject({ title: "Pub Quiz", pitch: "Ran before: 2026-06-10, 2026-03-04, 2025-11-06 (31 people the last time)." });
     expect(ideaFromEvent({ ...pool[3], helpers_needed: null }, [], "2026-10-29")).toMatchObject({ helpers_needed: 2, type_suggestion: "day_trip" });
+  });
+});
+
+describe("the idea title's earlier events (round 2026-11-10)", () => {
+  const formats = [
+    { id: "fq", name: "Pub Quiz", type: "standard" as const, helpers_needed: 3, category_id: "cat-games", active: true },
+    { id: "fb", name: "Bouldering", type: "day_trip" as const, helpers_needed: 1, category_id: null, active: true },
+    { id: "fold", name: "Old thing", type: "standard" as const, helpers_needed: 1, category_id: null, active: false },
+  ];
+  const list = earlierEvents(pool, formats);
+
+  it("runs of one event are one entry – a format's own runs and same-name events without one", () => {
+    const quiz = list.find((g) => g.key === "f:fq")!;
+    expect(quiz.name).toBe("Pub Quiz");
+    expect(quiz.runs.map((e) => e.event_id)).toEqual(["q3", "q2", "q1"]);
+    expect(list.find((g) => g.name === "Wanderung Herzogstand")).toMatchObject({ key: expect.stringMatching(/^t:/), format: null });
+    // A format that has not run yet is offered; a hidden one is not.
+    expect(list.find((g) => g.key === "f:fb")?.runs).toEqual([]);
+    expect(list.find((g) => g.key === "f:fold")).toBeUndefined();
+  });
+
+  it("the search: every word, the name starting with it first, umlauts folded", () => {
+    expect(searchEarlier(list, "quiz").map((g) => g.name)).toEqual(["Pub Quiz"]);
+    expect(searchEarlier(list, "herzog").map((g) => g.name)).toEqual(["Wanderung Herzogstand"]);
+    expect(searchEarlier(list, "nothing like it")).toEqual([]);
+    // Without a query: the most recent first.
+    expect(searchEarlier(list, "", 2).map((g) => g.name)).toEqual(["Pub Quiz", "International Dinner"]);
+  });
+
+  it("picking one fills the idea from its last run, with the format's type, helpers and category", () => {
+    expect(ideaFromEarlier(list.find((g) => g.key === "f:fq")!, "2026-10-29")).toMatchObject({
+      title: "Pub Quiz",
+      pitch: "Ran before: 2026-06-10, 2026-03-04, 2025-11-06 (31 people the last time).",
+      helpers_needed: 3,
+      type_suggestion: "standard",
+      category_id: "cat-games",
+      format_id: "fq",
+    });
+    expect(ideaFromEarlier(list.find((g) => g.key === "f:fb")!, "2026-10-29")).toEqual({ title: "Bouldering", proposed_date: "", pitch: "", helpers_needed: 1, type_suggestion: "day_trip", category_id: null, format_id: "fb" });
   });
 });

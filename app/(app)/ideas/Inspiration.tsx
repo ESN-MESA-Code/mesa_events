@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, MapPin, Repeat, Search, Users, X } from "lucide-react";
-import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
+import { Camera, MapPin, Repeat, Search, Tag, Users, X } from "lucide-react";
+import { Button, EmptyState, Input, Select } from "@/components/ui";
 import { SectionHeader } from "@/components/home";
 import { EVENT_TYPE_LABELS, EVENT_TYPES, type EventType } from "@/lib/labels";
-import { BIG_TURNOUT, SEASONS, ideaFromEvent, searchInspiration, teaser, type IdeaPrefill, type PastEvent } from "@/lib/inspiration";
+import { BIG_TURNOUT, SEASONS, earlierEvents, ideaFromEvent, searchInspiration, teaser, type IdeaPrefill, type PastEvent } from "@/lib/inspiration";
 import { formatDate, monthLabel } from "@/lib/dates";
 import { plural } from "@/lib/plural";
 import { categoryLabel, formatStats, sortedCategories, type Category, type Format } from "@/lib/formats";
@@ -68,6 +68,8 @@ export function IdeasWorkspace({
   const { results, total, groups } = useMemo(() => searchInspiration(pool, { query, type, category, when, bigTurnout }, limit), [pool, query, type, category, when, bigTurnout, limit]);
   const categoryOf = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const formatOf = useMemo(() => new Map(formats.map((f) => [f.id, f])), [formats]);
+  // What the idea form's title offers: the earlier events, runs of one event together.
+  const earlier = useMemo(() => earlierEvents(pool, formats), [pool, formats]);
   const chips = useMemo(() => sortedCategories(categories).filter((c) => c.active), [categories]);
   const more = results.length < groups;
   const filtered = !!(query || type || category || when || bigTurnout);
@@ -139,7 +141,7 @@ export function IdeasWorkspace({
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-5">
-          <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} formats={formats} earliest={earliest} days={days} members={members} onDone={closePanel} />
+          <IdeaForm key={prefill?.nonce ?? 0} prefill={prefill} categories={categories} earlier={earlier} earliest={earliest} days={days} members={members} onDone={closePanel} />
         </div>
       </dialog>
 
@@ -226,11 +228,7 @@ export function IdeasWorkspace({
               const ends = e.ends_at && formatDate(e.ends_at) !== formatDate(e.starts_at) ? ` – ${formatDate(e.ends_at)}` : "";
               return (
                 <li key={e.event_id} className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {cat && <Badge tone="purple">{categoryLabel(cat)}</Badge>}
-                    {e.type !== "standard" && <Badge>{EVENT_TYPE_LABELS[e.type]}</Badge>}
-                  </div>
-                  <h3 className="mt-2 font-semibold leading-snug text-gray-900 break-words">{e.title}</h3>
+                  <h3 className="font-semibold leading-snug text-gray-900 break-words">{e.title}</h3>
                   <p className="text-xs text-gray-500">
                     {times > 1 ? "Last ran " : ""}
                     {formatDate(e.starts_at)}
@@ -238,6 +236,20 @@ export function IdeasWorkspace({
                   </p>
                   <p className="mt-2 line-clamp-3 text-sm text-gray-600 break-words">{teaser({ hook: e.hook, intro: e.intro }) || e.venue}</p>
                   <div className="mt-3 space-y-1 text-xs text-gray-600">
+                    {/* The category (and a type other than standard) as a line like the others, so every card starts with its title. */}
+                    <p className="flex min-w-0 items-center gap-1.5" data-testid="inspiration-category">
+                      {cat?.emoji ? (
+                        <span className="w-3.5 shrink-0 text-center leading-none" aria-hidden="true">
+                          {cat.emoji}
+                        </span>
+                      ) : (
+                        <Tag className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
+                      )}
+                      <span className="truncate">
+                        {cat ? cat.name : <span className="text-gray-400">No category</span>}
+                        {e.type !== "standard" ? ` · ${EVENT_TYPE_LABELS[e.type]}` : ""}
+                      </span>
+                    </p>
                     <p className="flex items-center gap-1.5">
                       <Users className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
                       {e.headcount !== null ? plural(e.headcount, "person", "people") : "no headcount"}

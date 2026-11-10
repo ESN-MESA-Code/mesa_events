@@ -6,14 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Alert, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import { CategorySelect, FormatSelect } from "@/components/Sorting";
+import { CategorySelect } from "@/components/Sorting";
 import { proposeIdea } from "@/app/actions/planning";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/labels";
-import { suggestCategory, type Category, type Format } from "@/lib/formats";
-import type { IdeaPrefill } from "@/lib/inspiration";
+import { formatKey, suggestCategory, type Category } from "@/lib/formats";
+import { ideaFromEarlier, type EarlierEvent, type IdeaPrefill } from "@/lib/inspiration";
 import { cycleTimeline, type TimelineDays } from "@/lib/timeline";
 import { formatDate, formatDateTime, monthLabel } from "@/lib/dates";
 import { PartnerPicker, type Member, type Partner } from "./PartnerPicker";
+import { TitleSearch, runsNote } from "./TitleSearch";
 
 const schema = z.object({
   title: z.string().trim().min(1, "Give it a name").max(200),
@@ -33,15 +34,17 @@ const EMPTY: Values = { title: "", proposed_date: "", pitch: "", helpers_needed:
 /**
  * `prefill` ("Propose this again" from Get inspired) fills the form (the
  * workspace mounts a new form for each one). The category follows the title (suggested
- * from the keywords) until the member picks one; a format brings its
- * category, type and helpers (round 2026-11-01). The date starts at
+ * from the keywords) until the member picks one. The title searches the
+ * earlier events (round 2026-11-10, replacing the separate "new run of"
+ * field): picking one links its format and fills in the rest from its last
+ * run – every field the member has not typed into themself. The date starts at
  * `earliest`: months whose ideas deadline passed are closed, every later one
  * is open (round 2026-11-02).
  */
 export function IdeaForm({
   prefill,
   categories,
-  formats,
+  earlier,
   earliest,
   days,
   members,
@@ -49,7 +52,8 @@ export function IdeaForm({
 }: {
   prefill?: (IdeaPrefill & { nonce: number }) | null;
   categories: Category[];
-  formats: Format[];
+  /** The earlier events the title offers (lib/inspiration.ts earlierEvents). */
+  earlier: EarlierEvent[];
   earliest: string;
   days: TimelineDays;
   /** Everyone who can be named as partner (not the viewer). */
@@ -67,6 +71,8 @@ export function IdeaForm({
     defaultValues: prefill ? { ...EMPTY, ...prefill, category_id: prefill.category_id ?? "", format_id: prefill.format_id ?? "" } : EMPTY,
   });
   const e = formState.errors;
+  // Read here so the form tracks them: a pick leaves the fields the member typed into alone.
+  const dirty = formState.dirtyFields;
   const [title, categoryId, formatId, date] = useWatch({ control, name: ["title", "category_id", "format_id", "proposed_date"] });
   // Which month's schedule the idea goes into, and until when ideas for it are taken.
   const dateHint = /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") && date! >= earliest
@@ -88,17 +94,30 @@ export function IdeaForm({
     if (suggested !== getValues("category_id")) setValue("category_id", suggested);
   }, [suggested, picked, formatId, getValues, setValue]);
 
-  function pickFormat(id: string) {
-    setValue("format_id", id);
-    const f = formats.find((x) => x.id === id);
-    if (!f) return;
-    if (f.category_id) {
-      setValue("category_id", f.category_id);
+  // The earlier event this idea runs again: picked from the title's list, or the one "Propose this again" came from.
+  const [source, setSource] = useState<EarlierEvent | null>(() =>
+    prefill ? (earlier.find((g) => (prefill.format_id ? g.format?.id === prefill.format_id : g.key === `t:${formatKey(prefill.title)}`)) ?? null) : null
+  );
+  const [categoryByHand, setCategoryByHand] = useState(false);
+
+  function pickEarlier(g: EarlierEvent) {
+    const fill = ideaFromEarlier(g, earliest);
+    setSource(g);
+    setValue("title", fill.title, { shouldValidate: formState.isSubmitted });
+    setValue("format_id", fill.format_id ?? "");
+    if (!dirty.pitch) setValue("pitch", fill.pitch);
+    if (!dirty.proposed_date && fill.proposed_date) setValue("proposed_date", fill.proposed_date, { shouldValidate: formState.isSubmitted });
+    if (!dirty.helpers_needed) setValue("helpers_needed", fill.helpers_needed);
+    if (!dirty.type_suggestion) setValue("type_suggestion", fill.type_suggestion);
+    if (fill.category_id && !categoryByHand) {
+      setValue("category_id", fill.category_id);
       setPicked(true);
     }
-    if (!getValues("title").trim()) setValue("title", f.name, { shouldValidate: true });
-    if (!getValues("type_suggestion")) setValue("type_suggestion", f.type);
-    setValue("helpers_needed", f.helpers_needed);
+  }
+  // "It's something new": the idea keeps what is filled in, without the link.
+  function unlink() {
+    setSource(null);
+    setValue("format_id", "");
   }
 
   return (
@@ -108,6 +127,8 @@ export function IdeaForm({
         const p = checked.parse(v);
         run(proposeIdea, { ...p, type_suggestion: p.type_suggestion || null, category_id: p.category_id || null, format_id: p.format_id || null, partners }, () => {
           setPicked(false);
+          setSource(null);
+          setCategoryByHand(false);
           setPartners([]);
           reset(EMPTY);
           onDone?.();
@@ -117,13 +138,37 @@ export function IdeaForm({
       data-testid="idea-form"
     >
       <Group title="What">
-        <Field label="Title" htmlFor="idea-title" error={e.title?.message}>
-          <Input id="idea-title" {...register("title")} placeholder="e.g. Pub quiz in English" />
+        <Field
+          label="Title"
+          htmlFor="idea-title"
+          error={e.title?.message}
+          hint={source || !earlier.length ? undefined : "Type a new name – or pick an earlier event to run it again, and the rest fills itself in."}
+        >
+          <TitleSearch
+            id="idea-title"
+            field={register("title")}
+            text={title ?? ""}
+            options={earlier}
+            categories={categories}
+            onPick={pickEarlier}
+            invalid={!!e.title}
+            placeholder={earlier.length ? "e.g. Pub quiz in English – or search earlier events" : "e.g. Pub quiz in English"}
+          />
         </Field>
-        {formats.length > 0 && (
-          <Field label="Is this a new run of an event we did before?" htmlFor="idea-format" hint="Type to search our earlier events – then its runs and descriptions stay together.">
-            <FormatSelect id="idea-format" formats={formats} categories={categories} value={formatId ?? ""} onChange={pickFormat} />
-          </Field>
+        {source && (
+          <div className="flex items-start gap-2 rounded-lg border border-esn/30 bg-esn/5 px-3 py-2 text-sm" data-testid="idea-rerun">
+            <span aria-hidden className="mt-px text-esn">
+              ↻
+            </span>
+            <p className="min-w-0 flex-1 text-gray-700">
+              {formatId ? "A new run of " : "Again: "}
+              <strong className="font-semibold text-gray-900">{source.name}</strong> <span className="text-gray-500">({runsNote(source)})</span>
+              {source.runs.length > 0 && <span className="block text-xs text-gray-500">Filled in from its last run – change anything you like.</span>}
+            </p>
+            <button type="button" className="shrink-0 text-xs font-semibold text-esn hover:underline" onClick={unlink}>
+              It&apos;s something new
+            </button>
+          </div>
         )}
         <Field label="Pitch" htmlFor="idea-pitch" hint="What is it, why would internationals love it, rough costs?" error={e.pitch?.message}>
           <Textarea id="idea-pitch" rows={4} {...register("pitch")} />
@@ -137,6 +182,7 @@ export function IdeaForm({
               empty="Not sure"
               onChange={(id) => {
                 setPicked(true);
+                setCategoryByHand(true);
                 setValue("category_id", id);
               }}
             />
