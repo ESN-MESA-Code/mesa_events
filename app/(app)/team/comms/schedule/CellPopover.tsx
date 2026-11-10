@@ -6,24 +6,31 @@
 // already has a post on the chosen channel, the event can go into it instead
 // (a bundle: one Telegram post with several events). On the "Without an
 // event" row it plans posts with a title (the calendar, a recap …).
+// Round 2026-11-10: laid out as a small form – a header saying what and
+// when, the channel and format as buttons, labelled fields, the day and the
+// button in a foot that stays in view.
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarDays, Plus, Trash2, X } from "lucide-react";
 import { addToPost, createPost, planEventPosts } from "@/app/actions/publishing";
 import { describeError } from "@/components/ActionButton";
 import { useFeedback } from "@/components/Feedback";
-import { Button, Input, Select } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import { berlinDate, berlinTime } from "@/lib/dates";
-import { FORMAT_LABEL, POST_FORMATS, type PostFormat } from "@/lib/publishing";
+import { FORMAT_LABEL, type PostFormat } from "@/lib/publishing";
 import { cn } from "@/lib/utils";
-import { STATE_TEXT, dayLabel, leadTime, shortOf, stateOf, type BoardChannel, type BoardEvent, type BoardPost, type Coverage } from "./boardModel";
+import { STATE_TEXT, dayLabel, leadTime, stateOf, type BoardChannel, type BoardEvent, type BoardPost, type Coverage } from "./boardModel";
 import { MarkerShape } from "./Board";
+import { ChannelPicker, FieldLabel, FormatPicker } from "./fields";
 
 /** The cell the popover hangs on, in viewport pixels. */
 export type Anchor = { x: number; y: number; w: number; h: number };
 
 type Row = { channel: string; format: PostFormat | ""; time: string; title: string; into: string };
 
-const WIDTH = 352;
+const WIDTH = 400;
+/** The room the popover wants below its cell before it opens above instead. */
+const ROOM = 420;
 
 /** Phones get a sheet at the bottom instead of a popover. */
 const NARROW = "(max-width: 639px)";
@@ -70,7 +77,7 @@ export function CellPopover({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
-  const firstField = useRef<HTMLSelectElement>(null);
+  const firstField = useRef<HTMLButtonElement>(null);
   const usable = event ? channels : channels.filter((c) => c.key !== "telegram");
   // The first required channel the event is not on yet, else the first.
   const missing = event ? channels.filter((c) => c.required && !coverage[event.id]?.[c.key]) : [];
@@ -105,7 +112,7 @@ export function CellPopover({
   const lead = event ? leadTime(day, event.startsAt) : null;
   const channelName = (key: string) => channels.find((c) => c.key === key)?.name ?? key;
   const titlesOf = (p: BoardPost) => [p.title, ...p.events.map((id) => byId.get(id)?.title ?? "Event")].filter(Boolean).join(", ");
-  const invalid = !day || rows.some((r) => !r.channel || (!event && !r.title.trim()) || !/^\d{2}:\d{2}$/.test(r.time));
+  const invalid = !day || rows.some((r) => !r.channel || (!r.into && !event && !r.title.trim()) || !/^\d{2}:\d{2}$/.test(r.time));
 
   function submit() {
     setError(null);
@@ -139,7 +146,7 @@ export function CellPopover({
   // Below the cell when there is room, else above; a sheet at the bottom on phones.
   const vh = typeof window === "undefined" ? 800 : window.innerHeight;
   const vw = typeof window === "undefined" ? 1200 : window.innerWidth;
-  const below = vh - (anchor.y + anchor.h) > 360 || anchor.y < 360;
+  const below = vh - (anchor.y + anchor.h) > ROOM || anchor.y < ROOM;
   const style: React.CSSProperties = phone
     ? {}
     : {
@@ -153,7 +160,7 @@ export function CellPopover({
       ref={box}
       role="dialog"
       aria-label={`${event ? event.title : "Post without an event"}, ${dayLabel(day)}`}
-      className={cn("fixed z-50 overflow-y-auto border border-gray-200 bg-white p-3 text-xs shadow-xl", phone ? "inset-x-0 bottom-0 max-h-[80vh] rounded-t-2xl" : "rounded-xl")}
+      className={cn("fixed z-50 flex flex-col overflow-hidden border border-gray-200 bg-white text-xs shadow-2xl", phone ? "inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl" : "rounded-2xl")}
       style={style}
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
@@ -162,131 +169,169 @@ export function CellPopover({
       }}
       data-testid="cell-popover"
     >
-      <div className="mb-2 flex items-start gap-2">
+      {/* What and when. */}
+      <div className="flex items-start gap-2.5 border-b border-gray-100 px-4 pb-3 pt-3.5">
+        <span aria-hidden="true" className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-esn/5 text-esn">
+          <CalendarDays className="h-4 w-4" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-900">
-            <span className="truncate">{event ? event.title : "Post without an event"}</span>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            {editable ? "Plan a post" : "Posts"} · {dayLabel(day)}
           </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-gray-500">
-            {editable ? (
-              <Input aria-label="Day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="h-7 w-[8.5rem] px-1 text-xs" />
-            ) : (
-              <span>{dayLabel(day)}</span>
-            )}
-            {lead && <span className={cn("font-medium", lead.late ? "text-red-700" : "text-amber-800")}>{lead.text}</span>}
-            {day < today && <span className="text-gray-500">· has passed</span>}
+          <p className="truncate text-sm font-semibold leading-5 text-gray-900" title={event?.title}>
+            {event ? event.title : "Without an event"}
           </p>
+          {(lead || day < today) && (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5">
+              {lead && <span className={cn("font-medium", lead.late ? "text-red-700" : "text-amber-800")}>{lead.text}</span>}
+              {day < today && <span className="text-gray-500">{lead ? "· " : ""}this day has passed</span>}
+            </p>
+          )}
         </div>
-        <button type="button" aria-label="Close" className="px-1 text-gray-400 hover:text-gray-900" onClick={onClose}>
-          ✕
+        <button type="button" aria-label="Close" className="-mr-1.5 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-900" onClick={onClose}>
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
 
-      {here.length > 0 && (
-        <div className="mb-2 space-y-1 rounded-lg bg-gray-50 p-1.5" data-testid="cell-posts">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">On this day</p>
-          {here.map((p) => (
-            <button key={p.id} type="button" onClick={() => onOpenPost(p.id)} className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-white">
-              <MarkerShape post={p} />
-              <span className="shrink-0 font-semibold">{shortOf(p.channel, channelName(p.channel))}</span>
-              <span className="shrink-0 tabular-nums text-gray-500">{berlinTime(p.scheduledFor)}</span>
-              <span className="min-w-0 truncate">{p.title || (p.events.length > 1 ? titlesOf(p) : p.format ? FORMAT_LABEL[p.format] : "Post")}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-gray-500">{STATE_TEXT[stateOf(p)]}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {editable && !usable.length && <p className="text-gray-500">Posts without an event go on Instagram or another manual channel – none is switched on.</p>}
-      {editable && usable.length > 0 && (
-        <form
-          className="space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!invalid && !pending) submit();
-          }}
-        >
-          <ol className="space-y-2">
-            {rows.map((r, i) => {
-              const into = intoOf(r.channel);
-              const n = rows.length > 1 ? ` (post ${i + 1})` : "";
-              return (
-                <li key={i} className={cn("space-y-1", rows.length > 1 && "rounded-lg border border-gray-100 p-1.5")}>
-                  <span className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.5rem_auto] gap-1">
-                    <Select ref={i === 0 ? firstField : undefined} aria-label={`Channel${n}`} value={r.channel} onChange={(e) => set(i, { channel: e.target.value, into: "" })} className="h-8 min-w-0 px-1.5 py-1 text-xs">
-                      {usable.map((c) => (
-                        <option key={c.key} value={c.key}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </Select>
-                    <Select
-                      aria-label={`Format${n}`}
-                      value={r.channel === "telegram" ? "" : r.format}
-                      disabled={r.channel === "telegram" || !!r.into}
-                      onChange={(e) => set(i, { format: e.target.value as PostFormat | "" })}
-                      className="h-8 min-w-0 px-1.5 py-1 text-xs"
-                    >
-                      <option value="">{r.channel === "telegram" ? "Message" : event ? "Format…" : "Post"}</option>
-                      {POST_FORMATS.filter((f) => event || f !== "post").map((f) => (
-                        <option key={f} value={f}>
-                          {FORMAT_LABEL[f]}
-                        </option>
-                      ))}
-                    </Select>
-                    <Input aria-label={`Time${n}`} type="time" value={r.time} disabled={!!r.into} onChange={(e) => set(i, { time: e.target.value })} className="h-8 min-w-0 px-1 text-xs" />
-                    {rows.length > 1 ? (
-                      <button type="button" aria-label={`Remove post ${i + 1}`} className="px-1 text-gray-400 hover:text-red-600" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
-                        ✕
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                  </span>
-                  {!r.into && (
-                    <Input
-                      aria-label={`Title${n}`}
-                      placeholder={event ? "Title (optional), e.g. Save the date" : "Title, e.g. December calendar"}
-                      value={r.title}
-                      maxLength={120}
-                      required={!event}
-                      onChange={(e) => set(i, { title: e.target.value })}
-                      className="h-8 min-w-0 px-1.5 text-xs"
-                    />
-                  )}
-                  {/* A bundle: the day has a post on this channel already. */}
-                  {into.length > 0 && (
-                    <fieldset className="space-y-0.5 rounded-md bg-sky-50 p-1.5 text-sky-950" data-testid="bundle-options">
-                      <legend className="sr-only">New post or add to an existing one{n}</legend>
-                      <label className="flex cursor-pointer items-start gap-1.5">
-                        <input type="radio" className="mt-0.5 accent-esn" checked={!r.into} onChange={() => set(i, { into: "" })} />A new {channelName(r.channel)} post
-                      </label>
-                      {into.map((p) => (
-                        <label key={p.id} className="flex cursor-pointer items-start gap-1.5">
-                          <input type="radio" className="mt-0.5 accent-esn" checked={r.into === p.id} onChange={() => set(i, { into: p.id })} />
-                          <span className="min-w-0">
-                            Add to the {channelName(p.channel)} post at {berlinTime(p.scheduledFor)} <span className="text-sky-800">({titlesOf(p)})</span>
-                          </span>
-                        </label>
-                      ))}
-                    </fieldset>
-                  )}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        {here.length > 0 && (
+          <section data-testid="cell-posts">
+            <FieldLabel className="mb-1">Already on this day</FieldLabel>
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+              {here.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => onOpenPost(p.id)} className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left hover:bg-gray-50">
+                    <MarkerShape post={p} />
+                    <span className="shrink-0 tabular-nums text-gray-600">{berlinTime(p.scheduledFor)}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-gray-900">
+                      {channelName(p.channel)}
+                      <span className="font-normal text-gray-600"> · {p.title || (p.events.length > 1 ? titlesOf(p) : p.format ? FORMAT_LABEL[p.format] : p.channel === "telegram" ? "Message" : "Post")}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-gray-500">{STATE_TEXT[stateOf(p)]} ›</span>
+                  </button>
                 </li>
-              );
-            })}
-          </ol>
-          <div className="flex flex-wrap items-center gap-2">
+              ))}
+            </ul>
+          </section>
+        )}
+        {!editable && !here.length && <p className="text-gray-500">No posts on this day.</p>}
+
+        {editable && !usable.length && <p className="text-gray-500">Posts without an event go on Instagram or another manual channel – none is switched on.</p>}
+        {editable && usable.length > 0 && (
+          <form
+            id="cell-form"
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!invalid && !pending) submit();
+            }}
+          >
+            {here.length > 0 && <FieldLabel>{rows.length > 1 ? "Add posts" : "Add a post"}</FieldLabel>}
+            <ol className="space-y-2.5">
+              {rows.map((r, i) => {
+                const into = intoOf(r.channel);
+                const n = rows.length > 1 ? ` (post ${i + 1})` : "";
+                const telegram = r.channel === "telegram";
+                return (
+                  <li key={i} className={cn("space-y-2.5", rows.length > 1 && "rounded-xl border border-gray-200 bg-gray-50/60 p-2.5")}>
+                    {rows.length > 1 && (
+                      <div className="flex items-center">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-700">Post {i + 1}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove post ${i + 1}`}
+                          className="-my-1 ml-auto flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => setRows((x) => x.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <FieldLabel>Channel</FieldLabel>
+                      <ChannelPicker channels={usable} value={r.channel} onChange={(key) => set(i, { channel: key, into: "" })} label={`Channel${n}`} firstRef={i === 0 ? firstField : undefined} />
+                    </div>
+                    {/* A bundle: the day has a post on this channel already. */}
+                    {into.length > 0 && (
+                      <fieldset className="space-y-1 rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-950" data-testid="bundle-options">
+                        <legend className="sr-only">New post or add to an existing one{n}</legend>
+                        <label className="flex cursor-pointer items-start gap-2">
+                          <input type="radio" className="mt-0.5 accent-esn" checked={!r.into} onChange={() => set(i, { into: "" })} />
+                          <span>A new {channelName(r.channel)} post</span>
+                        </label>
+                        {into.map((p) => (
+                          <label key={p.id} className="flex cursor-pointer items-start gap-2">
+                            <input type="radio" className="mt-0.5 accent-esn" checked={r.into === p.id} onChange={() => set(i, { into: p.id })} />
+                            <span className="min-w-0">
+                              Add it to the {channelName(p.channel)} post at {berlinTime(p.scheduledFor)} <span className="text-sky-800">({titlesOf(p)})</span>
+                            </span>
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    {!r.into && (
+                      <>
+                        <div className="space-y-1">
+                          <FieldLabel>Format</FieldLabel>
+                          {telegram ? (
+                            <p className="rounded-lg bg-sky-50 px-2.5 py-2 leading-4 text-sky-900">A message made from the event’s description – you check the preview before it goes out.</p>
+                          ) : (
+                            <FormatPicker value={r.format || (event ? "" : "post")} onChange={(f) => set(i, { format: f })} label={`Format${n}`} optional={!!event} />
+                          )}
+                        </div>
+                        <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                          <div className="space-y-1">
+                            <FieldLabel htmlFor={`cell-time-${i}`}>Time</FieldLabel>
+                            <Input id={`cell-time-${i}`} aria-label={`Time${n}`} type="time" value={r.time} onChange={(e) => set(i, { time: e.target.value })} className="h-8 min-w-0 px-2 text-xs" />
+                          </div>
+                          <div className="space-y-1">
+                            <FieldLabel htmlFor={`cell-title-${i}`}>
+                              Title{event && <span className="font-normal normal-case tracking-normal text-gray-400"> – optional</span>}
+                            </FieldLabel>
+                            <Input
+                              id={`cell-title-${i}`}
+                              aria-label={`Title${n}`}
+                              placeholder={event ? "e.g. Save the date" : "e.g. December calendar"}
+                              value={r.title}
+                              maxLength={120}
+                              required={!event}
+                              onChange={(e) => set(i, { title: e.target.value })}
+                              className="h-8 min-w-0 px-2 text-xs"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
             {rows.length < 10 && (
-              <button type="button" className="text-esn hover:underline" onClick={addRow} data-testid="cell-add-row">
-                + Another post
+              <button type="button" className="inline-flex items-center gap-1 font-medium text-esn hover:underline" onClick={addRow} data-testid="cell-add-row">
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Another post on this day
               </button>
             )}
-            <Button type="submit" size="sm" className="ml-auto" disabled={pending || invalid} data-testid="cell-plan">
-              {pending ? "Saving…" : rows.length === 1 ? (rows[0].into ? "Add to the post" : "Plan the post") : `Plan ${rows.length} posts`}
-            </Button>
-          </div>
-          {error && <p className="text-red-600">{error}</p>}
-        </form>
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 px-2.5 py-2 text-red-700">
+                {error}
+              </p>
+            )}
+          </form>
+        )}
+      </div>
+
+      {/* The day and the button stay in view however many posts are listed. */}
+      {editable && usable.length > 0 && (
+        <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50/70 px-4 py-2.5">
+          <label className="flex min-w-0 items-center gap-1.5 text-gray-600">
+            <span className="shrink-0 font-medium">Day</span>
+            <Input aria-label="Day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="h-8 w-[8.75rem] px-1.5 text-xs" />
+          </label>
+          <Button type="submit" form="cell-form" size="sm" className="ml-auto shrink-0" disabled={pending || invalid} data-testid="cell-plan">
+            {pending ? "Saving…" : rows.length === 1 ? (rows[0].into ? "Add to the post" : "Plan the post") : `Plan ${rows.length} posts`}
+          </Button>
+        </div>
       )}
     </div>
   );

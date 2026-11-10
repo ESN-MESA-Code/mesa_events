@@ -40,7 +40,7 @@ export default async function PretixPage({ searchParams }: { searchParams: Promi
     supabase.from("publication_channels").select("enabled").eq("key", "pretix").maybeSingle(),
     supabase
       .from("events")
-      .select("id, title, starts_at, type, status, descriptions(status)")
+      .select("id, title, starts_at, type, big, status, descriptions(status)")
       .in("status", ["draft", ...PUBLISHABLE_STATUSES])
       .eq("source", "platform")
       .gte("starts_at", new Date(now).toISOString())
@@ -50,7 +50,7 @@ export default async function PretixPage({ searchParams }: { searchParams: Promi
   ]);
   // The event a link named (?event=…, from the stages or the board) is shown however far ahead it is.
   const asked = /^[0-9a-f-]{36}$/.test(sp.event ?? "") && !(rows ?? []).some((e) => e.id === sp.event)
-    ? (await supabase.from("events").select("id, title, starts_at, type, status, descriptions(status)").eq("id", sp.event!).in("status", ["draft", ...PUBLISHABLE_STATUSES]).maybeSingle()).data
+    ? (await supabase.from("events").select("id, title, starts_at, type, big, status, descriptions(status)").eq("id", sp.event!).in("status", ["draft", ...PUBLISHABLE_STATUSES]).maybeSingle()).data
     : null;
   const events = [...(rows ?? []).filter((e) => advertisable({ status: e.status, startsAt: e.starts_at }, now)), ...(asked ? [asked] : [])];
   const ids = events.map((e) => e.id);
@@ -73,7 +73,11 @@ export default async function PretixPage({ searchParams }: { searchParams: Promi
     .filter((e) => !done.has(e.id))
     .sort((a, b) => (dueOf(a.id) ?? "9999").localeCompare(dueOf(b.id) ?? "9999") || a.starts_at.localeCompare(b.starts_at));
   const finished = events.filter((e) => done.has(e.id));
-  const shown = show === "todo" ? todo : show === "done" ? finished : events;
+  const listed = show === "todo" ? todo : show === "done" ? finished : events;
+  // The event a link named stays in view whatever the filter (round 2026-11-10): it used to vanish from
+  // "To set up" the moment it was ticked – no "Set up by", no Undo – and a link to one already set up showed nothing.
+  const named = events.find((e) => e.id === sp.event);
+  const shown = named && !listed.includes(named) ? [named, ...listed] : listed;
   const counts = { todo: todo.length, done: finished.length, all: events.length };
   const overdue = todo.filter((e) => dueOf(e.id) && berlinDate(dueOf(e.id)!) <= today).length;
   const showHref = (filter: Show) => `/team/comms/pretix${filter === "todo" ? "" : `?show=${filter}`}`;
@@ -136,7 +140,7 @@ export default async function PretixPage({ searchParams }: { searchParams: Promi
                           <Link href={`/events/${e.id}/description?from=comms`} className="break-words font-semibold text-gray-900 hover:text-esn">
                             {e.title}
                           </Link>
-                          {isBigEvent(e.type) && <Badge tone="amber">big</Badge>}
+                          {isBigEvent({ big: e.big, type: e.type }) && <Badge tone="amber">big</Badge>}
                           {e.status === "draft" && <Badge tone="gray">draft</Badge>}
                         </div>
                         <p className="text-xs text-gray-500">

@@ -44,7 +44,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const [{ data: eventList }, { data: channelRows }, { data: postRows }, { data: team }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, starts_at, type, status, category_id, descriptions(status)")
+      .select("id, title, starts_at, type, big, status, category_id, descriptions(status)")
       .in("status", ["draft", ...PUBLISHABLE_STATUSES])
       .eq("source", "platform")
       .gte("starts_at", monthStartIso(loadFrom))
@@ -85,7 +85,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const to = addDays(from, span - 1);
   const inWindow = (d: string) => d >= from && d <= to;
 
-  // The rows: the events of the window, the big ones of the next months (advertised weeks ahead), the focused one,
+  // The rows: the events of the window, the big ones of the next months (the Events team's mark – advertised weeks ahead), the focused one,
   // and whatever the window's posts advertise.
   const aheadUntil = addMonths(`${from.slice(0, 7)}-01`, AHEAD_MONTHS);
   const windowPosts = posts.filter((p) => onBoard.has(p.channel) && inWindow(berlinDate(p.scheduled_for)));
@@ -93,7 +93,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     ...rows
       .filter((r) => {
         const d = berlinDate(r.starts_at);
-        return inWindow(d) || (d > to && d >= today && isBigEvent(r.type) && monthOf(r.starts_at) <= aheadUntil) || r.id === focusId;
+        return inWindow(d) || (d > to && d >= today && isBigEvent(r) && monthOf(r.starts_at) <= aheadUntil) || r.id === focusId;
       })
       .map((r) => r.id),
     ...windowPosts.flatMap((p) => p.publication_post_events.map((x) => x.event_id)),
@@ -107,7 +107,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   for (const p of posts) if (p.channel === "pretix" && p.status === "published") for (const x of p.publication_post_events) pretix.done[x.event_id] ??= { link: p.link };
   const [{ data: eventRows }, { data: descriptions }] = ids.length
     ? await Promise.all([
-        supabase.from("events").select("id, title, starts_at, type, status, format_id, category_id, planning_cycles(description_deadline)").in("id", ids),
+        supabase.from("events").select("id, title, starts_at, type, big, status, format_id, category_id, planning_cycles(description_deadline)").in("id", ids),
         supabase.from("descriptions").select("event_id, status, fields, approved_fields").in("event_id", ids),
       ])
     : [{ data: [] }, { data: [] }];
@@ -191,7 +191,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       title: e.title,
       startsAt: e.starts_at,
       description: desc.get(e.id)?.status ?? "missing",
-      type: e.type,
+      big: isBigEvent({ big: e.big, type: e.type }),
       draft: e.status === "draft",
       categoryId: e.category_id,
       listed: listed.has(e.id),

@@ -19,8 +19,8 @@ export interface BoardEvent {
   startsAt: string;
   /** Description status ("missing" when none). */
   description: string;
-  /** standard, special, day_trip, weekend_trip – the big ones are advertised weeks ahead. */
-  type: string | null;
+  /** The Events team marked it big (round 2026-11-10): advertised weeks ahead. */
+  big: boolean;
   /** Its cycle is still being planned (round 2026-11-09): it may be advertised early, but its date may still change. */
   draft?: boolean;
   /** Its category (event_categories), for the filter and the emoji on its row. */

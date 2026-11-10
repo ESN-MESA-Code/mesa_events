@@ -13,6 +13,7 @@ import { ScheduleCalendar } from "../ScheduleCalendar";
 import { z } from "zod";
 import { loadSorting } from "@/lib/sortingLoad";
 import { shownStatus } from "@/lib/labels";
+import { isBigEvent } from "@/lib/publishing";
 
 export const metadata: Metadata = { title: "Month schedule" };
 
@@ -34,7 +35,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
   const [{ data: events }, { data: ideaRows }, { data: signups }, { categories, formats }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, title, type, starts_at, ends_at, location, meeting_point, helpers_needed, ocs_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name), assignments(role, status)")
+      .select("id, title, type, big, starts_at, ends_at, location, meeting_point, helpers_needed, ocs_needed, price_cents, status, proposed_by, category_id, format_id, profiles:proposed_by(full_name), assignments(role, status)")
       .eq("cycle_id", id)
       .order("starts_at"),
     supabase
@@ -101,6 +102,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                   <ScheduleRow
                     key={e.id}
                     canEdit={editableSchedule}
+                    canMark={canEdit}
                     event={{
                       id: e.id,
                       title: e.title,
@@ -118,6 +120,7 @@ export default async function CyclePage({ params }: { params: Promise<{ id: stri
                       signups: signupCount.get(e.id) ?? 0,
                       categoryId: e.category_id ?? "",
                       formatId: e.format_id ?? "",
+                      big: isBigEvent({ big: e.big, type: e.type }),
                     }}
                     categories={categories}
                     formats={formats}

@@ -3,21 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, ChevronLeft, ChevronRight, FileText, Search, Send } from "lucide-react";
-import { PictureButton, UploadedPicture, pictureProblem } from "@/components/PostPicture";
-import { Alert, Badge, Button, Card, Input, Select, buttonVariants } from "@/components/ui";
+import { Camera, ChevronLeft, ChevronRight, FileText, Search, Send, Ticket } from "lucide-react";
+import { Alert, Button, Card, Input, Select, buttonVariants } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import { confirmPost, deletePost, editPost, markPostPublished, movePost, publishPostNow, removeFromPost, reorderPost, setPostEventPicture, skipPost } from "@/app/actions/publishing";
-import { berlinDate, berlinTime, formatDateTime, formatShortDate, monthLabel } from "@/lib/dates";
+import { berlinDate, formatShortDate, monthLabel } from "@/lib/dates";
 import { addDays, dayDiff, monthParam } from "@/lib/month";
-import { FORMAT_LABEL, isBigEvent, namesOf } from "@/lib/publishing";
-import { ContentEditor, NewPostForm, RegularPostsForm, type TeamMember } from "./PostContent";
+import { NewPostForm, RegularPostsForm, type TeamMember } from "./PostContent";
+import { PostDialog } from "./PostDialog";
 import { Board, Mark, MarkerShape } from "./Board";
 import { EventPanel } from "./EventPanel";
 import {
   BOARD_STEP_WEEKS,
   STATE_TEXT,
-  leadTime,
   needsPosts,
   stateOf,
   type BoardCategory,
@@ -27,7 +24,6 @@ import {
   type Coverage,
   type PostState,
   type PretixChecklist,
-  type PreviewMessage,
 } from "./boardModel";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -189,7 +185,7 @@ export function ScheduleBoard({
     if (e.id === focus) return true;
     if (berlinDate(e.startsAt) < today && !f.past && !hasPostsInView(e.id)) return false;
     if (f.needs && !needsPosts(e, required, coverage, today)) return false;
-    if (f.big && !isBigEvent(e.type)) return false;
+    if (f.big && !e.big) return false;
     if (f.category && e.categoryId !== f.category) return false;
     if (q && !e.title.toLowerCase().includes(q)) return false;
     return true;
@@ -305,7 +301,7 @@ export function ScheduleBoard({
               Needs posts
               <span className={cn("rounded-full px-1.5 text-[10px] font-bold tabular-nums", f.needs ? "bg-white/25" : needing.length ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500")}>{needing.length}</span>
             </Toggle>
-            <Toggle on={f.big} onClick={() => set({ big: !f.big })} testId="filter-big" title="Parties and trips">
+            <Toggle on={f.big} onClick={() => set({ big: !f.big })} testId="filter-big" title="The events the Events team marked as big – advertised weeks ahead">
               Big events
             </Toggle>
             <Toggle on={f.mine} onClick={() => set({ mine: !f.mine })} testId="only-mine" title="Only the posts you make">
@@ -384,11 +380,20 @@ export function ScheduleBoard({
             <span className="inline-flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> warning
             </span>
-            <span className="inline-flex items-center gap-1" title="Per event, in this order: description, pretix page, Telegram, Instagram">
-              <Mark icon={FileText} tone="done" label="done" />
-              <Mark icon={Send} tone="planned" label="planned" />
-              <Mark icon={Camera} tone="missing" label="missing" />
-              description · pretix · TG · IG: done, planned, missing
+            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 border-l border-gray-200 pl-3" title="Per event, in this order: description, pretix page, Telegram, Instagram">
+              <span className="text-gray-500">Per event:</span>
+              <span className="inline-flex items-center gap-1">
+                <Mark icon={FileText} tone="done" label="done" /> done
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Mark icon={Send} tone="planned" label="planned" /> planned
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Mark icon={Camera} tone="missing" label="missing" /> missing
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Mark icon={Ticket} tone="off" label="not needed" /> not needed
+              </span>
             </span>
           </div>
           {editable && (
@@ -426,311 +431,16 @@ export function ScheduleBoard({
         )}
       </div>
       {opened && (
-        <PostDialog onClose={() => setOpen(null)} title={`${opened.title ? `${opened.title} – ` : ""}${channelOf.get(opened.channel)?.name ?? opened.channel} ${opened.format ? FORMAT_LABEL[opened.format].toLowerCase() : "post"}, ${formatDateTime(opened.scheduledFor)}`}>
-          <PostDetails
-            post={opened}
-            channel={channelOf.get(opened.channel) ?? { key: opened.channel, name: opened.channel, kind: "manual", required: false }}
-            byId={byId}
-            editable={editable}
-            team={team}
-            viewerEmail={viewer.email}
-          />
-        </PostDialog>
+        <PostDialog
+          post={opened}
+          channel={channelOf.get(opened.channel) ?? { key: opened.channel, name: opened.channel, kind: "manual", required: false }}
+          byId={byId}
+          editable={editable}
+          team={team}
+          viewerEmail={viewer.email}
+          onClose={() => setOpen(null)}
+        />
       )}
-    </div>
-  );
-}
-
-/** A modal <dialog> for one post: Escape or the button closes it. */
-function PostDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (d && !d.open) d.showModal();
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      aria-label={title}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-gray-900/40"
-      onCancel={(e) => (e.preventDefault(), onClose())}
-      onClick={(e) => e.target === ref.current && onClose()}
-      data-testid="post-dialog"
-    >
-      <div className="space-y-3 p-4">
-        <div className="flex items-start gap-2">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button type="button" className="ml-auto px-1 text-gray-500 hover:text-gray-900" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </dialog>
-  );
-}
-
-/**
- * A Telegram post as the channel will show it (round 2026-11-03): open by
- * default, one bubble per message (one per event, after the heading of a
- * post of several), each with its picture – its own, else the default of
- * its format or type – and a button to add, replace or remove it (saved at
- * once); then confirmed or posted from the same panel.
- */
-function TelegramPanel({ post, postName, editable, byId }: { post: BoardPost; postName: string; editable: boolean; byId: Map<string, BoardEvent> }) {
-  const { run, pending, error, setError, confirm } = useAction();
-  const [uploading, setUploading] = useState<number | null>(null);
-  const [note, setNote] = useState(post.note);
-  const messages = post.preview ?? [];
-  const canEdit = editable && post.status !== "skipped";
-
-  async function upload(i: number, file: File) {
-    setError(null);
-    const problem = pictureProblem(file);
-    if (problem) return setError(problem);
-    setUploading(i);
-    const path = `${post.id}/${crypto.randomUUID()}.${file.type.split("/")[1].replace("jpeg", "jpg")}`;
-    const { error: e } = await supabase.storage.from("post-pictures").upload(path, file, { contentType: file.type });
-    setUploading(null);
-    if (e) return setError(`Upload failed: ${e.message}`);
-    setPicture(messages[i], `upload:${path}`);
-  }
-  // The heading's picture is the post's; an event's is its own in this post.
-  const setPicture = (m: PreviewMessage, picture: string) =>
-    m.eventId ? run(setPostEventPicture, { post_id: post.id, event_id: m.eventId, picture }) : run(editPost, { post_id: post.id, picture, note: post.note });
-
-  return (
-    <div className="space-y-2 rounded border border-esn/30 bg-esn/5 p-2" data-testid="telegram-preview">
-      <p className="font-medium text-esn-dark">
-        This goes to the Telegram channel{messages.length > 1 ? ` as ${messages.length} messages` : ""}:
-      </p>
-      <ol className="max-h-[55vh] space-y-2 overflow-auto">
-        {messages.map((m, i) => (
-          <li key={i} className="space-y-1.5 rounded bg-white p-1.5 shadow-sm" data-testid="telegram-message">
-            {messages.length > 1 && (
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-gray-400">
-                Message {i + 1}
-                {m.eventId ? ` · ${byId.get(m.eventId)?.title ?? "Event"}` : " · heading"}
-              </p>
-            )}
-            {m.picture && <UploadedPicture picture={m.picture} />}
-            {m.picture && m.isDefault && <p className="text-xs text-gray-500">Default picture (Pictures tab)</p>}
-            <pre className="whitespace-pre-wrap break-words font-sans text-xs text-gray-800">{m.text}</pre>
-            {canEdit && (
-              <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-1.5" data-testid="telegram-picture">
-                <PictureButton label={m.picture && !m.isDefault ? "Replace the picture" : "Add a picture"} disabled={uploading !== null || pending} onFile={(f) => upload(i, f)} />
-                {m.picture && !m.isDefault && (
-                  <button type="button" className="text-xs text-gray-600 hover:underline" disabled={pending} onClick={() => setPicture(m, "")}>
-                    Remove the picture
-                  </button>
-                )}
-                {uploading === i && <span className="text-xs text-gray-500">Uploading…</span>}
-              </div>
-            )}
-          </li>
-        ))}
-        {!messages.length && <li className="text-gray-500">–</li>}
-      </ol>
-      {canEdit && post.events.length > 1 && (
-        <form className="flex gap-1" onSubmit={(e) => (e.preventDefault(), run(editPost, { post_id: post.id, picture: post.picture ?? "", note }))}>
-          <Input aria-label="Heading of the bundle" placeholder="Heading message, e.g. This week at ESN MESA (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-          {note.trim() !== post.note && (
-            <Button size="sm" variant="outline" disabled={pending}>
-              Save
-            </Button>
-          )}
-        </form>
-      )}
-      {post.refusal && (
-        <p className="text-amber-800" data-testid="telegram-refusal">
-          {post.refusal} It can stay planned; confirm it once that is sorted – until then it does not go out.
-        </p>
-      )}
-      {canEdit && !post.refusal && (
-        <div className="flex flex-wrap gap-2">
-          {post.status === "planned" && !post.confirmed && (
-            <Button size="sm" disabled={pending || uploading !== null} onClick={() => run(confirmPost, { post_id: post.id })}>
-              Confirm for {formatDateTime(post.scheduledFor)}
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant={post.status === "published" ? "default" : "outline"}
-            disabled={pending || uploading !== null}
-            onClick={async () => {
-              const again = post.status === "published";
-              if (
-                await confirm({
-                  title: again ? "Edit the Telegram post now?" : "Post this to the Telegram channel now?",
-                  body: again ? `The channel's messages for ${postName} are replaced with the preview.` : `${postName} goes out to everyone in the channel at once, not at its planned time.`,
-                  confirmLabel: again ? "Edit the post" : "Post now",
-                })
-              )
-                run(publishPostNow, { post_id: post.id }, undefined, again ? "Telegram post updated." : "Posted to the Telegram channel.");
-            }}
-          >
-            {post.status === "published" ? "Post again (edits the messages)" : "Confirm and post now"}
-          </Button>
-        </div>
-      )}
-      {post.confirmed && post.status === "planned" && <p className="text-xs text-gray-500">Confirmed – it goes out by itself at its time. Any change takes the confirmation back.</p>}
-      {error && <p className="text-red-600">{error}</p>}
-    </div>
-  );
-}
-
-function PostDetails({
-  post,
-  channel,
-  byId,
-  editable,
-  team,
-  viewerEmail,
-}: {
-  post: BoardPost;
-  channel: BoardChannel;
-  byId: Map<string, BoardEvent>;
-  editable: boolean;
-  team: TeamMember[];
-  viewerEmail: string;
-}) {
-  const { run, pending, error, confirm } = useAction();
-  // What a confirm dialog names (usability review #8).
-  const postName = `the ${channel.name} post of ${formatDateTime(post.scheduledFor)} (${[post.title, ...post.events.map((id) => byId.get(id)?.title ?? "?")].filter(Boolean).join(", ")})`;
-  const [mode, setMode] = useState<"" | "move" | "publish" | "skip">("");
-  const [day, setDay] = useState(berlinDate(post.scheduledFor));
-  const [time, setTime] = useState(berlinTime(post.scheduledFor));
-  const [text, setText] = useState("");
-  const telegram = channel.key === "telegram";
-  const postDay = berlinDate(post.scheduledFor);
-  const move = (i: number, by: number) => {
-    const ids = [...post.events];
-    [ids[i], ids[i + by]] = [ids[i + by], ids[i]];
-    run(reorderPost, { post_id: post.id, event_ids: ids });
-  };
-
-  const badge =
-    post.status === "published"
-      ? { tone: "green" as const, text: "✓ posted" }
-      : post.status === "skipped"
-        ? { tone: "gray" as const, text: "⨯ skipped" }
-        : telegram && !post.confirmed
-          ? { tone: "amber" as const, text: `⏸ ${berlinTime(post.scheduledFor)} · not confirmed` }
-          : { tone: "blue" as const, text: `⏰ ${berlinTime(post.scheduledFor)}${telegram ? " · confirmed" : ""}` };
-
-  return (
-    <div className="space-y-2 text-sm" data-testid={`post-details-${post.id}`}>
-      <div className="flex items-center gap-2">
-        <Badge tone={badge.tone}>{badge.text}</Badge>
-        {post.events.length > 1 && <span className="text-xs text-gray-500">{post.events.length} events</span>}
-        {post.assignees.length > 0 && <span className="ml-auto truncate text-xs text-gray-500">By {namesOf(post.assignees, team)}</span>}
-      </div>
-      <ol className="space-y-1">
-        {post.events.map((id, i) => {
-          const ev = byId.get(id);
-          const lead = ev ? leadTime(postDay, ev.startsAt) : null;
-          return (
-            <li key={id} className="flex items-center gap-1">
-              <span className="min-w-0 grow">
-                <span className="block truncate">{ev?.title ?? "Event"}</span>
-                {lead && <span className={cn("block text-xs", lead.late ? "text-red-700" : "text-amber-800")}>📅 {formatShortDate(ev!.startsAt)} · {lead.text}</span>}
-              </span>
-              {editable && post.status !== "skipped" && (
-                <span className="flex shrink-0 gap-0.5">
-                  {i > 0 && (
-                    <button type="button" aria-label="Move up" className="px-1 text-gray-500 hover:text-esn" onClick={() => move(i, -1)}>
-                      ↑
-                    </button>
-                  )}
-                  {i < post.events.length - 1 && (
-                    <button type="button" aria-label="Move down" className="px-1 text-gray-500 hover:text-esn" onClick={() => move(i, 1)}>
-                      ↓
-                    </button>
-                  )}
-                  <button type="button" aria-label={`Remove ${ev?.title ?? "event"}`} className="px-1 text-gray-500 hover:text-red-600" onClick={() => run(removeFromPost, { post_id: post.id, event_id: id })}>
-                    ✕
-                  </button>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      {post.status === "published" && post.link && (
-        <a href={post.link} target="_blank" rel="noopener noreferrer" className="block truncate text-esn hover:underline">
-          Open the post
-        </a>
-      )}
-      {post.status === "skipped" && post.skipReason && <p className="text-gray-500">{post.skipReason}</p>}
-      {post.lastError && (
-        <p className="text-red-700" data-testid="post-error">
-          {post.lastError}
-        </p>
-      )}
-      {post.warnings.map((w) => (
-        <p key={w} className="text-amber-800" data-testid="post-warning">
-          ⚠ {w}
-        </p>
-      ))}
-      {/* What Comms kept in their sheet (round 2026-11-09); Telegram's text comes from the descriptions. */}
-      <ContentEditor key={`${post.id}:${post.progress}:${post.assignees.join()}`} post={post} team={team} editable={editable} viewerEmail={viewerEmail} />
-      {/* Telegram: the preview first, with the picture and the buttons to post (round 2026-11-03). */}
-      {telegram && post.status !== "skipped" && <TelegramPanel key={`${post.id}:${post.note}`} post={post} postName={postName} editable={editable} byId={byId} />}
-      {editable && post.status !== "skipped" && (channel.kind === "manual" || post.status === "planned") && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-gray-100 pt-2">
-          {channel.kind === "manual" && post.status === "planned" && (
-            <button type="button" className="text-esn hover:underline" onClick={() => setMode(mode === "publish" ? "" : "publish")}>
-              Mark posted
-            </button>
-          )}
-          {post.status === "planned" && (
-            <>
-              <button type="button" className="text-esn hover:underline" onClick={() => setMode(mode === "move" ? "" : "move")}>
-                Change day
-              </button>
-              <button type="button" className="text-gray-600 hover:underline" onClick={() => setMode(mode === "skip" ? "" : "skip")}>
-                Skip
-              </button>
-              <button
-                type="button"
-                className="text-gray-600 hover:underline"
-                onClick={async () => {
-                  if (await confirm({ title: "Delete this post?", body: `Deletes ${postName}. An uploaded picture is removed too.`, confirmLabel: "Delete", danger: true }))
-                    run(deletePost, { post_id: post.id }, undefined, "Post deleted.");
-                }}
-              >
-                Delete
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {mode === "move" && (
-        <form className="flex flex-wrap gap-1" onSubmit={(e) => (e.preventDefault(), run(movePost, { post_id: post.id, day, time }, () => setMode("")))}>
-          <Input aria-label="New day" type="date" className="w-40" value={day} onChange={(e) => setDay(e.target.value)} />
-          <Input aria-label="New time" type="time" className="w-28" value={time} onChange={(e) => setTime(e.target.value)} />
-          <Button size="sm" disabled={pending}>
-            Move
-          </Button>
-        </form>
-      )}
-      {mode === "publish" && (
-        <form className="flex gap-1" onSubmit={(e) => (e.preventDefault(), run(markPostPublished, { post_id: post.id, link: text }, () => setMode("")))}>
-          <Input aria-label="Link of the published post" placeholder="https://…" value={text} onChange={(e) => setText(e.target.value)} />
-          <Button size="sm" disabled={pending}>
-            Save link
-          </Button>
-        </form>
-      )}
-      {mode === "skip" && (
-        <form className="flex gap-1" onSubmit={(e) => (e.preventDefault(), run(skipPost, { post_id: post.id, reason: text }, () => setMode("")))}>
-          <Input aria-label="Why skip it" placeholder="e.g. the event is full" value={text} onChange={(e) => setText(e.target.value)} />
-          <Button size="sm" variant="outline" disabled={pending}>
-            Skip
-          </Button>
-        </form>
-      )}
-      {error && <p className="text-red-600">{error}</p>}
     </div>
   );
 }

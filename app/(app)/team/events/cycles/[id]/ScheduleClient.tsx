@@ -5,11 +5,13 @@ import { useParams } from "next/navigation";
 import { Alert, Badge, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionButton, useAction } from "@/components/ActionButton";
 import { EVENT_STATUS_LABELS, EVENT_STATUS_TONES, EVENT_TYPE_LABELS, EVENT_TYPES, type EventStatus, type EventType } from "@/lib/labels";
-import { acceptIdea, clearVolunteerResponse, createEvent, dropEvent, mergeIdea, moveIdea, rejectIdea, updateEvent } from "@/app/actions/planning";
+import { acceptIdea, clearVolunteerResponse, createEvent, dropEvent, mergeIdea, moveIdea, rejectIdea, setEventBig, updateEvent } from "@/app/actions/planning";
 import { plural } from "@/lib/plural";
 import { CategoryBadge, CategorySelect, FormatSelect } from "@/components/Sorting";
 import { suggestCategory, type Category, type Format } from "@/lib/formats";
 import { DateTile } from "@/components/DateTile";
+import { Megaphone } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RowEvent {
   id: string;
@@ -30,9 +32,46 @@ interface RowEvent {
   signups: number;
   categoryId: string;
   formatId: string;
+  /** Advertised weeks ahead – the Events team's call (round 2026-11-10). */
+  big: boolean;
 }
 
-export function ScheduleRow({ event, canEdit, categories, formats }: { event: RowEvent; canEdit: boolean; categories: Category[]; formats: Format[] }) {
+/**
+ * "Big" on a schedule row (round 2026-11-10): the Events team switches it –
+ * Comms advertises big events weeks ahead. Special events and weekend trips
+ * start as big. Others see it as a label.
+ */
+function BigToggle({ event, canMark }: { event: Pick<RowEvent, "id" | "title" | "big">; canMark: boolean }) {
+  const { run, pending, error } = useAction();
+  if (!canMark) return event.big ? <Badge tone="amber">Big</Badge> : null;
+  return (
+    <>
+      {error && (
+        <span role="alert" className="text-xs text-red-600">
+          {error}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-pressed={event.big}
+        aria-label={`${event.title}: big event`}
+        title={event.big ? "Big event – Comms advertises it weeks ahead. Click to take the mark off." : "Mark as a big event – Comms then advertises it weeks ahead."}
+        disabled={pending}
+        onClick={() => run(setEventBig, { event_id: event.id, big: !event.big }, undefined, event.big ? `${event.title} is no longer marked big.` : `${event.title} is marked big.`)}
+        className={cn(
+          "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition-colors disabled:opacity-50",
+          event.big ? "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200" : "border-dashed border-gray-300 text-gray-500 hover:border-amber-400 hover:text-amber-800"
+        )}
+        data-testid={`big-${event.title}`}
+      >
+        <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+        {event.big ? "Big" : "Mark big"}
+      </button>
+    </>
+  );
+}
+
+export function ScheduleRow({ event, canEdit, canMark = canEdit, categories, formats }: { event: RowEvent; canEdit: boolean; /** The Events team, also once the schedule is fixed. */ canMark?: boolean; categories: Category[]; formats: Format[] }) {
   const cycleParam = useParams<{ id: string }>().id;
   const [editing, setEditing] = useState(false);
   const { run, pending, error } = useAction();
@@ -141,7 +180,8 @@ export function ScheduleRow({ event, canEdit, categories, formats }: { event: Ro
             {event.proposer && ` · idea by ${event.proposer}`}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <BigToggle event={event} canMark={canMark} />
           <Badge tone={EVENT_STATUS_TONES[event.status]}>{EVENT_STATUS_LABELS[event.status]}</Badge>
           {canEdit && (
             <>

@@ -79,6 +79,8 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const statusOf = new Map((statusRows ?? []).map((x) => [`${x.event_id}|${x.channel}`, x]));
   const advertising = channels.filter((c) => c.required && c.schedulable);
   const pretixOn = channels.some((c) => c.key === "pretix");
+  // The chips at the foot of a row and "Not yet on" (round 2026-11-10): not pretix – it is a stage of its own in the track.
+  const chipChannels = channels.filter((c) => c.key !== "pretix");
   const views = new Map(
     rows.map((r) => {
       const e = esn.get(r.event_id);
@@ -111,7 +113,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
   const monthViews = inMonth.map((r) => views.get(r.event_id)!);
   const counts = stageCounts(monthViews);
   const filter = parseFilter(sp.show);
-  const missing = channels.find((c) => c.key === sp.missing)?.key ?? null;
+  const missing = chipChannels.find((c) => c.key === sp.missing)?.key ?? null;
   const shown = inMonth.filter((r) => {
     if (missing) return statusOf.get(`${r.event_id}|${missing}`)?.state !== "published";
     const v = views.get(r.event_id)!;
@@ -231,7 +233,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                 </nav>
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500" data-testid="channel-filters">
                   <span className="mr-1 font-medium">Not yet on</span>
-                  {channels.map((c) => (
+                  {chipChannels.map((c) => (
                     <Link
                       key={c.key}
                       href={missing === c.key ? showHref("needs") : missingHref(c.key)}
@@ -273,7 +275,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                       .flatMap((x) => (x?.at && ["published", "planned"].includes(x.state) ? [x.at] : []))
                       .sort()[0];
                     const boardHref = `/team/comms/schedule?month=${monthParam(firstPost ? monthOf(firstPost) : boardMonthFor(month!, thisMonth))}&event=${r.event_id}`;
-                    const req = channels.filter((c) => c.required);
+                    const req = chipChannels.filter((c) => c.required);
                     const on = req.filter((c) => ["published", "planned"].includes(statusOf.get(`${r.event_id}|${c.key}`)?.state ?? "")).length;
                     const past = Date.parse(r.starts_at) <= now;
                     return (
@@ -322,7 +324,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                           {/* Fixed columns (round 2026-11-09): each channel sits under the same spot in every row. */}
                           <div
                             className="flex flex-wrap items-center gap-1.5 text-xs sm:grid sm:gap-1"
-                            style={{ gridTemplateColumns: `${req.length > 0 ? "11rem " : ""}repeat(${channels.length}, minmax(0, 1fr))` }}
+                            style={{ gridTemplateColumns: `${req.length > 0 ? "11rem " : ""}repeat(${chipChannels.length}, minmax(0, 1fr))` }}
                             data-testid="channel-chips"
                           >
                             {req.length > 0 && (
@@ -335,7 +337,7 @@ export default async function CommsPage({ searchParams }: { searchParams: Promis
                                 {on}/{req.length} channels planned
                               </Link>
                             )}
-                            {channels.map((c) => {
+                            {chipChannels.map((c) => {
                               const st = statusOf.get(`${r.event_id}|${c.key}`);
                               const state = (st?.state ?? "not_planned") as ChannelState;
                               return (

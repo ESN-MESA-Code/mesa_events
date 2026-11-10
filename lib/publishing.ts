@@ -107,9 +107,16 @@ export function boardMonthFor(eventMonth: string, thisMonth: string): string {
   return earliest > thisMonth ? earliest : thisMonth;
 }
 
-/** Big events (parties, trips) are advertised weeks ahead: they lead their month in the list (round 2026-11-02). */
-export const BIG_EVENT_TYPES = ["special", "day_trip", "weekend_trip"] as const;
-export const isBigEvent = (type: string | null | undefined) => (BIG_EVENT_TYPES as readonly string[]).includes(type ?? "");
+/**
+ * Big events are advertised weeks ahead: they lead their month in the list
+ * (round 2026-11-02). Which ones are big is the Events team's call
+ * (events.big, round 2026-11-10); a new event is big when it is a special
+ * event or a weekend trip.
+ */
+export const BIG_BY_DEFAULT_TYPES = ["special", "weekend_trip"] as const;
+export const bigByDefault = (type: string | null | undefined) => (BIG_BY_DEFAULT_TYPES as readonly string[]).includes(type ?? "");
+/** The Events team's mark; while it is unknown (an event not saved yet), what its type gives. */
+export const isBigEvent = (e: { big?: boolean | null; type?: string | null }) => e.big ?? bigByDefault(e.type);
 
 /**
  * The event list of the board for `month` (round 2026-11-02): the month's
@@ -117,7 +124,7 @@ export const isBigEvent = (type: string | null | undefined) => (BIG_EVENT_TYPES 
  * months, grouped by their month, big ones first – so posts for an event
  * weeks ahead are planned on this month's days.
  */
-export function trayGroups<E extends { startsAt: string; type?: string | null }>(events: E[], month: string): Array<{ month: string; later: boolean; events: E[] }> {
+export function trayGroups<E extends { startsAt: string; type?: string | null; big?: boolean | null }>(events: E[], month: string): Array<{ month: string; later: boolean; events: E[] }> {
   const byDate = (a: E, b: E) => a.startsAt.localeCompare(b.startsAt);
   const isLater = (ev: E) => monthOf(ev.startsAt) > month;
   const months = [...new Set(events.filter(isLater).map((ev) => monthOf(ev.startsAt)))].sort();
@@ -126,7 +133,7 @@ export function trayGroups<E extends { startsAt: string; type?: string | null }>
     ...months.map((m) => ({
       month: m,
       later: true,
-      events: events.filter((ev) => monthOf(ev.startsAt) === m).sort((a, b) => Number(isBigEvent(b.type)) - Number(isBigEvent(a.type)) || byDate(a, b)),
+      events: events.filter((ev) => monthOf(ev.startsAt) === m).sort((a, b) => Number(isBigEvent(b)) - Number(isBigEvent(a)) || byDate(a, b)),
     })),
   ];
 }

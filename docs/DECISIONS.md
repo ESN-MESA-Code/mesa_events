@@ -1530,3 +1530,56 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
 - **Re-runs**: the demo Comms team's posts without an event are removed with the rest (they are
   not found through events), and so are blacklist entries of demo members – one added by hand on
   staging stopped the seed ("Aisha Bello is on the blacklist").
+
+## 2026-11-10 – "Big" is the Events team's mark; board marks, post popups, mock pictures
+
+- **"Big" is no longer the event's type.** It was derived from the type (special, day trip,
+  weekend trip), and the type starts as the proposer's suggestion on the idea – so in effect the
+  OC decided what Comms advertises weeks ahead. Now `events.big` is a mark of its own
+  (migration `20261110000100_big_events`): the Events team switches it on the month's schedule
+  ("Big" / "Mark big" on each row, also after the schedule is fixed; `setEventBig`), a trigger
+  lets nobody else change it. **Default**: a new event is big when it is a special event or a
+  weekend trip – a day trip is not, unless the Events team says so (existing events were set the
+  same way). When the type is changed and nobody decided about "big" (it still is what the old
+  type gave), it follows the new type; a mark set by hand stays. The board's early rows, the
+  "Big events" filter, the labels on the board, the event panel and the pretix tab read the mark.
+- **Events by stage: no pretix chip.** pretix has its own stage in the track, so it is gone from
+  the chips at the foot of a row and from "Not yet on"; "n/m channels planned" counts the
+  advertising channels only.
+- **Board, an event's marks**: they sit at the right edge of the label, so each icon is in the
+  same column in every row (they used to follow "in 3 d" / "tomorrow" / "past" and so jumped
+  from row to row). **Colours**: done is filled green, planned a blue outline on white, missing
+  red, not needed grey – fill and hue both differ (planned was a lighter green, hard to tell
+  from done). The legend names all four; the event panel uses the same icons for description,
+  pretix and each channel.
+- **Planning a post (the popover on a day, the campaign planner in the event panel)**: the
+  channel and the format are buttons (each channel with its icon and colour; post / story / reel
+  with the shape it has on the board) instead of two unlabelled dropdowns, every field has a
+  label, Telegram says what it posts ("a message made from the event's description"), and the
+  day and the button are in a foot that stays in view. Several posts are numbered cards.
+- **A post's dialog** (`PostDialog.tsx`) was one narrow column: the content form, a preview that
+  scrolled inside the scrolling dialog, and the actions as text links at the very end. Now: a
+  header (channel, title or events, when, state), two columns – left what it advertises (order,
+  remove), title, format, who makes it, how far it is; right the thing that goes out (the
+  Telegram messages as bubbles with their pictures, or the Instagram caption and design link) –
+  and a foot that stays in view: Change day / Skip / Delete on the left, the next step as the
+  one filled button on the right (Confirm, Mark posted). Format, who and progress save at once;
+  the texts with "Save changes". Telegram posts no longer show a caption and a format they do
+  not use. One column on phones.
+- **Mock default pictures in the demo data** (`lib/staging/pictures.ts`): the Pictures tab and
+  the Telegram previews had nothing to show on staging. The seed draws a labelled placeholder
+  (a coloured card with the name in pixel letters; a PNG written by hand, no image library, so
+  it also runs from "Reset demo data") for every event type, every category and every second
+  format – the formats left out show the empty slot and the fallback to the category's picture.
+  Slots that already have a picture are left alone; the mock ones go with `--remove`.
+- **pretix tab: the event a link named stays in view.** Ticked under "To set up", an event left
+  the list at once – no "Set up by", no link to open, no Undo – and a link to an event already
+  set up (from the board's panel) showed a list without it. The event named by `?event=` is now
+  listed first whatever the filter.
+- **Tests brought up to date**: `tests/e2e/schedule.spec.ts` still described the calendar and
+  tray the board replaced on 2026-11-09 (5); it now drives the board (a day on a row, the event
+  panel, a bundle from the popover, the post dialog) and the Events team's mark. The Telegram
+  expectations in `tests/db/publishing.test.ts`, `tests/db/advertising.test.ts` and
+  `monthly-cycle.spec.ts` follow description layout B (2026-11-08: titles in capitals, "are you
+  ready"). Tests whose posts must go out as text set the event types' default pictures aside
+  and put them back (`setAsideTypePictures()`), since the demo data now has mock ones.

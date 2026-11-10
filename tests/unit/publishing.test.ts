@@ -21,25 +21,30 @@ describe("the board's event list", () => {
       ev("nov-a", "2026-11-04T18:00:00Z"),
       // An October event on one of November's posts stays with the month's own.
       ev("oct", "2026-10-30T18:00:00Z"),
-      ev("dec-hike", "2026-12-08T08:00:00Z", "day_trip"),
+      // A day trip is not big by itself – this one the Events team marked.
+      { ...ev("dec-hike", "2026-12-08T08:00:00Z", "day_trip"), big: true },
+      // …and a weekend trip they said is not.
+      { ...ev("dec-cabin", "2026-12-05T08:00:00Z", "weekend_trip"), big: false },
     ];
     expect(trayGroups(events, "2026-11-01").map((g) => [g.month, g.later, g.events.map((e) => e.id)])).toEqual([
       ["2026-11-01", false, ["oct", "nov-a", "nov-b"]],
-      ["2026-12-01", true, ["dec-hike", "dec-party", "dec-quiz"]],
+      ["2026-12-01", true, ["dec-hike", "dec-party", "dec-quiz", "dec-cabin"]],
       ["2027-01-01", true, ["jan-trip"]],
     ]);
     // The month's own group is there even when empty.
     expect(trayGroups([ev("dec", "2026-12-03T18:00:00Z")], "2026-11-01")[0]).toEqual({ month: "2026-11-01", later: false, events: [] });
   });
 
-  it("lists up to three months ahead; big events are the specials and the trips", () => {
+  it("lists up to three months ahead; big is the Events team's mark – special events and weekend trips by default", () => {
     expect(listedAhead("2026-12-01", "2026-11-01")).toBe(true);
     expect(listedAhead("2027-02-01", "2026-11-01")).toBe(true);
     expect(listedAhead("2027-03-01", "2026-11-01")).toBe(false);
     expect(listedAhead("2026-11-01", "2026-11-01")).toBe(false);
-    expect(["special", "day_trip", "weekend_trip"].every(isBigEvent)).toBe(true);
-    expect(isBigEvent("standard")).toBe(false);
-    expect(isBigEvent(null)).toBe(false);
+    expect(["special", "weekend_trip"].every((type) => isBigEvent({ type }))).toBe(true);
+    expect(["standard", "day_trip", null].some((type) => isBigEvent({ type }))).toBe(false);
+    expect(isBigEvent({ type: "standard", big: true })).toBe(true);
+    expect(isBigEvent({ type: "weekend_trip", big: false })).toBe(false);
+    expect(isBigEvent({ type: "special", big: null })).toBe(true);
   });
 
   it("an event without posts is planned on the first board that lists it", () => {

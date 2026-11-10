@@ -52,6 +52,10 @@ export async function dropEvent(input: unknown) {
   return run(A.dropEvent, input);
 }
 
+export async function setEventBig(input: unknown) {
+  return run(A.setEventBig, input);
+}
+
 export async function openForm(input: unknown) {
   return run(A.openForm, input);
 }

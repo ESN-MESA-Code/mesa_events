@@ -14,7 +14,7 @@ import type { ServerAction } from "@/components/ActionButton";
 import { DESCRIPTION_STATUS } from "@/components/status";
 import { berlinDate, berlinTime, formatDateTime, monthLabel } from "@/lib/dates";
 import { addDays, dayDiff } from "@/lib/month";
-import { FORMAT_LABEL, isBigEvent } from "@/lib/publishing";
+import { FORMAT_LABEL } from "@/lib/publishing";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
 import { CellPopover, type Anchor } from "./CellPopover";
@@ -371,22 +371,29 @@ export function Board({
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1">
               <span className={cn("truncate text-xs font-semibold leading-4 text-gray-900", focus === e.id && "text-esn", past && "text-gray-500")}>{e.title}</span>
-              {isBigEvent(e.type) && <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-bold uppercase leading-3 text-amber-900">big</span>}
+              {e.big && (
+                <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-bold uppercase leading-3 text-amber-900" title="Marked big by the Events team – advertise it weeks ahead">
+                  big
+                </span>
+              )}
               {e.draft && <span className="shrink-0 rounded bg-gray-100 px-1 text-[9px] font-bold uppercase leading-3 text-gray-600">draft</span>}
             </span>
             <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-gray-500">
-              {e.categoryId && emoji.get(e.categoryId) && <span aria-hidden="true">{emoji.get(e.categoryId)}</span>}
-              <span className={cn("whitespace-nowrap", soon && "font-semibold text-amber-700")}>
-                {past ? "past" : inDays === 0 ? "today" : inDays === 1 ? "tomorrow" : `in ${inDays} d`}
-                {!inView(d) && (d > to ? " →" : " ←")}
+              <span className="flex min-w-0 items-center gap-1">
+                {e.categoryId && emoji.get(e.categoryId) && <span aria-hidden="true">{emoji.get(e.categoryId)}</span>}
+                <span className={cn("truncate", soon && "font-semibold text-amber-700")}>
+                  {past ? "past" : inDays === 0 ? "today" : inDays === 1 ? "tomorrow" : `in ${inDays} d`}
+                  {!inView(d) && (d > to ? " →" : " ←")}
+                </span>
               </span>
               {missing && (
                 <span className="font-bold text-red-700 sm:hidden" title="Still needs posts">
                   !
                 </span>
               )}
-              {/* What it needs, in the order it is done: description, pretix, the channels. Green done, red missing. */}
-              <span className="ml-1 hidden items-center gap-0.5 sm:flex" data-testid={`marks-${e.id}`}>
+              {/* What it needs, in the order it is done: description, pretix, the channels. At the right edge, so each
+                  icon sits in the same column in every row, whatever "in 3 d" or "tomorrow" says (round 2026-11-10). */}
+              <span className="ml-auto hidden shrink-0 items-center gap-1 sm:flex" data-testid={`marks-${e.id}`}>
                 <Mark
                   icon={FileText}
                   tone={descDone ? "done" : past ? "off" : "missing"}
@@ -715,21 +722,22 @@ function monthsIn(days: string[]): Array<{ month: string; first: number; count: 
 }
 
 export const MARK_TONE = {
-  done: "bg-emerald-500 text-white",
-  planned: "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300",
-  missing: "bg-red-100 text-red-600 ring-1 ring-inset ring-red-300",
-  off: "bg-gray-100 text-gray-400",
+  done: "bg-emerald-600 text-white",
+  planned: "bg-white text-esn ring-[1.5px] ring-inset ring-esn/70",
+  missing: "bg-red-50 text-red-600 ring-1 ring-inset ring-red-300",
+  off: "bg-gray-100 text-gray-300",
 } as const;
 
 /**
- * One step an event needs, as a small icon (round 2026-11-09 (7)): green when done, light green
- * when planned (a channel), red when still missing, grey when it no longer matters. The words are
- * in the tooltip and for screen readers.
+ * One step an event needs, as a small icon (round 2026-11-09 (7)): filled green when done, a blue
+ * outline when planned (a channel), red when still missing, grey when it no longer matters – fill
+ * and colour both differ, so planned and done are told apart at a glance (round 2026-11-10). The
+ * words are in the tooltip and for screen readers.
  */
 export function Mark({ icon: Icon, tone, label, testId }: { icon: LucideIcon; tone: keyof typeof MARK_TONE; label: string; testId?: string }) {
   return (
-    <span title={label} className={cn("flex h-4 w-4 items-center justify-center rounded", MARK_TONE[tone])} data-testid={testId}>
-      <Icon className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
+    <span title={label} className={cn("flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded", MARK_TONE[tone])} data-tone={tone} data-testid={testId}>
+      <Icon className="h-3 w-3" strokeWidth={2.25} aria-hidden="true" />
       <span className="sr-only">{label}</span>
     </span>
   );

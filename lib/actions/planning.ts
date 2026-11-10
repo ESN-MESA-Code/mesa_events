@@ -259,6 +259,14 @@ export const dropEvent = defineAction(z.object({ id: uuid }), async (ctx, { id }
   if (!count) throw notFound("Only planned events can be removed here.");
 }, { revalidate: [PAGES.eventsTeam, PAGES.calendar, PAGES.home] });
 
+/** The Events team marks an event as big (round 2026-11-10): Comms advertises it weeks ahead. */
+export const setEventBig = defineAction(z.object({ event_id: uuid, big: z.boolean() }), async (ctx, i) => {
+  requireRole(ctx, "events");
+  const { error, count } = await ctx.supabase.from("events").update({ big: i.big }, { count: "exact" }).eq("id", i.event_id);
+  dbError(error);
+  if (!count) throw notFound();
+}, { revalidate: [PAGES.eventsTeam, PAGES.event, PAGES.comms, PAGES.schedule, PAGES.pretix] });
+
 export const openForm = defineAction(z.object({ cycle_id: uuid, closes_at: localDateTime }), async (ctx, i) => {
   requireRole(ctx, "events");
   dbError((await ctx.supabase.rpc("open_volunteer_form", { cycle: i.cycle_id, closes_at: i.closes_at })).error);
