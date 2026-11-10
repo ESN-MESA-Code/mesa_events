@@ -182,6 +182,19 @@ export async function createEvent(setup: EventSetup = {}) {
   return event;
 }
 
+/**
+ * Sets the event types' default pictures aside (the demo data has mock ones,
+ * lib/staging/pictures.ts) and returns how to put them back: for tests whose
+ * Telegram posts must go out as plain text, on a database that holds the demo.
+ */
+export async function setAsideTypePictures(): Promise<() => Promise<void>> {
+  const { data } = await admin.from("advertising_pictures").select("event_type, picture").not("event_type", "is", null);
+  if (data?.length) check(await admin.from("advertising_pictures").delete().not("event_type", "is", null), "type pictures aside");
+  return async () => {
+    if (data?.length) check(await admin.from("advertising_pictures").upsert(data, { onConflict: "event_type" }), "type pictures back");
+  };
+}
+
 export async function deleteEvent(id: string) {
   await admin.from("events").delete().eq("id", id);
 }

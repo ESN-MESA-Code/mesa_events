@@ -147,7 +147,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
     await page.locator("#f-esnGoal").fill("Bring internationals and locals together over a quiz night.");
     await waitSaved(page);
     await expect(page.getByTestId("char-counter")).toContainText("/ 4,096");
-    await expect(page.getByTestId("preview")).toContainText("Are you ready for a night of trivia? 🎉");
+    await expect(page.getByTestId("preview")).toContainText("are you ready for a night of trivia? 🎉");
     await page.getByRole("button", { name: "Submit for Comms review" }).click();
     await expect(page.getByTestId("description-status")).toHaveText("Waiting for Comms review");
   });

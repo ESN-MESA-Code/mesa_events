@@ -4,7 +4,7 @@
 // (unapproved, TBA); manual channels; the status per event and channel;
 // posts weeks before an event of a later month (round 2026-11-02).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { USERS, admin, as, createEvent, hoursFromNow } from "../helpers/local";
+import { USERS, admin, as, createEvent, hoursFromNow, setAsideTypePictures } from "../helpers/local";
 import { actionContext } from "./actionContext";
 import * as P from "@/lib/actions/publishing";
 import { runDueJobs, type JobDeps } from "@/lib/jobs/runner";
@@ -33,6 +33,8 @@ let tba: string;
 let free: string;
 const created: string[] = [];
 const posts: string[] = [];
+// These posts go out as text: no default picture for their events' type meanwhile.
+let restorePictures: () => Promise<void> = async () => {};
 
 async function post(channel: string, events: string[], h = 48) {
   const r = await P.createPost(await actionContext(USERS.comms), { channel, day: day(h), time: "10:00", event_ids: events });
@@ -52,6 +54,7 @@ const tgMessages = async (id: string) => {
 };
 
 beforeAll(async () => {
+  restorePictures = await setAsideTypePictures();
   const make = async (title: string, status: string, price = "5") => {
     const e = await createEvent({ title, starts_at: hoursFromNow(24 * 6), oc: USERS.oc, helpers: [USERS.helper] });
     created.push(e.id);
@@ -65,6 +68,7 @@ beforeAll(async () => {
   await admin.from("events").update({ chat_space_name: space }).eq("id", approved);
 });
 afterAll(async () => {
+  await restorePictures();
   const { data } = await admin.from("publication_posts").select("telegram").in("id", posts);
   for (const t of (data ?? []).map((d) => d.telegram as SentState | null).filter(Boolean)) {
     await admin.from("fake_telegram_messages").delete().eq("chat_id", t!.chatId).in("message_id", sentIds(t!));
@@ -166,7 +170,7 @@ describe("Telegram", () => {
     expect(p.link).toMatch(/^https:\/\/t\.me\/mesa_fake_channel\/\d+$/);
     let msgs = await tgMessages(tg);
     expect(msgs).toHaveLength(1);
-    expect(msgs[0].text.startsWith("<b>Pub approved</b>\n\n🗓️")).toBe(true);
+    expect(msgs[0].text.startsWith("<b>PUB APPROVED</b>\n\n🗓️")).toBe(true);
     const { data: chat } = await admin.from("fake_chat_messages").select("text").eq("space", space).like("text", "%on Telegram%");
     expect(chat).toEqual([{ text: `<users/all> 📢 Comms has published *Pub approved* on Telegram. <${p.link}|Open>` }]);
 
@@ -176,7 +180,7 @@ describe("Telegram", () => {
     await runJobs();
     msgs = await tgMessages(tg);
     expect(msgs).toEqual([expect.objectContaining({ edits: 1, deleted: false })]);
-    expect(msgs[0].text).toContain("Are you ready for a changed test?");
+    expect(msgs[0].text).toContain("are you ready for a changed test?");
     expect((await admin.from("fake_chat_messages").select("name").eq("space", space).like("text", "%on Telegram%")).data).toHaveLength(1);
   });
 
@@ -200,7 +204,7 @@ describe("Telegram", () => {
     await P.publishPostNow(await actionContext(USERS.comms), { post_id: id });
     await runJobs();
     const ms = await tgMessages(id);
-    expect(ms.map((m) => m.text.split("\n")[0])).toEqual(["<b>📅 This week</b>", "<b>Pub approved</b>", "<b>Pub free</b>"]);
+    expect(ms.map((m) => m.text.split("\n")[0])).toEqual(["<b>📅 This week</b>", "<b>PUB APPROVED</b>", "<b>PUB FREE</b>"]);
     expect(ms[1].text).toContain("💸 € 5.00");
     expect(ms[2].text).toContain("FREE");
     // Published again with the same messages: each is edited in place, none sent anew.

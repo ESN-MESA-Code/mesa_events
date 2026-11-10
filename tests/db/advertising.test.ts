@@ -137,8 +137,9 @@ describe("pictures per message and defaults", () => {
     ]);
     const { data: sent } = await admin.from("fake_telegram_messages").select("kind, text").eq("chat_id", tg.chatId).in("message_id", tg.messages.map((m) => m.photoMessageId!)).order("message_id");
     expect(sent!.map((m) => [m.kind, m.text.split("\n")[0]])).toEqual([
-      ["photo", `<b>Own picture ${tag}</b>`],
-      ["photo", `<b>Format picture ${tag}</b>`],
+      // The title in capitals (description layout B, 2026-11-08).
+      ["photo", `<b>OWN PICTURE ${tag}</b>`],
+      ["photo", `<b>FORMAT PICTURE ${tag}</b>`],
     ]);
     // The post's upload is gone once it is out; the default stays.
     expect((await admin.storage.from("post-pictures").list(r.data.id)).data).toEqual([]);
