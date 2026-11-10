@@ -138,6 +138,22 @@ export function IdeaForm({
       data-testid="idea-form"
     >
       <Group title="What">
+        {/* Which earlier event this runs again, above the title it named (round 2026-11-10). */}
+        {source && (
+          <div className="flex items-start gap-2 rounded-lg border border-esn/30 bg-esn/5 px-3 py-2 text-sm" data-testid="idea-rerun">
+            <span aria-hidden className="mt-px text-esn">
+              ↻
+            </span>
+            <p className="min-w-0 flex-1 text-gray-700">
+              {formatId ? "A new run of " : "Again: "}
+              <strong className="font-semibold text-gray-900">{source.name}</strong> <span className="text-gray-500">({runsNote(source)})</span>
+              {source.runs.length > 0 && <span className="block text-xs text-gray-500">Filled in from its last run – change anything you like.</span>}
+            </p>
+            <button type="button" className="shrink-0 text-xs font-semibold text-esn hover:underline" onClick={unlink}>
+              It&apos;s something new
+            </button>
+          </div>
+        )}
         <Field
           label="Title"
           htmlFor="idea-title"
@@ -155,21 +171,6 @@ export function IdeaForm({
             placeholder={earlier.length ? "e.g. Pub quiz in English – or search earlier events" : "e.g. Pub quiz in English"}
           />
         </Field>
-        {source && (
-          <div className="flex items-start gap-2 rounded-lg border border-esn/30 bg-esn/5 px-3 py-2 text-sm" data-testid="idea-rerun">
-            <span aria-hidden className="mt-px text-esn">
-              ↻
-            </span>
-            <p className="min-w-0 flex-1 text-gray-700">
-              {formatId ? "A new run of " : "Again: "}
-              <strong className="font-semibold text-gray-900">{source.name}</strong> <span className="text-gray-500">({runsNote(source)})</span>
-              {source.runs.length > 0 && <span className="block text-xs text-gray-500">Filled in from its last run – change anything you like.</span>}
-            </p>
-            <button type="button" className="shrink-0 text-xs font-semibold text-esn hover:underline" onClick={unlink}>
-              It&apos;s something new
-            </button>
-          </div>
-        )}
         <Field label="Pitch" htmlFor="idea-pitch" hint="What is it, why would internationals love it, rough costs?" error={e.pitch?.message}>
           <Textarea id="idea-pitch" rows={4} {...register("pitch")} />
         </Field>
