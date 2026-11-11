@@ -1,6 +1,6 @@
 // Internal events, office hours and the calendar subscription (round
-// 2026-10-30): HR plans by drag and drop (a kind onto a day, a member onto
-// the OC slot) and repeats a Tuesday Talk; the OC of an office hour counts
+// 2026-10-30): HR plans the calendar (a double-click on a day, a member
+// dragged onto the OC slot) and repeats a Tuesday Talk; the OC of an office hour counts
 // the cash box and the ESNcards and signs it off; a member signs up to an
 // internal event, sees the leaderboard and subscribes to the calendar.
 import { TEST_TAG, USERS, admin, as as asDb } from "../helpers/local";
@@ -12,31 +12,35 @@ const removeMonth = async (month: string) => {
   if (ids.length) await admin.from("internal_events").delete().in("id", ids);
 };
 
-test("HR plans a month by drag and drop and repeats a Tuesday Talk", async ({ page, as }) => {
+test("HR adds a date with a double-click, staffs it on the duty roster and repeats a Tuesday Talk", async ({ page, as }) => {
   const month = freshMonth();
   try {
     await as(USERS.hr);
     await page.goto(`/team/internal?view=month&month=${month}`);
-    await expect(page.getByTestId("kind-palette")).toBeVisible();
+    await expect(page.getByTestId("planner-toolbar")).toBeVisible();
 
-    // A kind onto a day: an office hour at its default time.
-    await drag(page, page.getByTestId("palette-office_hour"), page.getByTestId(`plan-day-${month}-10`));
+    // A double-click on a day offers the kinds (2026-11-11, instead of dragging one onto it): an office hour at its default time.
+    await page.getByTestId(`plan-day-${month}-10`).dblclick();
+    await page.getByTestId("add-menu").getByRole("menuitem", { name: /Office hour/ }).click();
     // The grid's chip (phones get a hidden list of the same days).
     const chip = page.getByTestId(`plan-office_hour-${month}-10`).filter({ visible: true });
     await expect(chip).toContainText("14:00");
     await expect(page.getByTestId("planner-editor")).toContainText("Office hour");
 
-    // A member onto its OC slot – in a tall window, away from the edges where dnd-kit scrolls the page.
+    // A member onto its OC slot, on the Duty roster tab (split 2026-11-11) – in a tall window, away from the edges where dnd-kit scrolls the page.
     await page.setViewportSize({ width: 1280, height: 2000 });
+    await page.getByTestId("tab-roster").click();
+    await expect(page).toHaveURL(new RegExp(`/team/internal/roster\\?view=month&month=${month}`));
     const row = page.getByTestId(`roster-office_hour-${month}-10`);
     await expect(row).toBeVisible();
     await drag(page, page.getByTestId(`member-${USERS.member.id}`), page.getByLabel(`Office hour ${month}-10 oc`));
     await expect(row).toContainText(USERS.member.name);
     await page.setViewportSize({ width: 1280, height: 720 });
 
-    // Repeat: the 1st Tuesday of the month.
+    // Repeat: the 1st Tuesday of the month – a button in the calendar's toolbar, the form in the side panel (2026-11-11).
+    await page.getByTestId("tab-calendar").click();
+    await page.getByRole("button", { name: "Repeat dates" }).click();
     const repeat = page.getByTestId("repeat");
-    await repeat.getByText("Repeat over").click(); // folded until needed (round 2026-11-03 (2))
     await repeat.getByLabel("Kind").selectOption("tuesday_talk");
     await expect(repeat.getByTestId("repeat-dates").locator("label")).toHaveCount(1);
     await repeat.getByRole("button", { name: /^Add 1 date$/ }).click();

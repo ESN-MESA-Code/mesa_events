@@ -1,26 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
-import { FoldCard } from "@/components/Fold";
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { ArrowRight, CalendarDays, Eye, MousePointerClick, Plus, Repeat2, Settings2, Users } from "lucide-react";
+import { Alert, Badge, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { useAction } from "@/components/ActionButton";
-import {
-  assignInternal,
-  createInternalEvent,
-  createInternalSeries,
-  deleteInternalEvent,
-  moveInternalPerson,
-  unassignInternal,
-  updateInternalEvent,
-  updateKindSettings,
-} from "@/app/actions/internal";
+import { createInternalEvent, createInternalSeries, deleteInternalEvent, updateInternalEvent, updateKindSettings } from "@/app/actions/internal";
 import { monthLabel } from "@/lib/dates";
 import { calendarWeeks, moveToDay } from "@/lib/month";
 import {
   INTERNAL_KINDS,
-  INTERNAL_KIND_CHIPS,
+  INTERNAL_KIND_DOTS,
   INTERNAL_KIND_LABELS,
   OCCURRENCE_LABELS,
   WEEKDAY_NAMES,
@@ -28,77 +19,47 @@ import {
   formatMinutes,
   hasPresentation,
   internalPath,
-  internalStaffing,
   isStaffed,
   repeatDates,
   takesSignUps,
   type InternalKind,
   type Occurrence,
 } from "@/lib/internal";
-import type { InternalPerson } from "@/lib/internalEvents";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
+import type { KindSetting, PlannerEvent } from "./planner";
+import { CHIP, GHOST, SHORT, STAFFING_DOT, STAFFING_TEXT, WEEKDAYS, dayLabel, staffingOf } from "./plannerFormat";
+import { Draggable, Drop, SidePanel } from "./plannerUi";
 
-export interface PlannerEvent {
-  id: string;
-  kind: InternalKind;
-  title: string;
-  /** Berlin datetime-local values. */
-  start: string;
-  end: string | null;
-  location: string;
-  note: string;
-  presentationUrl: string | null;
-  capacity: number | null;
-  helpersNeeded: number;
-  cancelled: boolean;
-  past: boolean;
-  seriesId: string | null;
-  people: InternalPerson[];
+type DragData = { type: "event"; event: PlannerEvent };
+
+/** The add menu: on a day (right-click, double-click, double-tap), or with a date field ("+ Add date"). */
+interface AddAt {
+  day: string | null;
+  x: number;
+  y: number;
 }
 
-export interface KindSetting {
+/** What the side panel shows: a date, "Repeat dates" or the defaults per kind. */
+type Panel = { type: "event"; id: string } | { type: "repeat" } | { type: "defaults" } | null;
+
+/** The dates "Repeat" would add, drawn dashed on the calendar while its panel is open. */
+interface Preview {
   kind: InternalKind;
-  title: string;
-  /** "19:00" */
+  days: string[];
   start: string;
-  minutes: number;
-  helpers: number;
-  description: string;
 }
 
-type DragData =
-  | { type: "kind"; kind: InternalKind }
-  | { type: "event"; event: PlannerEvent }
-  | { type: "member"; profileId: string; name: string }
-  | { type: "person"; personId: string; name: string };
-
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const OCCURRENCES: Occurrence[] = ["every", 1, 2, 3, 4, "last"];
 
-function Draggable({ id, data, disabled, children, className }: { id: string; data: DragData; disabled: boolean; children: React.ReactNode; className?: string }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data, disabled });
-  return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={cn(className, !disabled && "cursor-grab touch-none active:cursor-grabbing", isDragging && "opacity-40")}>
-      {children}
-    </div>
-  );
-}
-
-function Drop({ id, disabled, className, over, children, label, testId }: { id: string; disabled: boolean; className?: string; over: string; children: React.ReactNode; label?: string; testId?: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id, disabled });
-  return (
-    <div ref={setNodeRef} aria-label={label} data-testid={testId} className={cn(className, isOver && over)}>
-      {children}
-    </div>
-  );
-}
-
 /**
- * The internal planner: months as calendars (a whole semester, or one month),
- * a palette of kinds to drag onto days, dates to drag to other days, the
- * OC and helper slots of Stammtisch and office hours to drag members onto,
- * "Repeat" over the semester and the defaults per kind.
+ * The Calendar tab of the internal planning (redesign 2026-11-11): the months
+ * across the full width (a whole semester, or one month) under a toolbar with
+ * "+ Add date", "Repeat dates", "Defaults" and which kinds to show. A
+ * right-click, double-click or double-tap on a day offers the kinds to add
+ * there (it replaced dragging kinds onto days); dates move by drag and drop. A
+ * date, the repeat form or the defaults open in a panel that slides in from
+ * the right. Who is on duty is the Duty roster tab.
  */
 export function PlannerBoard({
   months,
@@ -107,8 +68,9 @@ export function PlannerBoard({
   period,
   events,
   kinds,
-  members,
   canEdit,
+  openId,
+  rosterHref,
 }: {
   months: string[];
   compact: boolean;
@@ -116,18 +78,34 @@ export function PlannerBoard({
   period: { label: string; from: string; to: string };
   events: PlannerEvent[];
   kinds: KindSetting[];
-  members: Array<{ id: string; name: string }>;
   canEdit: boolean;
+  /** ?date=: the date to open (the "Next up" figure, a date on the roster). */
+  openId: string | null;
+  /** The Duty roster tab for this period. */
+  rosterHref: string;
 }) {
   const { run, pending, error } = useAction();
   const [active, setActive] = useState<DragData | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel>(openId ? { type: "event", id: openId } : null);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [shown, setShown] = useState<Set<InternalKind>>(new Set(INTERNAL_KINDS));
+  const [menu, setMenu] = useState<AddAt | null>(null);
+  const lastTap = useRef<{ day: string; t: number } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  // A new ?date= (a link on this page) opens that date.
+  const [seenOpen, setSeenOpen] = useState(openId);
+  if (openId !== seenOpen) {
+    setSeenOpen(openId);
+    if (openId) setPanel({ type: "event", id: openId });
+  }
+  const close = useCallback(() => setPanel(null), []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const kindOf = useMemo(() => new Map(kinds.map((k) => [k.kind, k])), [kinds]);
   const visible = events.filter((e) => shown.has(e.kind));
   const onDay = (day: string) => visible.filter((e) => e.start.slice(0, 10) === day);
+  const selected = panel?.type === "event" ? panel.id : null;
   const current = events.find((e) => e.id === selected) ?? null;
+  const ghosts = panel?.type === "repeat" && preview ? new Set(preview.days) : null;
 
   function onDragStart(e: DragStartEvent) {
     setActive((e.active.data.current as DragData) ?? null);
@@ -137,175 +115,360 @@ export function PlannerBoard({
     setActive(null);
     const data = e.active.data.current as DragData | undefined;
     const target = e.over?.id ? String(e.over.id) : null;
-    if (!data || !target) return;
-    if (/^m?day:/.test(target)) {
-      const day = target.slice(target.indexOf(":") + 1);
-      if (data.type === "kind") {
-        const k = kindOf.get(data.kind)!;
-        const t = defaultTimes(day, k.start, k.minutes);
-        run(createInternalEvent, { kind: data.kind, starts_at: t.start, ends_at: t.end }, (r) => setSelected(r.id));
-      } else if (data.type === "event" && data.event.start.slice(0, 10) !== day) {
-        const moved = moveToDay(data.event.start, data.event.end, day);
-        run(updateInternalEvent, { id: data.event.id, starts_at: moved.start, ends_at: moved.end });
-      }
-      return;
-    }
-    if (target === "pool") {
-      if (data.type === "person") run(unassignInternal, { person_id: data.personId });
-      return;
-    }
-    if (target.startsWith("slot:")) {
-      const [, eventId, role] = target.split(":");
-      if (data.type === "member") run(assignInternal, { internal_event_id: eventId, profile_id: data.profileId, role });
-      else if (data.type === "person") run(moveInternalPerson, { person_id: data.personId, internal_event_id: eventId, role });
+    if (!data || !target || !/^m?day:/.test(target)) return;
+    const day = target.slice(target.indexOf(":") + 1);
+    if (data.event.start.slice(0, 10) !== day) {
+      const moved = moveToDay(data.event.start, data.event.end, day);
+      run(updateInternalEvent, { id: data.event.id, starts_at: moved.start, ends_at: moved.end });
     }
   }
 
-  const chip = (ev: PlannerEvent) => (
-    <Draggable key={ev.id} id={`event:${ev.id}`} data={{ type: "event", event: ev }} disabled={!canEdit || ev.past || pending}>
-      <button
-        type="button"
-        onClick={() => setSelected(ev.id)}
-        className={cn(
-          "block w-full rounded border px-1 py-0.5 text-left leading-tight",
-          compact ? "text-[10px]" : "text-[11px]",
-          ev.cancelled ? "border-gray-200 bg-gray-50 text-gray-400 line-through" : INTERNAL_KIND_CHIPS[ev.kind],
-          selected === ev.id && "ring-2 ring-esn"
-        )}
-        data-testid={`plan-${ev.kind}-${ev.start.slice(0, 10)}`}
-        title={`${ev.title} – ${ev.start.slice(11)}`}
-      >
-        <span className="font-semibold tabular-nums">{ev.start.slice(11)}</span> <span className="break-words">{compact ? ev.title.slice(0, 18) : ev.title}</span>
-        {isStaffed(ev.kind) && !ev.cancelled && internalStaffing(ev.people.some((p) => p.role === "oc"), ev.people.filter((p) => p.role === "helper").length, ev.helpersNeeded) !== "staffed" && (
-          <span className="ml-0.5 text-amber-700" aria-label="Not fully staffed">
-            ●
-          </span>
-        )}
-      </button>
-    </Draggable>
-  );
+  /** A date of `kind` on `day` at the kind's default time; it opens in the panel. */
+  function add(kind: InternalKind, day: string) {
+    const k = kindOf.get(kind)!;
+    const t = defaultTimes(day, k.start, k.minutes);
+    setMenu(null);
+    run(createInternalEvent, { kind, starts_at: t.start, ends_at: t.end }, (r) => setPanel({ type: "event", id: r.id }));
+  }
 
-  const monthGrid = (month: string) => (
-    <section key={month} aria-label={monthLabel(month)} data-testid={`plan-month-${month.slice(0, 7)}`}>
-      <h2 className="mb-1 text-sm font-semibold text-gray-800">{monthLabel(month)}</h2>
-      <div className="hidden sm:block">
-        <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase text-gray-500">
-          {WEEKDAYS.map((d) => (
-            <span key={d}>{d}</span>
-          ))}
+  /** Right-click, double-click or double-tap on a coming day offers the kinds to add (not on a date itself: that opens it). */
+  const onChip = (e: React.SyntheticEvent) => !!(e.target as Element).closest("button");
+  const dayHandlers = (day: string) =>
+    canEdit && day >= today
+      ? {
+          onContextMenu: (e: React.MouseEvent) => {
+            e.preventDefault();
+            setMenu({ day, x: e.clientX, y: e.clientY });
+          },
+          onDoubleClick: (e: React.MouseEvent) => {
+            if (!onChip(e)) setMenu({ day, x: e.clientX, y: e.clientY });
+          },
+          onPointerUp: (e: React.PointerEvent) => {
+            if (e.pointerType !== "touch" || onChip(e)) return;
+            const last = lastTap.current;
+            if (last && last.day === day && e.timeStamp - last.t < 400) {
+              lastTap.current = null;
+              setMenu({ day, x: e.clientX, y: e.clientY });
+            } else lastTap.current = { day, t: e.timeStamp };
+          },
+        }
+      : undefined;
+
+  function toggleKind(k: InternalKind) {
+    setShown((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
+
+  const chip = (ev: PlannerEvent) => {
+    const staffing = isStaffed(ev.kind) && !ev.cancelled ? staffingOf(ev) : "staffed";
+    return (
+      <Draggable key={ev.id} id={`event:${ev.id}`} data={{ type: "event", event: ev }} disabled={!canEdit || ev.past || pending}>
+        <button
+          type="button"
+          onClick={() => setPanel({ type: "event", id: ev.id })}
+          className={cn(
+            "relative block w-full rounded-md border-0 border-l-[3px] py-0.5 pl-1.5 pr-1 text-left leading-tight transition-colors",
+            compact ? "text-[10.5px]" : "text-xs",
+            ev.cancelled ? "border-gray-300 bg-gray-50 text-gray-400 line-through" : CHIP[ev.kind],
+            ev.past && !ev.cancelled && "opacity-60",
+            selected === ev.id && "ring-2 ring-esn ring-offset-1"
+          )}
+          data-testid={`plan-${ev.kind}-${ev.start.slice(0, 10)}`}
+          title={`${ev.title} – ${ev.start.slice(11)}${staffing !== "staffed" ? ` (${STAFFING_TEXT[staffing]})` : ""}`}
+        >
+          {compact ? (
+            <>
+              <span className="block font-semibold tabular-nums">{ev.start.slice(11)}</span>
+              <span className="block truncate">{ev.title}</span>
+            </>
+          ) : (
+            <span className="flex min-w-0 items-baseline gap-1">
+              <span className="shrink-0 font-semibold tabular-nums">{ev.start.slice(11)}</span>
+              <span className="truncate">{ev.title}</span>
+            </span>
+          )}
+          {staffing !== "staffed" && <span className={cn("absolute right-1 top-1 size-1.5 rounded-full", STAFFING_DOT[staffing])} aria-label={STAFFING_TEXT[staffing]} />}
+        </button>
+      </Draggable>
+    );
+  };
+
+  /** A date "Repeat" would add (not a date yet: no test id, not clickable). */
+  const ghost = (day: string) =>
+    ghosts?.has(day) && preview ? (
+      <div aria-hidden="true" className={cn("rounded-md border border-dashed bg-white/70 px-1.5 py-0.5 leading-tight", compact ? "text-[10.5px]" : "text-xs", GHOST[preview.kind])}>
+        <span className="font-semibold tabular-nums">+ {preview.start}</span>
+        {!compact && <span> {SHORT[preview.kind]}</span>}
+      </div>
+    ) : null;
+
+  const monthGrid = (month: string) => {
+    const count = visible.filter((e) => e.start.slice(0, 7) === month.slice(0, 7) && !e.cancelled).length;
+    return (
+      <section key={month} aria-label={monthLabel(month)} data-testid={`plan-month-${month.slice(0, 7)}`}>
+        <div className="mb-2 flex items-baseline gap-2">
+          <h3 className="text-sm font-semibold text-gray-900">{monthLabel(month)}</h3>
+          <span className="text-xs text-gray-400">{count ? plural(count, "date") : "nothing planned"}</span>
         </div>
-        <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+        <div className="hidden sm:block">
+          <div className="grid grid-cols-7 gap-1 pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            {WEEKDAYS.map((d) => (
+              <span key={d}>{compact ? d.slice(0, 2) : d}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {calendarWeeks(month)
+              .flat()
+              .map((day, i) => {
+                if (!day) return <div key={`blank-${month}-${i}`} aria-hidden="true" />;
+                const past = day < today;
+                const weekend = i % 7 >= 5;
+                return (
+                  <Drop
+                    key={day}
+                    id={`day:${day}`}
+                    disabled={!canEdit || past}
+                    label={day}
+                    testId={`plan-day-${day}`}
+                    handlers={dayHandlers(day)}
+                    over="border-esn bg-esn/10 ring-1 ring-esn"
+                    className={cn(
+                      "select-none space-y-0.5 rounded-lg border p-1 transition-colors",
+                      compact ? "min-h-[4.5rem]" : "min-h-28",
+                      past ? "border-transparent bg-gray-50" : weekend ? "border-gray-200 bg-gray-50/60" : "border-gray-200 bg-white",
+                      active && !past && canEdit && "border-dashed border-esn/40",
+                      menu?.day === day && "border-esn ring-1 ring-esn"
+                    )}
+                  >
+                    <p className="flex">
+                      <span
+                        className={cn(
+                          "inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums",
+                          day === today ? "bg-esn text-white" : past ? "text-gray-300" : "text-gray-500"
+                        )}
+                      >
+                        {Number(day.slice(8))}
+                      </span>
+                    </p>
+                    {onDay(day).map(chip)}
+                    {ghost(day)}
+                  </Drop>
+                );
+              })}
+          </div>
+        </div>
+        {/* Phones: the days with dates, plus drop targets while dragging (their own ids – a hidden twin of a grid day would take the drop). */}
+        <ol className="space-y-1.5 sm:hidden">
           {calendarWeeks(month)
             .flat()
-            .map((day, i) =>
-              day ? (
-                <Drop
-                  key={day}
-                  id={`day:${day}`}
-                  disabled={!canEdit || day < today}
-                  label={day}
-                  testId={`plan-day-${day}`}
-                  over="border-esn bg-esn/10"
-                  className={cn("rounded border p-0.5 space-y-0.5", compact ? "min-h-14" : "min-h-24", day < today ? "border-gray-100 bg-gray-50" : "border-gray-200 bg-white")}
-                >
-                  <p className={cn("text-[10px] font-semibold tabular-nums", day === today ? "text-esn" : "text-gray-400")}>{Number(day.slice(8))}</p>
-                  {onDay(day).map(chip)}
+            .filter((d): d is string => !!d && (onDay(d).length > 0 || !!ghosts?.has(d) || (!!active && d >= today)))
+            .map((day) => (
+              <li key={day}>
+                <Drop id={`mday:${day}`} disabled={!canEdit || day < today} handlers={dayHandlers(day)} over="border-esn bg-esn/10" className={cn("flex gap-3 rounded-lg border border-gray-200 p-2", day < today ? "bg-gray-50" : "bg-white")}>
+                  <span className={cn("w-20 shrink-0 pt-0.5 text-xs font-medium tabular-nums", day === today ? "text-esn" : "text-gray-500")}>{dayLabel(day)}</span>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {onDay(day).map(chip)}
+                    {ghost(day)}
+                  </div>
                 </Drop>
-              ) : (
-                <div key={`blank-${month}-${i}`} aria-hidden="true" />
-              )
-            )}
-        </div>
-      </div>
-      {/* Phones: the days with dates, plus drop targets while dragging (their own ids – a hidden twin of a grid day would take the drop). */}
-      <ol className="space-y-1 sm:hidden">
-        {calendarWeeks(month)
-          .flat()
-          .filter((d): d is string => !!d && (onDay(d).length > 0 || (!!active && d >= today)))
-          .map((day) => (
-            <li key={day}>
-              <Drop id={`mday:${day}`} disabled={!canEdit || day < today} over="border-esn bg-esn/10" className="flex gap-2 rounded border border-gray-200 bg-white p-1">
-                <span className="w-16 shrink-0 text-xs tabular-nums text-gray-500">{day.slice(8)}.{day.slice(5, 7)}.</span>
-                <div className="flex-1 space-y-0.5">{onDay(day).map(chip)}</div>
-              </Drop>
-            </li>
-          ))}
-      </ol>
-    </section>
+              </li>
+            ))}
+          {!visible.some((e) => e.start.slice(0, 7) === month.slice(0, 7)) && !active && !ghosts?.size && <li className="text-xs text-gray-400">Nothing planned.</li>}
+        </ol>
+      </section>
+    );
+  };
+
+  const toolButton = (type: "repeat" | "defaults", icon: React.ReactNode, label: string) => (
+    <button
+      type="button"
+      aria-pressed={panel?.type === type}
+      onClick={() => setPanel(panel?.type === type ? null : { type })}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+        panel?.type === type ? "border-esn bg-esn text-white" : "border-gray-300 bg-white text-gray-700 hover:border-esn/40 hover:text-esn"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 
   return (
     <DndContext id="internal-planner" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       {error && (
-        <Alert tone="error" className="mb-3" role="alert">
+        <Alert tone="error" className="mb-4" role="alert">
           {error}
         </Alert>
       )}
-      <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="kind-palette">
-        {canEdit && <span className="text-xs text-gray-600">Drag onto a day:</span>}
-        {INTERNAL_KINDS.map((k) => (
-          <div key={k} className="flex items-center gap-1">
-            {canEdit && (
-              <Draggable id={`kind:${k}`} data={{ type: "kind", kind: k }} disabled={pending} className={cn("rounded border px-2 py-1 text-xs font-medium", INTERNAL_KIND_CHIPS[k])}>
-                <span data-testid={`palette-${k}`}>+ {INTERNAL_KIND_LABELS[k]}</span>
-              </Draggable>
-            )}
-            <label className="flex items-center gap-1 text-[11px] text-gray-500" title={`Show ${INTERNAL_KIND_LABELS[k]}`}>
-              <input
-                type="checkbox"
-                checked={shown.has(k)}
-                aria-label={`Show ${INTERNAL_KIND_LABELS[k]}`}
-                onChange={(e) =>
-                  setShown((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(k);
-                    else next.delete(k);
-                    return next;
-                  })
-                }
-              />
-              {!canEdit && INTERNAL_KIND_LABELS[k]}
-            </label>
-          </div>
-        ))}
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card className="p-3">
-          <div className={cn("grid gap-5", compact && "xl:grid-cols-2")} data-testid="planner-calendar">
-            {months.map(monthGrid)}
-          </div>
-          {canEdit && <p className="mt-3 text-xs text-gray-500">Drag a kind from above onto a day to add it (its default time), a date to another day to move it. Click a date to edit it. ● = OC or helpers missing.</p>}
-        </Card>
-        <div className="space-y-4 lg:sticky lg:top-4 lg:h-fit">
-          {current ? (
-            <Editor key={`${current.id}-${current.start}-${current.cancelled}`} ev={current} canEdit={canEdit} onClose={() => setSelected(null)} />
-          ) : (
-            <Card className="p-4 text-sm text-gray-500">Click a date in the calendar to see and edit it.</Card>
+      <div className="relative rounded-2xl border border-gray-200 bg-white shadow-sm">
+        {/* Toolbar: sticks while the semester scrolls by (not on phones, where it would take a quarter of the screen). */}
+        <div className="z-20 flex flex-col gap-2 rounded-t-2xl border-b border-gray-100 bg-white/95 px-4 py-3 backdrop-blur sm:sticky sm:top-0" data-testid="planner-toolbar">
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-auto flex items-center gap-1.5 text-xs text-gray-500">
+                <MousePointerClick className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="hidden sm:inline">Right-click or double-click a day to add a date</span>
+                  <span className="sm:hidden">Double-tap a day to add a date</span>
+                  <span className="hidden md:inline"> · drag a date to move it</span>
+                </span>
+              </span>
+              <span className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setMenu(menu?.day === null ? null : { day: null, x: r.left, y: r.bottom + 4 });
+                  }}
+                  aria-expanded={menu?.day === null}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-esn bg-esn px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-esn-dark"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add date
+                </button>
+                {toolButton("repeat", <Repeat2 className="size-3.5" aria-hidden="true" />, "Repeat dates")}
+                {toolButton("defaults", <Settings2 className="size-3.5" aria-hidden="true" />, "Defaults")}
+              </span>
+            </div>
           )}
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show kinds">
+            <span className="mr-1 flex items-center gap-1 text-xs font-medium text-gray-500">
+              <Eye className="size-3.5" aria-hidden="true" />
+              Show
+            </span>
+            {INTERNAL_KINDS.map((k) => {
+              const on = shown.has(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`Show ${INTERNAL_KIND_LABELS[k]}`}
+                  onClick={() => toggleKind(k)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                    on ? "border-gray-200 bg-white text-gray-700 hover:bg-gray-50" : "border-dashed border-gray-300 bg-transparent text-gray-400 hover:text-gray-600"
+                  )}
+                >
+                  <span className={cn("size-2 rounded-full", on ? INTERNAL_KIND_DOTS[k] : "bg-gray-300")} aria-hidden="true" />
+                  {SHORT[k]}
+                </button>
+              );
+            })}
+            <span className="ml-auto hidden items-center gap-3 text-[11px] text-gray-500 md:flex">
+              <span className="flex items-center gap-1">
+                <span className="size-1.5 rounded-full bg-red-500" /> no OC
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="size-1.5 rounded-full bg-amber-500" /> helpers missing
+              </span>
+            </span>
+          </div>
         </div>
+        <div className={cn("grid grid-cols-1 gap-x-8 gap-y-8 p-4", compact && "lg:grid-cols-2")} data-testid="planner-calendar">
+          {months.map(monthGrid)}
+        </div>
+        {canEdit && (
+          <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
+            Right-click or double-click a day (double-tap on a phone) to add a date at its kind&apos;s default time; drag a date to another day to move it; click it to edit it.
+          </p>
+        )}
       </div>
 
-      <Roster events={events.filter((e) => isStaffed(e.kind) && !e.cancelled && !e.past && shown.has(e.kind))} members={members} canEdit={canEdit} period={period.label} />
-
-      {canEdit && (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Repeat kinds={kinds} events={events} period={period} />
-          <Settings kinds={kinds} />
-        </div>
-      )}
+      {menu && <AddMenu key={`${menu.day}-${menu.x}-${menu.y}`} at={menu} kinds={kinds} today={today} onPick={add} onClose={closeMenu} />}
+      {current && <Editor key={`${current.id}-${current.start}-${current.cancelled}`} ev={current} canEdit={canEdit} onClose={close} rosterHref={rosterHref} />}
+      {canEdit && panel?.type === "repeat" && <RepeatPanel key={period.label} kinds={kinds} events={events} period={period} onPreview={setPreview} onClose={close} />}
+      {canEdit && panel?.type === "defaults" && <DefaultsPanel kinds={kinds} onClose={close} />}
 
       <DragOverlay>
-        {active?.type === "kind" && <Badge tone="blue">+ {INTERNAL_KIND_LABELS[active.kind]}</Badge>}
-        {active?.type === "event" && <Badge tone="blue">{active.event.title}</Badge>}
-        {(active?.type === "member" || active?.type === "person") && <Badge tone="blue">{active.name}</Badge>}
+        {active && <Badge tone="blue">{active.event.title}</Badge>}
       </DragOverlay>
     </DndContext>
   );
 }
 
-/** One date: details, cancel or restore, delete (also the rest of its series). */
-function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; onClose: () => void }) {
+/**
+ * The kinds to add on a day, each at its default time – where the day was
+ * right-clicked, double-clicked or double-tapped; with a date field from
+ * "+ Add date". Arrow keys move, Esc or a click elsewhere closes it.
+ */
+function AddMenu({ at, kinds, today, onPick, onClose }: { at: AddAt; kinds: KindSetting[]; today: string; onPick: (kind: InternalKind, day: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [day, setDay] = useState(at.day ?? today);
+  // Inside the window, where the pointer was.
+  const [pos] = useState(() => ({ left: Math.max(8, Math.min(at.x, window.innerWidth - 248)), top: Math.max(8, Math.min(at.y, window.innerHeight - (at.day ? 290 : 340))) }));
+
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>(at.day ? "[role=menuitem]" : "input")?.focus();
+    const away = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", key);
+    window.addEventListener("resize", onClose);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [at.day, onClose]);
+
+  function move(e: React.KeyboardEvent) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = Array.from(ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+  }
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={`Add a date on ${dayLabel(day)}`}
+      onKeyDown={move}
+      onContextMenu={(e) => e.preventDefault()}
+      className="fixed z-[60] w-60 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5"
+      style={pos}
+      data-testid="add-menu"
+    >
+      {at.day ? (
+        <p className="px-2 pb-1.5 pt-1 text-xs font-semibold text-gray-500">Add on {dayLabel(day)}</p>
+      ) : (
+        <label className="block px-2 pb-2 pt-1 text-xs font-semibold text-gray-500">
+          Add on
+          <Input type="date" min={today} value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="mt-1 h-8 py-1" />
+        </label>
+      )}
+      {kinds.map((k) => (
+        <button
+          key={k.kind}
+          type="button"
+          role="menuitem"
+          disabled={day < today}
+          onClick={() => onPick(k.kind, day)}
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-gray-800 hover:bg-gray-100 focus:bg-esn/10 focus:outline-none disabled:opacity-40"
+        >
+          <span className={cn("size-2.5 shrink-0 rounded-full", INTERNAL_KIND_DOTS[k.kind])} aria-hidden="true" />
+          <span className="flex-1">{SHORT[k.kind]}</span>
+          <span className="text-xs tabular-nums text-gray-400">{k.start}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** One date, in the side panel: details, who is on it, cancel or restore, delete (also the rest of its series). */
+function Editor({ ev, canEdit, onClose, rosterHref }: { ev: PlannerEvent; canEdit: boolean; onClose: () => void; rosterHref: string }) {
   const { run, pending, error, confirm } = useAction();
   const [f, setF] = useState({
     title: ev.title,
@@ -320,88 +483,42 @@ function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
   const disabled = !canEdit || pending;
   const attendees = ev.people.filter((p) => p.role === "attendee");
+  const oc = ev.people.find((p) => p.role === "oc");
+  const helpers = ev.people.filter((p) => p.role === "helper");
+  const staffing = isStaffed(ev.kind) && !ev.cancelled ? staffingOf(ev) : null;
   return (
-    <Card data-testid="planner-editor">
-      <CardHeader>
-        <CardTitle className="text-base">{INTERNAL_KIND_LABELS[ev.kind]}</CardTitle>
-        <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-900" aria-label="Close">
-          ✕
-        </button>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(updateInternalEvent, {
-              id: ev.id,
-              title: f.title,
-              starts_at: f.start,
-              ends_at: f.end || null,
-              location: f.location,
-              note: f.note,
-              ...(hasPresentation(ev.kind) ? { presentation_url: f.presentation_url } : {}),
-              ...(takesSignUps(ev.kind) ? { capacity: f.capacity ? Number(f.capacity) : null } : {}),
-              ...(isStaffed(ev.kind) ? { helpers_needed: Number(f.helpers) } : {}),
-            });
-          }}
-        >
-          <Field label="Title" htmlFor="ie-title">
-            <Input id="ie-title" value={f.title} onChange={set("title")} disabled={disabled} maxLength={200} />
-          </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Starts" htmlFor="ie-start">
-              <Input id="ie-start" type="datetime-local" value={f.start} onChange={set("start")} disabled={disabled} />
-            </Field>
-            <Field label="Ends" htmlFor="ie-end">
-              <Input id="ie-end" type="datetime-local" value={f.end} onChange={set("end")} disabled={disabled} />
-            </Field>
-          </div>
-          <Field label="Where" htmlFor="ie-location">
-            <Input id="ie-location" value={f.location} onChange={set("location")} disabled={disabled} maxLength={300} />
-          </Field>
-          {hasPresentation(ev.kind) && (
-            <Field label="Presentation (link)" htmlFor="ie-pres" hint="Google Slides, Canva … (https://)">
-              <Input id="ie-pres" type="url" value={f.presentation_url} onChange={set("presentation_url")} disabled={disabled} placeholder="https://" />
-            </Field>
-          )}
-          {takesSignUps(ev.kind) && (
-            <Field label="Places (empty: no limit)" htmlFor="ie-cap">
-              <Input id="ie-cap" type="number" min={1} value={f.capacity} onChange={set("capacity")} disabled={disabled} />
-            </Field>
-          )}
-          {isStaffed(ev.kind) && (
-            <Field label="Helpers needed" htmlFor="ie-helpers">
-              <Input id="ie-helpers" type="number" min={0} max={20} value={f.helpers} onChange={set("helpers")} disabled={disabled} />
-            </Field>
-          )}
-          <Field label="Note (optional)" htmlFor="ie-note">
-            <Textarea id="ie-note" rows={2} value={f.note} onChange={set("note")} disabled={disabled} maxLength={2000} />
-          </Field>
-          {canEdit && (
-            <Button type="submit" size="sm" disabled={pending}>
+    <SidePanel
+      label={`${ev.title} on ${dayLabel(ev.start.slice(0, 10))}`}
+      testId="planner-editor"
+      onClose={onClose}
+      icon={<span className={cn("mt-1 size-3 shrink-0 rounded-full", INTERNAL_KIND_DOTS[ev.kind])} aria-hidden="true" />}
+      eyebrow={INTERNAL_KIND_LABELS[ev.kind]}
+      title={ev.title}
+      meta={
+        <p className="flex flex-wrap items-center gap-2">
+          <CalendarDays className="size-4 text-gray-400" aria-hidden="true" />
+          <span className="tabular-nums">
+            {dayLabel(ev.start.slice(0, 10))} · {ev.start.slice(11)}
+            {ev.end && ev.end.slice(0, 10) === ev.start.slice(0, 10) ? `–${ev.end.slice(11)}` : ""}
+          </span>
+          {ev.cancelled && <Badge tone="red">Cancelled</Badge>}
+          {ev.past && !ev.cancelled && <Badge>Past</Badge>}
+        </p>
+      }
+      footer={
+        canEdit && (
+          <>
+            <Button type="submit" form={`ie-form-${ev.id}`} size="sm" disabled={pending}>
               Save
             </Button>
-          )}
-        </form>
-        {takesSignUps(ev.kind) && (
-          <p className="mt-3 text-xs text-gray-600">
-            {attendees.length ? `Signed up: ${attendees.map((a) => a.name).join(", ")}` : "Nobody signed up yet."}
-          </p>
-        )}
-        {isStaffed(ev.kind) && <p className="mt-3 text-xs text-gray-600">Assign the OC and helpers in the roster below.</p>}
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-          <Link href={internalPath(ev.kind, ev.id)} className="text-sm text-esn hover:underline">
-            Open its page →
-          </Link>
-          {canEdit && (
-            <>
-              <Button size="sm" variant="outline" disabled={pending} onClick={() => run(updateInternalEvent, { id: ev.id, status: ev.cancelled ? "scheduled" : "cancelled" })}>
-                {ev.cancelled ? "Restore" : "Cancel date"}
-              </Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(updateInternalEvent, { id: ev.id, status: ev.cancelled ? "scheduled" : "cancelled" })}>
+              {ev.cancelled ? "Restore" : "Cancel date"}
+            </Button>
+            <span className="ml-auto flex gap-2">
               <Button
                 size="sm"
-                variant="destructive"
+                variant="ghost"
+                className="text-red-600 hover:bg-red-50 hover:text-red-700"
                 disabled={pending}
                 onClick={async () => {
                   if (await confirm({ title: `Delete ${ev.title} on ${ev.start.slice(0, 10)}?`, body: "Its OC and helpers are removed with it. To keep it visible as cancelled, use “Cancel date”.", confirmLabel: "Delete", danger: true }))
@@ -413,7 +530,8 @@ function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; 
               {ev.seriesId && (
                 <Button
                   size="sm"
-                  variant="destructive"
+                  variant="ghost"
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
                   disabled={pending}
                   onClick={async () => {
                     if (
@@ -430,95 +548,131 @@ function Editor({ ev, canEdit, onClose }: { ev: PlannerEvent; canEdit: boolean; 
                   Delete this and later
                 </Button>
               )}
-            </>
+            </span>
+          </>
+        )
+      }
+    >
+      {staffing && (
+        <div className="rounded-xl border border-gray-200 p-3 text-sm">
+          <p className="mb-2 flex items-center gap-2 font-medium text-gray-900">
+            <span className={cn("size-2 rounded-full", STAFFING_DOT[staffing])} aria-hidden="true" />
+            {STAFFING_TEXT[staffing]}
+          </p>
+          <dl className="grid grid-cols-[5rem_1fr] gap-y-1 text-gray-600">
+            <dt className="text-gray-500">OC</dt>
+            <dd>{oc ? oc.name : <span className="text-red-600">nobody yet</span>}</dd>
+            <dt className="text-gray-500">
+              Helpers {helpers.length}/{ev.helpersNeeded}
+            </dt>
+            <dd>{helpers.length ? helpers.map((h) => h.name).join(", ") : <span className={ev.helpersNeeded ? "text-amber-700" : ""}>none yet</span>}</dd>
+          </dl>
+          {!ev.past && (
+            <Link href={`${rosterHref}#roster-${ev.id}`} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-esn hover:underline">
+              Assign in the duty roster <ArrowRight className="size-3" aria-hidden="true" />
+            </Link>
           )}
         </div>
-        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+      )}
 
-/** The OC and helper slots of the coming Stammtisch and office hours: drag members onto them. */
-function Roster({ events, members, canEdit, period }: { events: PlannerEvent[]; members: Array<{ id: string; name: string }>; canEdit: boolean; period: string }) {
-  const [filter, setFilter] = useState("");
-  const duties = new Map<string, number>();
-  for (const e of events) for (const p of e.people) if (p.role !== "attendee") duties.set(p.profileId, (duties.get(p.profileId) ?? 0) + 1);
-  const shown = members.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase()));
-  const missing = events.filter((e) => internalStaffing(e.people.some((p) => p.role === "oc"), e.people.filter((p) => p.role === "helper").length, e.helpersNeeded) !== "staffed").length;
-  const slot = (ev: PlannerEvent, role: "oc" | "helper") => (
-    <Drop id={`slot:${ev.id}:${role}`} disabled={!canEdit} label={`${ev.title} ${ev.start.slice(0, 10)} ${role}`} over="border-esn bg-esn/5" className="min-h-9 flex-1 space-y-1 rounded border border-dashed border-gray-200 p-1">
-      {ev.people
-        .filter((p) => p.role === role)
-        .map((p) => (
-          <Draggable key={p.id} id={`person:${p.id}`} data={{ type: "person", personId: p.id, name: p.name }} disabled={!canEdit} className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-xs shadow-sm">
-            {p.name}
-          </Draggable>
-        ))}
-    </Drop>
-  );
-  return (
-    <section className="mt-6" aria-label="Roster">
-      <div className="mb-2 flex flex-wrap items-baseline gap-2">
-        <h2 className="text-lg font-semibold">Who is on duty – {period}</h2>
-        <Badge tone={missing ? "amber" : "green"}>{missing ? `${missing} not fully staffed` : "all staffed"}</Badge>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {canEdit && (
-          <Card className="h-fit p-3 lg:sticky lg:top-4">
-            <h3 className="mb-2 text-sm font-semibold">Members</h3>
-            <input aria-label="Filter members" placeholder="Filter…" className="mb-2 w-full rounded border border-gray-200 px-2 py-1 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <Drop id="pool" disabled={!canEdit} over="border-esn bg-esn/5" className="max-h-[28rem] space-y-1 overflow-y-auto rounded border border-dashed border-gray-200 p-1">
-              {shown.map((m) => (
-                <Draggable key={m.id} id={`member:${m.id}`} data={{ type: "member", profileId: m.id, name: m.name }} disabled={!canEdit} className="rounded border border-gray-200 bg-white px-2 py-1 text-sm shadow-sm">
-                  <span className="font-medium" data-testid={`member-${m.id}`}>
-                    {m.name}
-                  </span>
-                  {duties.get(m.id) ? <span className="text-xs text-gray-500"> · {duties.get(m.id)} on duty</span> : null}
-                </Draggable>
-              ))}
-            </Drop>
-            <p className="mt-2 text-xs text-gray-500">Drag a name onto an OC or helper slot, or an assigned name to another date. Drop it here to take it off.</p>
-          </Card>
+      <form
+        id={`ie-form-${ev.id}`}
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(
+            updateInternalEvent,
+            {
+              id: ev.id,
+              title: f.title,
+              starts_at: f.start,
+              ends_at: f.end || null,
+              location: f.location,
+              note: f.note,
+              ...(hasPresentation(ev.kind) ? { presentation_url: f.presentation_url } : {}),
+              ...(takesSignUps(ev.kind) ? { capacity: f.capacity ? Number(f.capacity) : null } : {}),
+              ...(isStaffed(ev.kind) ? { helpers_needed: Number(f.helpers) } : {}),
+            },
+            undefined,
+            "Saved."
+          );
+        }}
+      >
+        <Field label="Title" htmlFor="ie-title">
+          <Input id="ie-title" value={f.title} onChange={set("title")} disabled={disabled} maxLength={200} />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Starts" htmlFor="ie-start">
+            <Input id="ie-start" type="datetime-local" value={f.start} onChange={set("start")} disabled={disabled} />
+          </Field>
+          <Field label="Ends" htmlFor="ie-end">
+            <Input id="ie-end" type="datetime-local" value={f.end} onChange={set("end")} disabled={disabled} />
+          </Field>
+        </div>
+        <Field label="Where" htmlFor="ie-location">
+          <Input id="ie-location" value={f.location} onChange={set("location")} disabled={disabled} maxLength={300} />
+        </Field>
+        {hasPresentation(ev.kind) && (
+          <Field label="Presentation (link)" htmlFor="ie-pres" hint="Google Slides, Canva … (https://)">
+            <Input id="ie-pres" type="url" value={f.presentation_url} onChange={set("presentation_url")} disabled={disabled} placeholder="https://" />
+          </Field>
         )}
-        <Card className="p-0">
-          {!events.length ? (
-            <p className="p-4 text-sm text-gray-500">No coming Stammtisch or office hours in this period.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100" data-testid="internal-roster">
-              {events.map((ev) => {
-                const helpers = ev.people.filter((p) => p.role === "helper").length;
-                return (
-                  <li key={ev.id} className="grid items-start gap-2 px-3 py-2 md:grid-cols-[12rem_minmax(0,1fr)_minmax(0,1.4fr)]" data-testid={`roster-${ev.kind}-${ev.start.slice(0, 10)}`}>
-                    <div className="text-sm">
-                      <span className={cn("mr-1 inline-block rounded border px-1 text-[10px]", INTERNAL_KIND_CHIPS[ev.kind])}>{INTERNAL_KIND_LABELS[ev.kind]}</span>
-                      <span className="tabular-nums">
-                        {ev.start.slice(8, 10)}.{ev.start.slice(5, 7)}. {ev.start.slice(11)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="w-8 text-[11px] font-semibold uppercase text-gray-500">OC</span>
-                      {slot(ev, "oc")}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className={cn("w-14 text-[11px] font-semibold uppercase", helpers < ev.helpersNeeded ? "text-amber-700" : "text-gray-500")}>
-                        Help {helpers}/{ev.helpersNeeded}
-                      </span>
-                      {slot(ev, "helper")}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      </div>
-    </section>
+        {(takesSignUps(ev.kind) || isStaffed(ev.kind)) && (
+          <div className="grid grid-cols-2 gap-2">
+            {takesSignUps(ev.kind) && (
+              <Field label="Places" htmlFor="ie-cap" hint="Empty: no limit">
+                <Input id="ie-cap" type="number" min={1} value={f.capacity} onChange={set("capacity")} disabled={disabled} />
+              </Field>
+            )}
+            {isStaffed(ev.kind) && (
+              <Field label="Helpers needed" htmlFor="ie-helpers">
+                <Input id="ie-helpers" type="number" min={0} max={20} value={f.helpers} onChange={set("helpers")} disabled={disabled} />
+              </Field>
+            )}
+          </div>
+        )}
+        <Field label="Note (optional)" htmlFor="ie-note">
+          <Textarea id="ie-note" rows={3} value={f.note} onChange={set("note")} disabled={disabled} maxLength={2000} />
+        </Field>
+      </form>
+
+      {takesSignUps(ev.kind) && (
+        <div className="text-sm">
+          <p className="mb-1 flex items-center gap-1.5 font-medium text-gray-900">
+            <Users className="size-4 text-gray-400" aria-hidden="true" />
+            Signed up ({attendees.length}
+            {ev.capacity ? ` of ${ev.capacity}` : ""})
+          </p>
+          <p className="text-gray-600">{attendees.length ? attendees.map((a) => a.name).join(", ") : "Nobody yet."}</p>
+        </div>
+      )}
+
+      <Link href={internalPath(ev.kind, ev.id)} className="inline-flex items-center gap-1 text-sm font-medium text-esn hover:underline">
+        Open its page <ArrowRight className="size-3.5" aria-hidden="true" />
+      </Link>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </SidePanel>
   );
 }
 
-/** "Repeat": the same kind on a weekday across the semester – every week, or selected weeks of each month. */
-function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: PlannerEvent[]; period: { label: string; from: string; to: string } }) {
+/**
+ * "Repeat dates", in the side panel: the same kind on a weekday across the
+ * period – every week, or selected weeks of each month. The dates it would add
+ * show dashed on the calendar beside it.
+ */
+function RepeatPanel({
+  kinds,
+  events,
+  period,
+  onPreview,
+  onClose,
+}: {
+  kinds: KindSetting[];
+  events: PlannerEvent[];
+  period: { label: string; from: string; to: string };
+  onPreview: (p: Preview | null) => void;
+  onClose: () => void;
+}) {
   const { run, pending, error } = useAction();
   const [kind, setKind] = useState<InternalKind>("stammtisch");
   const def = kinds.find((k) => k.kind === kind)!;
@@ -531,6 +685,13 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
   // Days that already have this kind are left out unless ticked again.
   const picked = days.filter((d) => (taken.has(d) ? skipped.has(d) : !skipped.has(d)));
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: k === "weekday" ? Number(e.target.value) : e.target.value }));
+
+  // The calendar draws what would be added; nothing once the panel closes.
+  const pickedKey = picked.join(",");
+  useEffect(() => {
+    onPreview({ kind, days: pickedKey ? pickedKey.split(",") : [], start: f.start });
+  }, [kind, pickedKey, f.start, onPreview]);
+  useEffect(() => () => onPreview(null), [onPreview]);
 
   function chooseKind(k: InternalKind) {
     const d = kinds.find((x) => x.kind === k)!;
@@ -549,8 +710,25 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
   }
 
   return (
-    <FoldCard title={`Repeat over ${period.label}`} testId="repeat">
+    <SidePanel
+      label="Repeat dates"
+      testId="repeat"
+      onClose={onClose}
+      icon={<Repeat2 className="mt-1 size-5 shrink-0 text-esn" aria-hidden="true" />}
+      eyebrow={`Repeat over ${period.label}`}
+      title="Repeat dates"
+      meta="The same kind on a weekday – every week, or chosen weeks of each month."
+      footer={
+        <>
+          <Button type="submit" form="repeat-form" disabled={pending || !picked.length || !f.title.trim()}>
+            Add {plural(picked.length, "date")}
+          </Button>
+          {done && <span className="text-sm text-emerald-700">{done}</span>}
+        </>
+      }
+    >
       <form
+        id="repeat-form"
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
@@ -574,7 +752,7 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
           );
         }}
       >
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <Field label="Kind" htmlFor="rp-kind">
             <Select id="rp-kind" value={kind} onChange={(e) => chooseKind(e.target.value as InternalKind)}>
               {INTERNAL_KINDS.map((k) => (
@@ -588,7 +766,7 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
             <Input id="rp-title" value={f.title} onChange={set("title")} maxLength={200} />
           </Field>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           <Field label="Weekday" htmlFor="rp-weekday">
             <Select id="rp-weekday" value={f.weekday} onChange={set("weekday")}>
               {WEEKDAY_NAMES.map((d, i) => (
@@ -607,16 +785,16 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
         </div>
         <fieldset>
           <legend className="mb-1 text-sm font-medium text-gray-700">Which {WEEKDAY_NAMES[f.weekday]}s of each month</legend>
-          <div className="flex flex-wrap gap-3 text-sm">
+          <div className="flex flex-wrap gap-1.5 text-sm">
             {OCCURRENCES.map((o) => (
-              <label key={String(o)} className="flex items-center gap-1">
+              <label key={String(o)} className={cn("flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5", which.includes(o) ? "border-esn/40 bg-esn/5 text-esn-dark" : "border-gray-200 text-gray-600")}>
                 <input type="checkbox" checked={which.includes(o)} onChange={() => toggleOccurrence(o)} />
                 {OCCURRENCE_LABELS[String(o)]}
               </label>
             ))}
           </div>
         </fieldset>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <Field label="From" htmlFor="rp-from">
             <Input id="rp-from" type="date" value={f.from} onChange={set("from")} />
           </Field>
@@ -641,7 +819,7 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
           <p className="mb-1 text-sm font-medium text-gray-700">
             {picked.length} of {days.length} dates – untick holidays and breaks:
           </p>
-          <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto" data-testid="repeat-dates">
+          <div className="flex flex-wrap gap-1.5" data-testid="repeat-dates">
             {days.map((d) => {
               const on = picked.includes(d);
               return (
@@ -664,32 +842,38 @@ function Repeat({ kinds, events, period }: { kinds: KindSetting[]; events: Plann
             })}
             {!days.length && <span className="text-xs text-gray-500">No dates – choose which weeks.</span>}
           </div>
+          {!!picked.length && <p className="mt-2 text-xs text-gray-500">Dashed on the calendar: the dates this adds.</p>}
         </div>
-        <Button type="submit" disabled={pending || !picked.length || !f.title.trim()}>
-          Add {plural(picked.length, "date")}
-        </Button>
-        {done && <p className="text-sm text-emerald-700">{done}</p>}
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
       </form>
-    </FoldCard>
+    </SidePanel>
   );
 }
 
-/** The defaults per kind: title, time, length, helpers and the fixed text (office hours). */
-function Settings({ kinds }: { kinds: KindSetting[] }) {
+/** The defaults per kind, in the side panel: title, time, length, helpers and the fixed text (office hours). */
+function DefaultsPanel({ kinds, onClose }: { kinds: KindSetting[]; onClose: () => void }) {
   const [kind, setKind] = useState<InternalKind>("office_hour");
   const k = kinds.find((x) => x.kind === kind)!;
   return (
-    <FoldCard title="Defaults per kind" testId="kind-settings">
-      <Select aria-label="Kind" className="mb-3 h-8 w-56" value={kind} onChange={(e) => setKind(e.target.value as InternalKind)}>
-        {INTERNAL_KINDS.map((x) => (
-          <option key={x} value={x}>
-            {INTERNAL_KIND_LABELS[x]}
-          </option>
-        ))}
-      </Select>
+    <SidePanel
+      label="Defaults per kind"
+      testId="kind-settings"
+      onClose={onClose}
+      icon={<Settings2 className="mt-1 size-5 shrink-0 text-esn" aria-hidden="true" />}
+      title="Defaults per kind"
+      meta="What a new date of each kind starts with, dragged in or repeated."
+    >
+      <Field label="Kind" htmlFor="ks-kind">
+        <Select id="ks-kind" value={kind} onChange={(e) => setKind(e.target.value as InternalKind)}>
+          {INTERNAL_KINDS.map((x) => (
+            <option key={x} value={x}>
+              {INTERNAL_KIND_LABELS[x]}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <SettingsForm key={kind} k={k} />
-    </FoldCard>
+    </SidePanel>
   );
 }
 
@@ -703,7 +887,7 @@ function SettingsForm({ k }: { k: KindSetting }) {
   };
   return (
     <form
-      className="space-y-3"
+      className="space-y-3 border-t border-gray-100 pt-4"
       onSubmit={(e) => {
         e.preventDefault();
         run(updateKindSettings, { kind: k.kind, default_title: f.title, default_start: f.start, default_minutes: Number(f.minutes), helpers_needed: Number(f.helpers), description: f.description }, () => setSaved(true));
@@ -724,12 +908,14 @@ function SettingsForm({ k }: { k: KindSetting }) {
         </Field>
       </div>
       <Field label={k.kind === "office_hour" ? "Office hour text (the same for every office hour)" : "Text (optional)"} htmlFor="ks-description">
-        <Textarea id="ks-description" rows={4} value={f.description} onChange={set("description")} maxLength={4000} />
+        <Textarea id="ks-description" rows={5} value={f.description} onChange={set("description")} maxLength={4000} />
       </Field>
-      <Button type="submit" size="sm" disabled={pending}>
-        Save defaults
-      </Button>
-      {saved && <span className="ml-2 text-sm text-emerald-700">Saved ✓</span>}
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          Save defaults
+        </Button>
+        {saved && <span className="text-sm text-emerald-700">Saved ✓</span>}
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </form>
   );

@@ -521,8 +521,8 @@ async function InternalQueue() {
         </Link>
       )}
       {(noOc > 0 || short > 0) && <p className="text-[13px] text-gray-600">Stammtisch and office hours in the next 4 weeks</p>}
-      <Figure label="Without an OC" value={noOc} tone="red" href="/team/internal" />
-      <Figure label="Short of helpers" value={short} tone="amber" href="/team/internal" />
+      <Figure label="Without an OC" value={noOc} tone="red" href="/team/internal/roster?only=open" />
+      <Figure label="Short of helpers" value={short} tone="amber" href="/team/internal/roster?only=open" />
     </QueueCard>
   );
 }
