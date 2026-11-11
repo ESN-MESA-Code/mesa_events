@@ -9,7 +9,8 @@ import { setPretixReady } from "@/app/actions/publishing";
 /**
  * One event's pretix page (round 2026-11-09): its link and "Mark set up";
  * once set up, the link can be changed or the tick taken back. The link
- * goes under the event's Telegram message ("Sign up").
+ * goes under the event's Telegram message ("Sign up") and is required
+ * (round 2026-11-11): Finance matches the ticket sales to the event by it.
  */
 export function PretixSetup({ event, state, editable }: { event: { id: string; title: string }; state: { link: string | null } | null; editable: boolean }) {
   const { run, pending, error } = useAction();
@@ -34,13 +35,14 @@ export function PretixSetup({ event, state, editable }: { event: { id: string; t
     >
       <Input
         aria-label={`pretix link of ${event.title}`}
-        placeholder="https://pretix.eu/… (optional)"
+        placeholder="https://pretix.eu/esnmesa/<event>/"
+        required
         className="h-8 min-w-0 flex-1 text-xs sm:w-64"
         value={link}
         onChange={(e) => setLink(e.target.value)}
       />
       {!done ? (
-        <Button size="sm" disabled={pending} className="h-8 shrink-0">
+        <Button size="sm" disabled={pending || !link.trim()} className="h-8 shrink-0" title={link.trim() ? undefined : "Paste the pretix link first – Finance matches the ticket sales by it"}>
           <Check className="mr-1 h-4 w-4" aria-hidden="true" />
           Mark set up
         </Button>

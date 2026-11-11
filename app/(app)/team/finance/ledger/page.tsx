@@ -5,35 +5,48 @@ import { createSessionClient } from "@/lib/supabase/session";
 import { berlinDate, berlinInputToIso, formatCents, formatDate, nowMs } from "@/lib/dates";
 import { addDays } from "@/lib/month";
 import { hasRole } from "@/lib/roles";
-import { parseSemesterKey, semesterFor, shiftSemester } from "@/lib/internal";
+import { parseSemesterKey, semesterFor } from "@/lib/internal";
+import { SemesterNav } from "@/components/finance/SemesterNav";
 import { METHOD_LABELS, byCategory, perEvent, totals, type CashRow, type ClaimRow, type LedgerRow } from "@/lib/finance";
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonVariants } from "@/components/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader } from "@/components/ui";
 import { FinanceTabs } from "@/components/FinanceTabs";
 import { cn } from "@/lib/utils";
 import { Categories, EntryActions, EntryForm, type Category, type EntryValues } from "./LedgerClient";
 import { FoldCard } from "@/components/Fold";
 
-export const metadata: Metadata = { title: "Finance overview" };
+export const metadata: Metadata = { title: "Ledger" };
 
 // Finance's overview of the organisation (round 2026-10-30), one semester at
 // a time: the ledger (other income and spending with categories – merch, an
 // event's revenue, Belege paid straight from the MESA bank account), the
 // reimbursements from claims, cash boxes not booked yet, and each event's
 // balance. Executives read it.
-export default async function LedgerPage({ searchParams }: { searchParams: Promise<{ semester?: string }> }) {
+export default async function LedgerPage({ searchParams }: { searchParams: Promise<{ semester?: string; year?: string; direction?: string; category?: string; beleg?: string; source?: string; q?: string }> }) {
   const viewer = await requirePageRole(["finance"], { executiveMayRead: true, page: "Finance" });
   const canAct = hasRole(viewer.roles, "finance");
   const supabase = await createSessionClient();
   const now = nowMs();
   const today = berlinDate(new Date(now).toISOString());
-  const semester = parseSemesterKey((await searchParams).semester) ?? semesterFor(today);
+  const sp = await searchParams;
+  const asSemester = parseSemesterKey(sp.semester) ?? semesterFor(today);
+  // A calendar year instead (from the tax reports).
+  const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : null;
+  const semester = year ? { ...asSemester, name: String(year), from: `${year}-01-01`, to: `${year}-12-31` } : asSemester;
+  const filter = {
+    direction: sp.direction === "income" || sp.direction === "expense" ? sp.direction : null,
+    category: /^[0-9a-f-]{36}$/.test(sp.category ?? "") ? sp.category! : null,
+    beleg: sp.beleg === "missing",
+    source: sp.source === "paypal" || sp.source === "manual" || sp.source === "cash" ? sp.source : null,
+    q: (sp.q ?? "").trim().slice(0, 100),
+  };
+  const filtered = !!(filter.direction || filter.category || filter.beleg || filter.source || filter.q);
   const fromIso = berlinInputToIso(`${semester.from}T00:00`);
   const toIso = berlinInputToIso(`${addDays(semester.to, 1)}T00:00`);
 
   const [{ data: entries }, { data: categories }, { data: claims }, { data: boxes }, { data: events }] = await Promise.all([
     supabase
       .from("finance_entries")
-      .select("id, direction, category_id, event_id, internal_event_id, cash_report_id, amount_cents, booked_on, description, counterparty, payment_method, beleg_ref, beleg_received, note, finance_categories(name), events(title), internal_events(title)")
+      .select("id, direction, category_id, event_id, internal_event_id, cash_report_id, payment_id, is_fee, amount_cents, booked_on, description, counterparty, payment_method, beleg_ref, beleg_received, note, finance_categories(name), events(title), internal_events(title)")
       .gte("booked_on", semester.from)
       .lte("booked_on", semester.to)
       .order("booked_on", { ascending: false })
@@ -43,6 +56,15 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
     supabase.from("cash_reports").select("id, event_id, internal_event_id, opening_cents, closing_cents, closed_at, events(starts_at), internal_events(starts_at)"),
     supabase.from("events").select("id, title, starts_at").eq("source", "platform").not("status", "in", "(draft,dropped)").gte("starts_at", fromIso).lt("starts_at", toIso).order("starts_at"),
   ]);
+  const needle = filter.q.toLowerCase();
+  const shownEntries = (entries ?? []).filter(
+    (e) =>
+      (!filter.direction || e.direction === filter.direction) &&
+      (!filter.category || e.category_id === filter.category) &&
+      (!filter.beleg || (e.direction === "expense" && !e.beleg_received)) &&
+      (!filter.source || (filter.source === "paypal" ? !!e.payment_id : filter.source === "cash" ? !!e.cash_report_id : !e.payment_id && !e.cash_report_id)) &&
+      (!needle || [e.description, e.counterparty, e.beleg_ref, e.note, (e.events as { title: string } | null)?.title ?? ""].some((t) => t.toLowerCase().includes(needle)))
+  );
   const booked = new Set((entries ?? []).map((e) => e.cash_report_id).filter(Boolean));
   const { data: allBooked } = await supabase.from("finance_entries").select("cash_report_id").not("cash_report_id", "is", null);
   for (const b of allBooked ?? []) booked.add(b.cash_report_id);
@@ -65,8 +87,6 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
   const eventList = events ?? [];
   const eventOptions = eventList.map((e) => ({ id: e.id, label: `${formatDate(e.starts_at)} · ${e.title}` }));
   const cats = (categories ?? []) as Category[];
-  const prev = shiftSemester(semester, -1);
-  const next = shiftSemester(semester, 1);
 
   const figures: Array<[string, number, string?]> = [
     ["Income", t.income, "text-emerald-700"],
@@ -81,15 +101,16 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
       <PageHeader title="Finance" description="The whole picture: other income and spending, reimbursements and cash boxes, per event.">
         <div className="flex flex-wrap items-center gap-2">
           {!canAct && <Badge data-testid="read-only">Read-only (executive)</Badge>}
-          <nav aria-label="Semester" className="flex items-center gap-1">
-            <Link href={`/team/finance/ledger?semester=${prev.key}`} className={buttonVariants({ variant: "outline", size: "sm" })} aria-label={`Previous semester (${prev.name})`}>
-              ←
-            </Link>
-            <span className="min-w-28 text-center font-semibold">{semester.name}</span>
-            <Link href={`/team/finance/ledger?semester=${next.key}`} className={buttonVariants({ variant: "outline", size: "sm" })} aria-label={`Next semester (${next.name})`}>
-              →
-            </Link>
-          </nav>
+          {year ? (
+            <span className="flex items-center gap-2 font-semibold">
+              {year}
+              <Link href="/team/finance/ledger" className="text-sm font-normal text-esn hover:underline">
+                back to semesters
+              </Link>
+            </span>
+          ) : (
+            <SemesterNav semester={semester} path="/team/finance/ledger" />
+          )}
         </div>
       </PageHeader>
       <FinanceTabs current="ledger" />
@@ -117,7 +138,103 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
           </p>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Ledger {semester.name}</CardTitle>
+            <Badge>{filtered ? `${shownEntries.length} of ${(entries ?? []).length}` : (entries ?? []).length}</Badge>
+          </CardHeader>
+          <form action="/team/finance/ledger" className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 pb-3" data-testid="ledger-filter">
+            {year ? <input type="hidden" name="year" value={year} /> : <input type="hidden" name="semester" value={semester.key} />}
+            <select name="direction" defaultValue={filter.direction ?? ""} aria-label="Income or spending" className="h-8 rounded-md border border-gray-300 px-2 text-sm">
+              <option value="">In and out</option>
+              <option value="income">Income</option>
+              <option value="expense">Spending</option>
+            </select>
+            <select name="category" defaultValue={filter.category ?? ""} aria-label="Category" className="h-8 rounded-md border border-gray-300 px-2 text-sm">
+              <option value="">Every category</option>
+              {cats.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.direction === "income" ? "in · " : "out · "}
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <select name="source" defaultValue={filter.source ?? ""} aria-label="Source" className="h-8 rounded-md border border-gray-300 px-2 text-sm">
+              <option value="">Every source</option>
+              <option value="paypal">PayPal import</option>
+              <option value="cash">Cash boxes</option>
+              <option value="manual">Booked by hand</option>
+            </select>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="checkbox" name="beleg" value="missing" defaultChecked={filter.beleg} /> Receipt missing
+            </label>
+            <input name="q" defaultValue={filter.q} placeholder="Search…" aria-label="Search the ledger" className="h-8 w-40 rounded-md border border-gray-300 px-2 text-sm" />
+            <button className="h-8 rounded-md border border-gray-300 px-3 text-sm hover:border-esn hover:text-esn">Filter</button>
+            {filtered && (
+              <Link href={`/team/finance/ledger?${year ? `year=${year}` : `semester=${semester.key}`}`} className="text-sm text-esn hover:underline">
+                Clear
+              </Link>
+            )}
+          </form>
+          <CardContent className="p-0">
+            {!shownEntries.length ? (
+              <EmptyState>{filtered ? "Nothing matches the filter." : "No entries yet."}</EmptyState>
+            ) : (
+              <ul className="divide-y divide-gray-100 text-sm" data-testid="ledger">
+                {shownEntries.map((e) => {
+                  const values: EntryValues = {
+                    id: e.id,
+                    direction: e.direction as EntryValues["direction"],
+                    category_id: e.category_id,
+                    event_id: e.event_id,
+                    amount_cents: e.amount_cents,
+                    booked_on: e.booked_on,
+                    description: e.description,
+                    counterparty: e.counterparty,
+                    payment_method: e.payment_method as EntryValues["payment_method"],
+                    beleg_ref: e.beleg_ref,
+                    beleg_received: e.beleg_received,
+                    note: e.note,
+                  };
+                  const about = (e.events as { title: string } | null)?.title ?? (e.internal_events as { title: string } | null)?.title;
+                  return (
+                    <li key={e.id} className="grid gap-x-3 gap-y-1 px-4 py-2 md:grid-cols-[6.5rem_minmax(0,1fr)_8rem_auto]">
+                      <span className="tabular-nums text-gray-600">{e.booked_on}</span>
+                      <span className="min-w-0">
+                        <span className="font-medium">{e.description}</span>
+                        <span className="block text-xs text-gray-500">
+                          {(e.finance_categories as { name: string } | null)?.name}
+                          {about && ` · ${about}`}
+                          {e.counterparty && ` · ${e.counterparty}`}
+                          {` · ${METHOD_LABELS[e.payment_method as keyof typeof METHOD_LABELS]}`}
+                          {e.beleg_ref && ` · receipt ${e.beleg_ref}`}
+                          {e.direction === "expense" && !e.beleg_received && <span className="text-amber-700"> · paper receipt missing</span>}
+                          {e.note && ` · ${e.note}`}
+                          {e.payment_id && <span className="text-blue-700"> · {e.is_fee ? "PayPal fee" : "PayPal import"}</span>}
+                        </span>
+                      </span>
+                      <span className={cn("tabular-nums md:text-right", e.direction === "income" ? "text-emerald-700" : "text-gray-900")}>
+                        {e.direction === "income" ? "+" : "−"}
+                        {formatCents(e.amount_cents)}
+                      </span>
+                      <span>
+                        {canAct && e.payment_id ? (
+                          <Link href={`/team/finance/inbox?show=booked&q=${encodeURIComponent(e.beleg_ref.replace(/^PayPal /, ""))}`} className="text-xs text-esn hover:underline">
+                            Change in “Booked”
+                          </Link>
+                        ) : (
+                          canAct && <EntryActions entry={values} categories={cats} events={eventOptions} today={today} fromCashBox={!!e.cash_report_id} />
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <Card>
             <CardHeader>
               <CardTitle>Per event</CardTitle>
@@ -196,60 +313,6 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
             )}
           </div>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Ledger {semester.name}</CardTitle>
-            <Badge>{(entries ?? []).length}</Badge>
-          </CardHeader>
-          <CardContent className="p-0">
-            {!(entries ?? []).length ? (
-              <EmptyState>No entries yet.</EmptyState>
-            ) : (
-              <ul className="divide-y divide-gray-100 text-sm" data-testid="ledger">
-                {(entries ?? []).map((e) => {
-                  const values: EntryValues = {
-                    id: e.id,
-                    direction: e.direction as EntryValues["direction"],
-                    category_id: e.category_id,
-                    event_id: e.event_id,
-                    amount_cents: e.amount_cents,
-                    booked_on: e.booked_on,
-                    description: e.description,
-                    counterparty: e.counterparty,
-                    payment_method: e.payment_method as EntryValues["payment_method"],
-                    beleg_ref: e.beleg_ref,
-                    beleg_received: e.beleg_received,
-                    note: e.note,
-                  };
-                  const about = (e.events as { title: string } | null)?.title ?? (e.internal_events as { title: string } | null)?.title;
-                  return (
-                    <li key={e.id} className="grid gap-x-3 gap-y-1 px-4 py-2 md:grid-cols-[6.5rem_minmax(0,1fr)_8rem_auto]">
-                      <span className="tabular-nums text-gray-600">{e.booked_on}</span>
-                      <span className="min-w-0">
-                        <span className="font-medium">{e.description}</span>
-                        <span className="block text-xs text-gray-500">
-                          {(e.finance_categories as { name: string } | null)?.name}
-                          {about && ` · ${about}`}
-                          {e.counterparty && ` · ${e.counterparty}`}
-                          {` · ${METHOD_LABELS[e.payment_method as keyof typeof METHOD_LABELS]}`}
-                          {e.beleg_ref && ` · receipt ${e.beleg_ref}`}
-                          {e.direction === "expense" && !e.beleg_received && <span className="text-amber-700"> · paper receipt missing</span>}
-                          {e.note && ` · ${e.note}`}
-                        </span>
-                      </span>
-                      <span className={cn("tabular-nums md:text-right", e.direction === "income" ? "text-emerald-700" : "text-gray-900")}>
-                        {e.direction === "income" ? "+" : "−"}
-                        {formatCents(e.amount_cents)}
-                      </span>
-                      <span>{canAct && <EntryActions entry={values} categories={cats} events={eventOptions} today={today} fromCashBox={!!e.cash_report_id} />}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
 
         {canAct && (
           <Card>

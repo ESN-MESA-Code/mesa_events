@@ -84,7 +84,7 @@ export default async function PretixPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <PageHeader title="Comms" description="Set up each event's pretix page before it is advertised – the posts link to it. Due before the event's first post." />
+      <PageHeader title="Comms" description="Set up each event's pretix page and paste its link before it is advertised – the posts link to it, and Finance matches the ticket sales by it. Due before the event's first post." />
       <CommsTabs current="pretix" month={null} executive={viewer.roles.includes("executive")} />
       {!channel?.enabled ? (
         <Card>

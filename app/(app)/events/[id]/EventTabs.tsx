@@ -32,7 +32,7 @@ export function EventTabs({ id, notes, cash }: { id: string; notes: Partial<Reco
     { href: `/events/${id}/attendance`, label: "Attendance", icon: ClipboardList },
     { href: `/events/${id}/hand-in`, label: "Hand-in", icon: PackageCheck },
     // The cash box (round 2026-10-30): staff, Events, Finance and executives.
-    ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash box", icon: Wallet }] : []),
+    ...(cash ? [{ href: `/events/${id}/cash`, label: "Cash", icon: Wallet }] : []),
   ];
   return <TabBar label="Event" tabs={tabs.map((t) => ({ href: withFrom(t.href, from), label: t.label, icon: t.icon, active: pathname === t.href, note: notes[t.label] }))} />;
 }

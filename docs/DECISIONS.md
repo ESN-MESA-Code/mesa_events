@@ -1583,3 +1583,82 @@ the month's end), a post-ideas backlog and a list of reel ideas. What moved into
   `monthly-cycle.spec.ts` follow description layout B (2026-11-08: titles in capitals, "are you
   ready"). Tests whose posts must go out as text set the event types' default pictures aside
   and put them back (`setAsideTypePictures()`), since the demo data now has mock ones.
+
+## 2026-11-11 – Finance: PayPal links, imports, the queue, budget and tax
+
+Finance asked for one place to run the organisation's money: what came in on PayPal and pretix
+and what it was for, the plan for the semester, and everything the tax return needs.
+
+- **PayPal links with a reference** (`payment_links`, Finance → PayPal links). A link is
+  `paypal.me/<name>/<amount>EUR` with a QR code and a reference `MESA-XXXXX` (five characters
+  without 0/O/1/I). PayPal.me cannot carry a note, so every QR card, sign and full-screen view asks
+  the payer to write the reference into the PayPal note. Links belong to an event, an office hour
+  (ESNcard member/external at the current prices, "drinks"), or nothing (merch). "Create ESNcard
+  links" makes them for every office hour of a period; presets are unique per event, so the
+  button can be pressed again. The office hour's and the event's cash page show their links to
+  the staff on duty.
+- **PayPal import** (Finance → Import, with a step-by-step guide). The activity download (CSV,
+  English or German, comma/semicolon, day- or month-first dates) is read in the browser, shown as
+  a preview, and sent in chunks of 250; transactions already imported are skipped by their
+  transaction code. Only completed euro payments are imported (pending ones come completed in a
+  later download). Matching runs in batches of 120 (`lib/payments/runMatch.ts`) so a year of
+  history never hits a request timeout: PayPal's own lines (withdrawals, bank top-ups, holds) are
+  ignored; a reference books the payment to the link's event and category; a pretix order code of
+  a linked event books it as ticket revenue; anything else waits in **To label**, with a
+  suggestion when one exists (a link of the same amount from a week before to three days after its
+  event, or the category of the payer's earlier payments). Nothing is booked on amount alone.
+- **Booking** goes through `book_payment()`: the gross amount as income or spending (category,
+  event or internal event) and the PayPal fee as its own "Bank and payment fees" line, both tied to
+  the payment. A trigger keeps amount, direction and date of those lines; they leave the ledger
+  only by unbooking the payment. Direct updates of a payment may only touch its suggestion.
+- **pretix**: Comms must paste the pretix link when ticking a page off now (the button stays
+  disabled without it); its event slug (`https://pretix.eu/<organizer>/<slug>/`) goes on
+  `events.pretix_slug`, unique. Orders come from the "Order data" CSV (organizer-wide with the
+  event column, or one event chosen on upload) or the REST API (`PRETIX_ORGANIZER`,
+  `PRETIX_API_TOKEN`). Orders paid with PayPal are booked through the PayPal import; orders paid
+  otherwise are booked per event and provider with one click. Finance links pretix events that no
+  event claims yet.
+- **Budget** (Finance → Budget): plan lines per semester and category, optionally per event;
+  claims count as event costs. With the bank balance Finance notes from each statement, the PayPal
+  balance of the last import and the cash boxes, the page shows what is available now and what
+  is expected at the semester's end.
+- **Reports & tax** (Finance → Reports & tax), one calendar year: the EÜR split into the four
+  spheres of a non-profit (ideeller Bereich, Vermögensverwaltung, Zweckbetrieb, wirtschaftlicher
+  Geschäftsbetrieb – each category has one, editable; claims count as Zweckbetrieb), the
+  commercial income against the § 64 (3) AO limit (€ 50,000 from 2025), a checklist before closing
+  the year, and CSV downloads (journal, EÜR, PayPal, events) with semicolons and decimal commas.
+  The page says it sorts numbers and is no tax advice; the sphere defaults are a starting point
+  for the tax adviser.
+- **Finance pages redesigned**: an Overview first (what waits, income/spending/result, money
+  available, income and spending per month, the running result, largest categories, budget),
+  then To label, Import, PayPal links, Ledger (now with filters: direction, category, source,
+  receipt missing, search; a calendar year from the reports), Budget, Claims (moved to
+  `/team/finance/claims`), Cash boxes, Reports & tax. Charts are plain SVG sized to their box,
+  with a legend, hover tooltips and a table view; income blue, spending orange (validated pair).
+- The demo data has links, one PayPal import (booked, ignored, a suggestion, two to label), a
+  plan and a bank balance; "Reset demo data" wipes the new tables.
+
+
+## 2026-11-11 (2) – The OC makes the QR codes; the cash box one step at a time
+
+- **QR codes on the spot** (`create_payment_link_here()`, `components/finance/PaymentLinksPanel.tsx`).
+  Finance no longer has to prepare every link: the OC and helpers (and Events / the internal
+  planners, and Finance) make them on the event's cash page or the office hour's page – they pick
+  what they sell (office hours: ESNcard member, ESNcard, drinks and snacks, something else;
+  events: drinks and snacks, ticket, something else), give it a name and set the amount (empty:
+  the payer enters it). The reference is made in the database; the category follows from what is
+  sold (cash box takings, event revenue, ESNcard sales, other income), so the import books it
+  without Finance. ESNcards stay one link per card and office hour, at the current price unless
+  the OC gives another; making it again updates the amount. The people on duty switch links off
+  and on; deleting stays with Finance. Finance only sets the PayPal.me name once.
+- **The cash box in steps** (`components/CashBox.tsx`). It showed the start and the end count,
+  the cards and the sign-off all at once. Now one screen per step: 1 count the box at the start
+  and confirm (only that form); 2 running – the ESNcard counters, the cash that should be in the
+  box now, the PayPal QR codes and the note, with "End and count the box"; 3 count the box at the
+  end (with "Back – still selling"); 4 the summary (start, end, takings, cards, difference) with
+  the OC's sign-off; then the signed-off summary with Finance's actions. Counts can be corrected
+  from the running and the summary screen until the sign-off. No database change: the step
+  follows from the counts saved.
+- **MESA's PayPal account is the default**: the migration sets the PayPal.me name to `mesamunich`
+  (account name "ESN MESA e.V.") unless Finance set one already; the demo data uses it too.
+  Finance can type it as `@mesamunich`, `paypal.me/mesamunich` or the whole link.

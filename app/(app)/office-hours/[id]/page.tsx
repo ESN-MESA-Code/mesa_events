@@ -7,6 +7,9 @@ import { plural } from "@/lib/plural";
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { InternalHeader } from "@/components/InternalHeader";
 import { CashBox } from "@/components/CashBox";
+import { PaymentLinks } from "@/components/finance/PaymentLinksCard";
+import { formatDate } from "@/lib/dates";
+import { hasRole } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Office hour" };
 
@@ -55,8 +58,26 @@ export default async function OfficeHourPage({ params }: { params: Promise<{ id:
           </CardContent>
         </Card>
       </div>
-      {(isStaff || report || finance || isPlanner) && (
-        <CashBox report={report} target={{ internal_event_id: id }} officeHour canCount={isStaff && event.status === "scheduled"} isOc={isOc} finance={finance} boxes={boxes} />
+      {(isStaff || report || finance || isPlanner || hasRole(viewer.roles, "finance") || viewer.roles.includes("executive")) && (
+        <CashBox
+          report={report}
+          target={{ internal_event_id: id }}
+          officeHour
+          canCount={isStaff && event.status === "scheduled"}
+          isOc={isOc}
+          finance={finance}
+          boxes={boxes}
+          // ESNcards and drinks paid with PayPal (round 2026-11-11 (2)): the OC makes the QR codes, shown while the box runs.
+          payments={
+            <PaymentLinks
+              supabase={supabase}
+              target={{ internal_event_id: id }}
+              canCreate={event.status === "scheduled" && (isStaff || isPlanner || hasRole(viewer.roles, "finance"))}
+              officeHour
+              context={`Office hour, ${formatDate(event.starts_at)}`}
+            />
+          }
+        />
       )}
     </div>
   );

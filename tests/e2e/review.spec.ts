@@ -183,7 +183,7 @@ test("executives read Finance without acting; bank details stay with Finance", a
 
     // Finance acts on the same row.
     await signInAs(context, baseURL!, USERS.finance);
-    await page.goto("/team/finance");
+    await page.goto("/team/finance/claims");
     await expect(page.getByTestId("read-only")).toHaveCount(0);
     await expect(page.getByTestId(`claim-${vendor}`).getByRole("button", { name: "Paper receipt received" })).toBeVisible();
   } finally {

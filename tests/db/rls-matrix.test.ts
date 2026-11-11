@@ -34,9 +34,9 @@ const uid = () => crypto.randomUUID();
 const uniqueMonth = () => `${3000 + crypto.randomInt(6000)}-${String(1 + crypto.randomInt(12)).padStart(2, "0")}-01`;
 const letters = () => Array.from(crypto.randomBytes(12), (b) => String.fromCharCode(97 + (b % 26))).join("");
 const ins = async (table: Table, row: Record<string, unknown>, key = "id"): Promise<Match> => {
-  const { data, error } = await admin.from(table).insert(row as never).select().single();
+  const { data, error } = await admin.from(table as "events").insert(row as never).select().single();
   if (error) throw new Error(`${table}: ${error.message}`);
-  return { [key]: (data as Record<string, string>)[key] };
+  return { [key]: (data as unknown as Record<string, string>)[key] };
 };
 
 /** An assignment on its own draft event (so cases do not collide). */
@@ -247,7 +247,8 @@ afterAll(async () => {
 
 async function visible(role: Role, table: Table, match: Match) {
   const c = await clientFor(role);
-  const { data, error } = await c.from(table).select("*").match(match);
+  // One table's type stands for all (the union of every table is too deep for TypeScript).
+  const { data, error } = await c.from(table as "events").select("*").match(match);
   return !error && (data?.length ?? 0) > 0;
 }
 

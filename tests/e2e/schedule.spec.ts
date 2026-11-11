@@ -93,10 +93,10 @@ test("plan, bundle, publish by hand and by schedule", async ({ page, as, baseURL
   await panel.getByRole("link", { name: /Not set up yet/ }).click();
   await expect(page).toHaveURL(new RegExp(`/team/comms/pretix\\?event=${hike.id}`));
   const pretixRow = page.getByTestId(`pretix-row-${hike.id}`);
-  await pretixRow.getByLabel(`pretix link of ${hike.title}`).fill("https://pretix.eu/esnmesa/e2e-hike/");
+  await pretixRow.getByLabel(`pretix link of ${hike.title}`).fill(`https://pretix.eu/esnmesa/e2e-hike-${hike.id.slice(0, 8)}/`);
   await pretixRow.getByRole("button", { name: "Mark set up" }).click();
   await expect(pretixRow.getByTestId("pretix-done-by")).toContainText("Set up by");
-  await expect(pretixRow.getByRole("link", { name: "open" })).toHaveAttribute("href", "https://pretix.eu/esnmesa/e2e-hike/");
+  await expect(pretixRow.getByRole("link", { name: "open" })).toHaveAttribute("href", `https://pretix.eu/esnmesa/e2e-hike-${hike.id.slice(0, 8)}/`);
   await page.goto(`/team/comms/schedule?month=${month}`);
   await expect(page.getByTestId(`pretix-${hike.id}`)).toHaveAttribute("data-tone", "done");
 

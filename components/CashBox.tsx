@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, CircleCheck, CreditCard, Equal, PiggyBank, Scale, TrendingUp, Wallet } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CircleCheck, ClipboardCheck, CreditCard, Equal, PiggyBank, Play, Scale, Square, TrendingUp, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Alert, Badge, Button, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Select, Textarea } from "@/components/ui";
 import { ProgressTrack, Stat, type TrackStep } from "@/components/EventKit";
 import { ActionButton, useAction } from "@/components/ActionButton";
 import { bookCashBox, bumpEsncards, checkCashBox, closeCashBox, reopenCashBox, saveCashCount, setCashNote, startCashBox } from "@/app/actions/cash";
@@ -77,9 +77,15 @@ function CountForm({
   savedBy,
   disabled,
   suggested,
+  submitLabel,
+  onSaved,
 }: {
   reportId: string;
   phase: "opening" | "closing";
+  /** The button: "Confirm the start count" … */
+  submitLabel?: string;
+  /** After the count is saved (the cash box moves on to its next screen). */
+  onSaved?: () => void;
   saved: CashCounts;
   savedBy: string | null;
   disabled: boolean;
@@ -91,7 +97,7 @@ function CountForm({
   const numbers: CashCounts = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v === "" ? 0 : Number(v)]));
   const total = countTotal(numbers);
   const dirty = JSON.stringify(Object.entries(numbers).filter(([, n]) => n > 0).sort()) !== JSON.stringify(Object.entries(saved).sort());
-  const label = phase === "opening" ? "Before (opening)" : "After (closing)";
+  const label = phase === "opening" ? "Start (before selling)" : "End (after selling)";
   const PhaseIcon = phase === "opening" ? ArrowDownToLine : ArrowUpFromLine;
   const field = (d: number) => {
     const n = numbers[String(d)] ?? 0;
@@ -122,7 +128,7 @@ function CountForm({
       data-testid={`count-${phase}`}
       onSubmit={(e) => {
         e.preventDefault();
-        run(saveCashCount, { report_id: reportId, phase, counts: Object.fromEntries(Object.entries(numbers).filter(([, n]) => n > 0)) });
+        run(saveCashCount, { report_id: reportId, phase, counts: Object.fromEntries(Object.entries(numbers).filter(([, n]) => n > 0)) }, () => onSaved?.());
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -153,7 +159,7 @@ function CountForm({
       </div>
       {!disabled && (
         <Button type="submit" size="sm" variant={dirty || !savedBy ? "default" : "outline"} disabled={pending || total === null}>
-          {pending ? "…" : savedBy ? "Save the count again" : "Save the count"}
+          {pending ? "…" : (submitLabel ?? (savedBy ? "Save the count again" : "Save the count"))}{total !== null && submitLabel ? ` · ${formatCents(total)}` : ""}
         </Button>
       )}
       {error && (
@@ -259,10 +265,64 @@ function BookForm({ reportId, finance }: { reportId: string; finance: CashFinanc
   );
 }
 
+/** Where the cash box is: count at the start → running → count at the end → sign off → done. */
+export type CashPhase = "start" | "running" | "end" | "signoff" | "closed";
+
+export function cashPhase(report: Pick<CashReportView, "opening_cents" | "closing_cents" | "closed_at">): CashPhase {
+  if (report.closed_at) return "closed";
+  if (report.opening_cents === null) return "start";
+  if (report.closing_cents === null) return "running";
+  return "signoff";
+}
+
+/** A screen of the cash box: what it is about and what to do. */
+function Step({ icon: Icon, title, text, children, testId }: { icon: LucideIcon; title: string; text?: React.ReactNode; children: React.ReactNode; testId?: string }) {
+  return (
+    <div className="space-y-4" data-testid={testId}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-esn text-white" aria-hidden="true">
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-gray-900">{title}</h3>
+          {text && <p className="text-sm text-gray-600">{text}</p>}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Before, after, takings – and for office hours the cards and the difference. */
+function Summary({ report, officeHour }: { report: CashReportView; officeHour: boolean }) {
+  const take = takings(report);
+  const cards = officeHour ? cardRevenue(report) : null;
+  const expected = officeHour ? expectedClosing(report) : null;
+  const diff = officeHour ? difference(report) : null;
+  return (
+    <div className={cn("grid grid-cols-2 gap-2", officeHour ? "lg:grid-cols-4" : "sm:grid-cols-3")} data-testid="cash-figures">
+      <Figure icon={ArrowDownToLine} label="Start" value={formatCents(report.opening_cents)} />
+      <Figure icon={ArrowUpFromLine} label="End" value={formatCents(report.closing_cents)} />
+      <Figure icon={TrendingUp} label="Takings (end − start)" value={formatCents(take)} tone={take !== null && take < 0 ? "red" : take !== null && take > 0 ? "green" : undefined} />
+      {officeHour && (
+        <>
+          <Figure icon={CreditCard} label="ESNcards sold" value={`${report.esncards_internal} internal · ${report.esncards_external} external`} />
+          <Figure icon={CreditCard} label="Cards should bring" value={formatCents(cards)} />
+          <Figure icon={Equal} label="Expected at the end (all cash)" value={formatCents(expected)} />
+          <Figure icon={Scale} label="Difference" value={diff === null ? "–" : `${diff > 0 ? "+" : ""}${formatCents(diff)}`} tone={diff === null || diff === 0 ? undefined : diff < 0 ? "red" : "green"} />
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
- * The cash box of an office hour or an event: count it before and after,
- * count ESNcards sold (office hours), and the OC signs off. Finance checks,
- * reopens or books it.
+ * The cash box of an office hour or an event, one step at a time (round
+ * 2026-11-11 (2)): count the box at the start and confirm it; while it
+ * runs, count the ESNcards sold, show the PayPal QR codes and note what
+ * was sold; count it at the end; the OC signs it off on a summary.
+ * Finance checks, reopens or books it. Earlier steps can be corrected
+ * until the sign-off.
  */
 export function CashBox({
   report,
@@ -272,6 +332,7 @@ export function CashBox({
   isOc,
   finance,
   boxes,
+  payments,
 }: {
   report: CashReportView | null;
   target: { event_id: string } | { internal_event_id: string };
@@ -281,7 +342,12 @@ export function CashBox({
   finance: CashFinance | null;
   /** The cash boxes to pick from (round 2026-10-31). */
   boxes: CashBoxOption[];
+  /** The PayPal QR codes, shown while the box runs (round 2026-11-11 (2)). */
+  payments?: React.ReactNode;
 }) {
+  const [ending, setEnding] = useState(false);
+  const [correcting, setCorrecting] = useState<"opening" | "closing" | null>(null);
+
   if (!report) {
     return (
       <Shell title="Cash box" badge={<Badge tone="gray">Not started</Badge>}>
@@ -289,10 +355,10 @@ export function CashBox({
           <p>
             {officeHour
               ? "Count the cash box when the office hour starts, count the ESNcards you sell, and count the box again at the end. The OC signs it off."
-              : "Using the cash box (selling drinks or the like)? Count it before and after; the OC signs it off and Finance sees the takings."}
+              : "Using the cash box (selling drinks or the like)? Count it at the start and at the end; the OC signs it off and Finance sees the takings."}
           </p>
           <div className="rounded-xl bg-gray-50/70 px-2 py-4">
-            <ProgressTrack label="How the cash box works" steps={trackSteps(null, false, officeHour)} className="mx-auto max-w-2xl" />
+            <ProgressTrack label="How the cash box works" steps={trackSteps(null, false, false)} className="mx-auto max-w-2xl" />
           </div>
           {canCount ? (
             <StartForm target={target} boxes={boxes} officeHour={officeHour} />
@@ -302,18 +368,51 @@ export function CashBox({
               The OC and helpers start it.
             </p>
           )}
+          {/* Office hours show their QR codes only while the box runs (round 2026-11-11 (3)); events may sell without a cash box. */}
+          {payments && !officeHour && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="mb-2 text-sm font-semibold text-gray-900">PayPal QR codes</p>
+              {payments}
+            </div>
+          )}
         </div>
       </Shell>
     );
   }
 
   const status = cashStatus(report, finance?.booked ?? false);
-  const closed = !!report.closed_at;
-  const editable = canCount && !closed;
-  const take = takings(report);
-  const cards = officeHour ? cardRevenue(report) : null;
-  const expected = officeHour ? expectedClosing(report) : null;
-  const diff = officeHour ? difference(report) : null;
+  const phase = cashPhase(report);
+  const editable = canCount && phase !== "closed";
+  // What is on screen: the phase, or a step the staff went back to.
+  const screen: CashPhase | "correct" = correcting && editable ? "correct" : phase === "running" && ending && editable ? "end" : phase;
+  const opening = (
+    <CountForm
+      key={`o-${report.opening_counted}`}
+      reportId={report.id}
+      phase="opening"
+      saved={report.opening_counts}
+      savedBy={report.opening_counted}
+      disabled={!editable}
+      submitLabel={report.opening_counted ? "Save the corrected start count" : "Confirm the start count"}
+      onSaved={() => setCorrecting(null)}
+      suggested={report.box && report.box.cents > 0 ? { counts: report.box.counts, label: `what Finance knows is in the ${report.box.name} (${formatCents(report.box.cents)})` } : null}
+    />
+  );
+  const closing = (
+    <CountForm
+      key={`c-${report.closing_counted}`}
+      reportId={report.id}
+      phase="closing"
+      saved={report.closing_counts}
+      savedBy={report.closing_counted}
+      disabled={!editable}
+      submitLabel={report.closing_counted ? "Save the corrected end count" : "Confirm the end count"}
+      onSaved={() => {
+        setCorrecting(null);
+        setEnding(false);
+      }}
+    />
+  );
 
   return (
     <Shell
@@ -330,114 +429,177 @@ export function CashBox({
       }
       badge={
         <Badge tone={CASH_STATUS_TONES[status]} data-testid="cash-status">
-          {CASH_STATUS_LABELS[status]}
+          {phase === "running" ? "Running" : CASH_STATUS_LABELS[status]}
         </Badge>
       }
     >
       <div className="border-y border-gray-100 bg-gray-50/60 px-2 py-4 sm:px-6">
-        <ProgressTrack label="Cash box steps" steps={trackSteps(report, finance?.booked ?? false, officeHour)} className="mx-auto max-w-2xl" />
+        <ProgressTrack label="Cash box steps" steps={trackSteps(report, finance?.booked ?? false, screen === "end")} className="mx-auto max-w-2xl" />
       </div>
-      <div className="space-y-5 p-4 sm:p-5">
-        {closed && (
-          <Alert tone="success">
-            Signed off by {report.closed}. {report.checked ? `Checked by ${report.checked}.` : "Finance checks it."}
-          </Alert>
-        )}
-        <div className={cn("grid grid-cols-2 gap-2", officeHour ? "lg:grid-cols-4" : "sm:grid-cols-3")} data-testid="cash-figures">
-          <Figure icon={ArrowDownToLine} label="Before" value={formatCents(report.opening_cents)} />
-          <Figure icon={ArrowUpFromLine} label="After" value={formatCents(report.closing_cents)} />
-          <Figure icon={TrendingUp} label="Takings (after − before)" value={formatCents(take)} tone={take !== null && take < 0 ? "red" : take !== null && take > 0 ? "green" : undefined} />
-          {officeHour && (
-            <>
-              <Figure icon={CreditCard} label="ESNcards sold" value={`${report.esncards_internal} internal · ${report.esncards_external} external`} />
-              <Figure icon={CreditCard} label="Cards should bring" value={formatCents(cards)} />
-              <Figure icon={Equal} label="Expected after (all cash)" value={formatCents(expected)} />
-              <Figure icon={Scale} label="Difference" value={diff === null ? "–" : `${diff > 0 ? "+" : ""}${formatCents(diff)}`} tone={diff === null || diff === 0 ? undefined : diff < 0 ? "red" : "green"} />
-            </>
-          )}
-        </div>
-
-        {officeHour && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <CardCounter reportId={report.id} card="internal" value={report.esncards_internal} price={report.card_price_internal_cents} disabled={!editable} />
-            <CardCounter reportId={report.id} card="external" value={report.esncards_external} price={report.card_price_external_cents} disabled={!editable} />
-          </div>
+      <div className="space-y-5 p-4 sm:p-5" data-phase={screen}>
+        {screen === "correct" && (
+          <Step icon={correcting === "opening" ? ArrowDownToLine : ArrowUpFromLine} title={correcting === "opening" ? "Correct the start count" : "Correct the end count"} testId="cash-correct">
+            {correcting === "opening" ? opening : closing}
+            <Button variant="ghost" size="sm" onClick={() => setCorrecting(null)}>
+              Back
+            </Button>
+          </Step>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <CountForm
-            key={`o-${report.opening_counted}`}
-            reportId={report.id}
-            phase="opening"
-            saved={report.opening_counts}
-            savedBy={report.opening_counted}
-            disabled={!editable}
-            suggested={report.box && report.box.cents > 0 ? { counts: report.box.counts, label: `what Finance knows is in the ${report.box.name} (${formatCents(report.box.cents)})` } : null}
-          />
-          <CountForm key={`c-${report.closing_counted}`} reportId={report.id} phase="closing" saved={report.closing_counts} savedBy={report.closing_counted} disabled={!editable} />
-        </div>
-
-        <NoteForm reportId={report.id} note={report.note} disabled={!editable} />
-
-        {editable && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-esn/20 bg-esn/5 p-4" data-testid="sign-off">
-            <p className="min-w-0 flex-1 basis-64 text-sm text-esn-dark">
-              {isOc
-                ? "When the box is counted after the end, sign it off: the counts and sales are then fixed (Finance can reopen it)."
-                : "The OC signs the cash box off once it is counted before and after."}
-            </p>
-            {isOc && (
-              <ActionButton
-                action={closeCashBox}
-                input={{ report_id: report.id }}
-                size="default"
-                disabled={report.opening_cents === null || report.closing_cents === null}
-                confirm={{
-                  title: "Sign off the cash box?",
-                  body: `Before: ${formatCents(report.opening_cents)}\nAfter: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}\n\n${report.box ? `The ${report.box.name} then holds ${formatCents(report.closing_cents)}. ` : ""}Finance checks and books it next; only Finance can reopen it.`,
-                  confirmLabel: "Sign off",
-                }}
-                done="Cash box signed off – Finance checks it next."
-              >
-                Close and sign off
-              </ActionButton>
-            )}
-          </div>
+        {screen === "start" && (
+          <Step
+            icon={ArrowDownToLine}
+            title="1 · Count the box at the start"
+            text={editable ? "Count every note and coin before you sell anything, then confirm. The next screen is for while it runs." : "The OC and helpers count the box at the start."}
+            testId="cash-start"
+          >
+            {opening}
+          </Step>
         )}
 
-        {finance?.canAct && closed && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4" data-testid="cash-finance">
-            {!report.checked_at && (
-              <ActionButton action={checkCashBox} input={{ report_id: report.id }} variant="success">
-                Mark checked
-              </ActionButton>
+        {screen === "running" && (
+          <Step
+            icon={Play}
+            title="2 · Running"
+            text={
+              <>
+                Started with <strong className="tabular-nums">{formatCents(report.opening_cents)}</strong>
+                {report.opening_counted ? `, counted by ${report.opening_counted}` : ""}.
+                {editable && (
+                  <>
+                    {" "}
+                    <button type="button" className="text-esn hover:underline" onClick={() => setCorrecting("opening")}>
+                      Correct
+                    </button>
+                  </>
+                )}
+              </>
+            }
+            testId="cash-running"
+          >
+            {officeHour && (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <CardCounter reportId={report.id} card="internal" value={report.esncards_internal} price={report.card_price_internal_cents} disabled={!editable} />
+                  <CardCounter reportId={report.id} card="external" value={report.esncards_external} price={report.card_price_external_cents} disabled={!editable} />
+                </div>
+                <p className="text-sm text-gray-600" data-testid="cash-expected-now">
+                  Cash that should be in the box now (if every card was paid in cash): <strong className="tabular-nums">{formatCents(expectedClosing({ ...report, closing_cents: null }))}</strong>
+                </p>
+              </>
             )}
-            {!finance.booked && take !== null && take > 0 && <BookForm reportId={report.id} finance={finance} />}
-            {!finance.booked && (
-              <ActionButton action={reopenCashBox} input={{ report_id: report.id }} variant="outline" confirm="Reopen the cash box? The OC has to sign it off again.">
-                Reopen
-              </ActionButton>
+            {payments && (
+              <div className="rounded-xl border border-gray-200 p-3 sm:p-4">
+                <p className="mb-2 text-sm font-semibold text-gray-900">PayPal QR codes</p>
+                {payments}
+              </div>
             )}
-            {finance.booked && <span className="text-sm text-gray-600">The takings are in the ledger.</span>}
-          </div>
+            <NoteForm reportId={report.id} note={report.note} disabled={!editable} />
+            {editable && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-esn/20 bg-esn/5 p-4">
+                <p className="min-w-0 flex-1 basis-64 text-sm text-esn-dark">Done selling? Count the box once more.</p>
+                <Button size="default" onClick={() => setEnding(true)} data-testid="cash-end">
+                  <Square className="mr-1.5 h-4 w-4" aria-hidden="true" /> End and count the box
+                </Button>
+              </div>
+            )}
+          </Step>
+        )}
+
+        {screen === "end" && (
+          <Step icon={ArrowUpFromLine} title="3 · Count the box at the end" text="Count every note and coin now, then confirm. You see the summary and the sign-off next." testId="cash-ending">
+            {closing}
+            <Button variant="ghost" size="sm" onClick={() => setEnding(false)}>
+              Back – still selling
+            </Button>
+          </Step>
+        )}
+
+        {screen === "signoff" && (
+          <Step icon={ClipboardCheck} title="4 · Check and sign off" text="Everything at a glance. Correct a count if something is off, then the OC signs it off." testId="cash-summary">
+            <Summary report={report} officeHour={officeHour} />
+            {report.note && <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700">“{report.note}”</p>}
+            {editable && (
+              <p className="flex flex-wrap gap-3 text-sm">
+                <button type="button" className="text-esn hover:underline" onClick={() => setCorrecting("opening")}>
+                  Correct the start count
+                </button>
+                <button type="button" className="text-esn hover:underline" onClick={() => setCorrecting("closing")}>
+                  Correct the end count
+                </button>
+              </p>
+            )}
+            {editable && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-esn/20 bg-esn/5 p-4" data-testid="sign-off">
+                <p className="min-w-0 flex-1 basis-64 text-sm text-esn-dark">
+                  {isOc ? "Signing off fixes the counts and sales (Finance can reopen it)." : "The OC signs the cash box off."}
+                </p>
+                {isOc && (
+                  <ActionButton
+                    action={closeCashBox}
+                    input={{ report_id: report.id }}
+                    size="default"
+                    confirm={{
+                      title: "Sign off the cash box?",
+                      body: `Start: ${formatCents(report.opening_cents)}\nEnd: ${formatCents(report.closing_cents)}${officeHour ? `\nESNcards: ${report.esncards_internal} internal, ${report.esncards_external} external` : ""}\n\n${report.box ? `The ${report.box.name} then holds ${formatCents(report.closing_cents)}. ` : ""}Finance checks and books it next; only Finance can reopen it.`,
+                      confirmLabel: "Sign off",
+                    }}
+                    done="Cash box signed off – Finance checks it next."
+                  >
+                    Close and sign off
+                  </ActionButton>
+                )}
+              </div>
+            )}
+          </Step>
+        )}
+
+        {screen === "closed" && (
+          <Step icon={CircleCheck} title="Signed off" text={`By ${report.closed}. ${report.checked ? `Checked by ${report.checked}.` : "Finance checks it."}`} testId="cash-closed">
+            <Summary report={report} officeHour={officeHour} />
+            {report.note && <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700">“{report.note}”</p>}
+            {officeHour && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CardCounter reportId={report.id} card="internal" value={report.esncards_internal} price={report.card_price_internal_cents} disabled />
+                <CardCounter reportId={report.id} card="external" value={report.esncards_external} price={report.card_price_external_cents} disabled />
+              </div>
+            )}
+            {finance?.canAct && (
+              <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4" data-testid="cash-finance">
+                {!report.checked_at && (
+                  <ActionButton action={checkCashBox} input={{ report_id: report.id }} variant="success">
+                    Mark checked
+                  </ActionButton>
+                )}
+                {!finance.booked && (takings(report) ?? 0) > 0 && <BookForm reportId={report.id} finance={finance} />}
+                {!finance.booked && (
+                  <ActionButton action={reopenCashBox} input={{ report_id: report.id }} variant="outline" confirm="Reopen the cash box? The OC has to sign it off again.">
+                    Reopen
+                  </ActionButton>
+                )}
+                {finance.booked && <span className="text-sm text-gray-600">The takings are in the ledger.</span>}
+              </div>
+            )}
+          </Step>
         )}
       </div>
     </Shell>
   );
 }
 
-/** Before → after → signed off → checked by Finance (→ booked when there are takings). */
-function trackSteps(report: CashReportView | null, booked: boolean, officeHour: boolean): TrackStep[] {
+/** Start count → running → end count → signed off → checked by Finance (or booked). */
+function trackSteps(report: CashReportView | null, booked: boolean, ending: boolean): TrackStep[] {
   const before = report?.opening_cents != null;
   const after = report?.closing_cents != null;
   const closed = !!report?.closed_at;
   const checked = !!report?.checked_at;
-  const current = !before ? 0 : !after ? 1 : !closed ? 2 : !checked ? 3 : 4;
+  const current = !before ? 0 : !after ? (ending ? 2 : 1) : !closed ? 3 : !checked ? 4 : 5;
   const state = (i: number): TrackStep["state"] => (!report ? "todo" : i < current ? "done" : i === current ? "current" : "todo");
   return [
-    { label: "Count before", note: officeHour ? "at the start" : "before selling", state: state(0) },
-    { label: "Count after", note: "at the end", state: state(1) },
-    { label: "Signed off", note: report?.closed ?? "by the OC", state: state(2) },
-    { label: booked ? "Booked" : "Checked", note: report?.checked ?? "by Finance", state: checked || booked ? "done" : state(3) },
+    { label: "Start count", note: report?.opening_counted ?? "before selling", state: state(0) },
+    { label: "Running", note: "cards, QR codes", state: state(1) },
+    { label: "End count", note: report?.closing_counted ?? "at the end", state: state(2) },
+    { label: "Signed off", note: report?.closed ?? "by the OC", state: state(3) },
+    { label: booked ? "Booked" : "Checked", note: report?.checked ?? "by Finance", state: checked || booked ? "done" : state(4) },
   ];
 }

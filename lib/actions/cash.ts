@@ -3,7 +3,7 @@
 // it off. Finance checks, reopens or books it, and keeps the boxes. The database functions check
 // who may do what (staff, OC, Finance).
 import { z } from "zod";
-import { dbError, defineAction, forbidden, PAGES, requireRole, uuid } from "@/lib/actions/core";
+import { dbError, defineAction, forbidden, PAGES, requireRole, uuid, type ActionContext } from "@/lib/actions/core";
 import { DENOMINATIONS, countTotal } from "@/lib/cash";
 
 // My events and Home show an office hour's cash box step (round 2026-11-03 (2)).
@@ -20,10 +20,24 @@ export const startCashBox = defineAction(
     const target = "event_id" in i ? { event: i.event_id } : { internal_event: i.internal_event_id };
     const { data, error } = await ctx.supabase.rpc("ensure_cash_report", { ...target, ...(i.box_id ? { box: i.box_id } : {}) });
     dbError(error);
+    // An office hour's ESNcard QR codes come with its cash box (round 2026-11-11 (3)), at the current prices.
+    if ("internal_event_id" in i) await ensureCardLinks(ctx, i.internal_event_id);
     return { report_id: data as string };
   },
   { revalidate: CASH }
 );
+
+/** The ESNcard links (member, external) of an office hour, made once; other kinds of dates have none. */
+export async function ensureCardLinks(ctx: ActionContext, internalEventId: string): Promise<void> {
+  const { data: ev } = await ctx.supabase.from("internal_events").select("kind").eq("id", internalEventId).maybeSingle();
+  if (ev?.kind !== "office_hour") return;
+  const { data: have } = await ctx.supabase.from("payment_links").select("preset").eq("internal_event_id", internalEventId).in("preset", ["esncard_internal", "esncard_external"]);
+  for (const kind of ["esncard_internal", "esncard_external"] as const) {
+    if ((have ?? []).some((l) => l.preset === kind)) continue;
+    // A refusal (no price set yet, the date cancelled) must not stop the cash box.
+    await ctx.supabase.rpc("create_payment_link_here", { target_internal: internalEventId, link_kind: kind });
+  }
+}
 
 export const saveCashCount = defineAction(
   z.object({ report_id: uuid, phase: z.enum(["opening", "closing"]), counts }),

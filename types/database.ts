@@ -5,7 +5,21 @@ export type Database = {
   
   "public": {
           Tables: {
-            "activity_log": {
+            "account_balances": {
+                  Row: {
+                    "account": string,"as_of": string,"cents": number,"created_at": string,"created_by": string | null,"id": string,"note": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account": string,"as_of": string,"cents": number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"note"?: string
+                  }
+                  Update: {
+                    "account"?: string,"as_of"?: string,"cents"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"note"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"activity_log": {
                   Row: {
                     "action": string,"actor_email": string | null,"at": string,"cycle_id": string | null,"details": NonNullable<Json>,"entity": string,"entity_id": string | null,"event_id": string | null,"id": number
                   }
@@ -160,6 +174,32 @@ isOneToOne: false
       columns: ["profile_id"]
 isOneToOne: false
       referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"budget_lines": {
+                  Row: {
+                    "category_id": string,"created_at": string,"created_by": string | null,"event_id": string | null,"id": string,"label": string,"note": string,"planned_cents": number,"semester": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category_id": string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string | null,"id"?: string,"label"?: string,"note"?: string,"planned_cents": number,"semester": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "category_id"?: string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string | null,"id"?: string,"label"?: string,"note"?: string,"planned_cents"?: number,"semester"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "budget_lines_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "finance_categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "budget_lines_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
       referencedColumns: ["id"]
     }
                   ]
@@ -523,14 +563,14 @@ isOneToOne: false
                   ]
                 },"events": {
                   Row: {
-                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"big": boolean | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"non_crucial": boolean,"ocs_needed": number,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
+                    "address_city": string | null,"address_country": string,"address_postal_code": string | null,"address_street": string | null,"archive_ref": string | null,"big": boolean | null,"cancel_reason": string | null,"cancellation_noted_at": string | null,"cancellation_noted_by": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"capacity": number | null,"category_id": string | null,"chat_space_name": string | null,"chat_space_requested_at": string | null,"chat_space_url": string | null,"created_at": string,"created_by": string | null,"cycle_id": string | null,"ends_at": string | null,"format_id": string | null,"helpers_needed": number,"id": string,"location": string | null,"meeting_city": string | null,"meeting_country": string,"meeting_point": string | null,"meeting_postal_code": string | null,"meeting_street": string | null,"meeting_time": string | null,"non_crucial": boolean,"ocs_needed": number,"pretix_slug": string | null,"price_cents": number | null,"proposed_by": string | null,"series_id": string | null,"source": string,"starts_at": string,"status": Database["public"]['Enums']["event_status"],"title": string,"type": Database["public"]['Enums']["event_type"],"understaffed_decided_at": string | null,"understaffed_decided_by": string | null,"understaffed_decision": string | null,"updated_at": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"big"?: boolean | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"big"?: boolean | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"pretix_slug"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at": string,"status"?: Database["public"]['Enums']["event_status"],"title": string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Update: {
-                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"big"?: boolean | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
+                    "address_city"?: string | null,"address_country"?: string,"address_postal_code"?: string | null,"address_street"?: string | null,"archive_ref"?: string | null,"big"?: boolean | null,"cancel_reason"?: string | null,"cancellation_noted_at"?: string | null,"cancellation_noted_by"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"capacity"?: number | null,"category_id"?: string | null,"chat_space_name"?: string | null,"chat_space_requested_at"?: string | null,"chat_space_url"?: string | null,"created_at"?: string,"created_by"?: string | null,"cycle_id"?: string | null,"ends_at"?: string | null,"format_id"?: string | null,"helpers_needed"?: number,"id"?: string,"location"?: string | null,"meeting_city"?: string | null,"meeting_country"?: string,"meeting_point"?: string | null,"meeting_postal_code"?: string | null,"meeting_street"?: string | null,"meeting_time"?: string | null,"non_crucial"?: boolean,"ocs_needed"?: number,"pretix_slug"?: string | null,"price_cents"?: number | null,"proposed_by"?: string | null,"series_id"?: string | null,"source"?: string,"starts_at"?: string,"status"?: Database["public"]['Enums']["event_status"],"title"?: string,"type"?: Database["public"]['Enums']["event_type"],"understaffed_decided_at"?: string | null,"understaffed_decided_by"?: string | null,"understaffed_decision"?: string | null,"updated_at"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {
@@ -677,28 +717,28 @@ isOneToOne: false
                   ]
                 },"finance_categories": {
                   Row: {
-                    "active": boolean,"created_at": string,"direction": string,"id": string,"name": string,"sort": number
+                    "active": boolean,"created_at": string,"direction": string,"id": string,"name": string,"sort": number,"sphere": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"created_at"?: string,"direction": string,"id"?: string,"name": string,"sort"?: number
+                    "active"?: boolean,"created_at"?: string,"direction": string,"id"?: string,"name": string,"sort"?: number,"sphere"?: string
                   }
                   Update: {
-                    "active"?: boolean,"created_at"?: string,"direction"?: string,"id"?: string,"name"?: string,"sort"?: number
+                    "active"?: boolean,"created_at"?: string,"direction"?: string,"id"?: string,"name"?: string,"sort"?: number,"sphere"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"finance_entries": {
                   Row: {
-                    "amount_cents": number,"beleg_received": boolean,"beleg_ref": string,"booked_on": string,"cash_report_id": string | null,"category_id": string,"counterparty": string,"created_at": string,"created_by": string | null,"description": string,"direction": string,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"payment_method": string,"updated_at": string,"updated_by": string | null
+                    "amount_cents": number,"beleg_received": boolean,"beleg_ref": string,"booked_on": string,"cash_report_id": string | null,"category_id": string,"counterparty": string,"created_at": string,"created_by": string | null,"description": string,"direction": string,"event_id": string | null,"id": string,"internal_event_id": string | null,"is_fee": boolean,"note": string,"payment_id": string | null,"payment_method": string,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents": number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on": string,"cash_report_id"?: string | null,"category_id": string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description": string,"direction": string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
+                    "amount_cents": number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on": string,"cash_report_id"?: string | null,"category_id": string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description": string,"direction": string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"is_fee"?: boolean,"note"?: string,"payment_id"?: string | null,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "amount_cents"?: number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on"?: string,"cash_report_id"?: string | null,"category_id"?: string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description"?: string,"direction"?: string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
+                    "amount_cents"?: number,"beleg_received"?: boolean,"beleg_ref"?: string,"booked_on"?: string,"cash_report_id"?: string | null,"category_id"?: string,"counterparty"?: string,"created_at"?: string,"created_by"?: string | null,"description"?: string,"direction"?: string,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"is_fee"?: boolean,"note"?: string,"payment_id"?: string | null,"payment_method"?: string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -724,6 +764,12 @@ isOneToOne: false
       columns: ["internal_event_id"]
 isOneToOne: false
       referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "finance_entries_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "payments"
       referencedColumns: ["id"]
     }
                   ]
@@ -887,6 +933,102 @@ isOneToOne: false
       referencedColumns: ["event_id"]
     }
                   ]
+                },"payment_imports": {
+                  Row: {
+                    "balance_cents": number | null,"balance_on": string | null,"created_at": string,"created_by": string | null,"filename": string,"id": string,"period_from": string | null,"period_to": string | null,"rows_new": number,"rows_skipped": number,"rows_total": number,"source": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "balance_cents"?: number | null,"balance_on"?: string | null,"created_at"?: string,"created_by"?: string | null,"filename"?: string,"id"?: string,"period_from"?: string | null,"period_to"?: string | null,"rows_new"?: number,"rows_skipped"?: number,"rows_total"?: number,"source": string
+                  }
+                  Update: {
+                    "balance_cents"?: number | null,"balance_on"?: string | null,"created_at"?: string,"created_by"?: string | null,"filename"?: string,"id"?: string,"period_from"?: string | null,"period_to"?: string | null,"rows_new"?: number,"rows_skipped"?: number,"rows_total"?: number,"source"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"payment_links": {
+                  Row: {
+                    "active": boolean,"amount_cents": number | null,"category_id": string,"created_at": string,"created_by": string | null,"event_id": string | null,"id": string,"internal_event_id": string | null,"note": string,"preset": string | null,"reference": string,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"amount_cents"?: number | null,"category_id": string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"preset"?: string | null,"reference": string,"title": string
+                  }
+                  Update: {
+                    "active"?: boolean,"amount_cents"?: number | null,"category_id"?: string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string | null,"id"?: string,"internal_event_id"?: string | null,"note"?: string,"preset"?: string | null,"reference"?: string,"title"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payment_links_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "finance_categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_links_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_links_internal_event_id_fkey"
+      columns: ["internal_event_id"]
+isOneToOne: false
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"payments": {
+                  Row: {
+                    "booked_on": string,"checked_at": string | null,"created_at": string,"currency": string,"decided_at": string | null,"decided_by": string | null,"email": string,"external_id": string,"fee_cents": number,"gross_cents": number,"id": string,"ignore_reason": string,"import_id": string | null,"invoice": string,"link_id": string | null,"matched_by": string | null,"name": string,"note": string,"occurred_at": string,"reference_txn": string,"source": string,"status": string,"subject": string,"suggested_category_id": string | null,"suggested_event_id": string | null,"suggested_internal_event_id": string | null,"suggested_link_id": string | null,"suggestion": string,"type": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "booked_on": string,"checked_at"?: string | null,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"email"?: string,"external_id": string,"fee_cents"?: number,"gross_cents": number,"id"?: string,"ignore_reason"?: string,"import_id"?: string | null,"invoice"?: string,"link_id"?: string | null,"matched_by"?: string | null,"name"?: string,"note"?: string,"occurred_at": string,"reference_txn"?: string,"source"?: string,"status"?: string,"subject"?: string,"suggested_category_id"?: string | null,"suggested_event_id"?: string | null,"suggested_internal_event_id"?: string | null,"suggested_link_id"?: string | null,"suggestion"?: string,"type"?: string
+                  }
+                  Update: {
+                    "booked_on"?: string,"checked_at"?: string | null,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"email"?: string,"external_id"?: string,"fee_cents"?: number,"gross_cents"?: number,"id"?: string,"ignore_reason"?: string,"import_id"?: string | null,"invoice"?: string,"link_id"?: string | null,"matched_by"?: string | null,"name"?: string,"note"?: string,"occurred_at"?: string,"reference_txn"?: string,"source"?: string,"status"?: string,"subject"?: string,"suggested_category_id"?: string | null,"suggested_event_id"?: string | null,"suggested_internal_event_id"?: string | null,"suggested_link_id"?: string | null,"suggestion"?: string,"type"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payments_import_id_fkey"
+      columns: ["import_id"]
+isOneToOne: false
+      referencedRelation: "payment_imports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_link_id_fkey"
+      columns: ["link_id"]
+isOneToOne: false
+      referencedRelation: "payment_links"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_suggested_category_id_fkey"
+      columns: ["suggested_category_id"]
+isOneToOne: false
+      referencedRelation: "finance_categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_suggested_event_id_fkey"
+      columns: ["suggested_event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_suggested_internal_event_id_fkey"
+      columns: ["suggested_internal_event_id"]
+isOneToOne: false
+      referencedRelation: "internal_events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_suggested_link_id_fkey"
+      columns: ["suggested_link_id"]
+isOneToOne: false
+      referencedRelation: "payment_links"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"payout_batches": {
                   Row: {
                     "created_at": string,"id": string,"month": string,"paid_at": string | null,"paid_by": string | null,"status": string
@@ -958,6 +1100,44 @@ isOneToOne: false
       columns: ["requester_id"]
 isOneToOne: false
       referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"pretix_orders": {
+                  Row: {
+                    "code": string,"created_at": string,"email": string,"event_id": string | null,"event_slug": string,"fees_cents": number,"finance_entry_id": string | null,"id": string,"import_id": string | null,"name": string,"ordered_at": string | null,"paid_on": string | null,"payment_id": string | null,"provider": string,"status": string,"tickets": number,"total_cents": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "code": string,"created_at"?: string,"email"?: string,"event_id"?: string | null,"event_slug": string,"fees_cents"?: number,"finance_entry_id"?: string | null,"id"?: string,"import_id"?: string | null,"name"?: string,"ordered_at"?: string | null,"paid_on"?: string | null,"payment_id"?: string | null,"provider"?: string,"status": string,"tickets"?: number,"total_cents": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "code"?: string,"created_at"?: string,"email"?: string,"event_id"?: string | null,"event_slug"?: string,"fees_cents"?: number,"finance_entry_id"?: string | null,"id"?: string,"import_id"?: string | null,"name"?: string,"ordered_at"?: string | null,"paid_on"?: string | null,"payment_id"?: string | null,"provider"?: string,"status"?: string,"tickets"?: number,"total_cents"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pretix_orders_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pretix_orders_finance_entry_id_fkey"
+      columns: ["finance_entry_id"]
+isOneToOne: false
+      referencedRelation: "finance_entries"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pretix_orders_import_id_fkey"
+      columns: ["import_id"]
+isOneToOne: false
+      referencedRelation: "payment_imports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pretix_orders_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "payments"
       referencedColumns: ["id"]
     }
                   ]
@@ -1335,6 +1515,12 @@ isOneToOne: false
 "book_cash_report":
 { Args: { "category": string,"report": string }; Returns: string
                            },
+"book_payment":
+{ Args: { "category": string,"description"?: string,"event"?: string,"internal_event"?: string,"link"?: string,"matched_by"?: string,"payment": string }; Returns: undefined
+                           },
+"book_pretix_orders":
+{ Args: { "category": string,"event": string }; Returns: number
+                           },
 "bump_esncards":
 { Args: { "card": string,"delta": number,"report": string }; Returns: Json
                            },
@@ -1445,6 +1631,9 @@ isOneToOne: false
                            },
 "create_esn_token":
 { Args: { "label": string,"valid_days"?: number }; Returns: string
+                           },
+"create_payment_link_here":
+{ Args: { "link_cents"?: number,"link_kind"?: string,"link_title"?: string,"target_event"?: string,"target_internal"?: string }; Returns: Json
                            },
 "create_post":
 { Args: { "channel": string,"events": (string)[],"format"?: string,"scheduled_for": string,"title"?: string }; Returns: string
@@ -1572,6 +1761,9 @@ isOneToOne: false
 "has_role":
 { Args: { "wanted": Database["public"]['Enums']["app_role"] }; Returns: boolean
                            },
+"ignore_payment":
+{ Args: { "payment": string,"reason": string }; Returns: undefined
+                           },
 "inspiration_events":
 { Args: Record<PropertyKey, never>; Returns: {
               "category_id": string,"ends_at": string,"event_id": string,"format_id": string,"headcount": number,"helpers_needed": number,"hook": string,"intro": string,"photo_folder_url": string,"price": string,"source": string,"starts_at": string,"title": string,"type": Database["public"]['Enums']["event_type"],"venue": string
@@ -1617,6 +1809,9 @@ isOneToOne: false
 { Args: { "semester": string }; Returns: {
               "full_name": string,"helper_count": number,"newbie": boolean,"oc_count": number,"office_hour_count": number,"profile_id": string
             }[]
+                           },
+"link_pretix_event":
+{ Args: { "event": string,"slug": string }; Returns: undefined
                            },
 "mark_beleg_received":
 { Args: { "claim": string }; Returns: undefined
@@ -1813,8 +2008,14 @@ isOneToOne: false
 "set_my_payout_details":
 { Args: { "account_holder"?: string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: number
                            },
+"set_payment_link_active":
+{ Args: { "link": string,"on_off": boolean }; Returns: undefined
+                           },
 "set_payout_details":
 { Args: { "account_holder"?: string,"claim": string,"iban"?: string,"method": string,"paypal_email"?: string }; Returns: undefined
+                           },
+"set_paypal_settings":
+{ Args: { "account_name": string,"handle": string }; Returns: undefined
                            },
 "set_post_event_picture":
 { Args: { "event": string,"picture": string,"post": string }; Returns: undefined
@@ -1875,6 +2076,9 @@ isOneToOne: false
                            },
 "test_invoke_job_runner":
 { Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"unbook_payment":
+{ Args: { "payment": string }; Returns: undefined
                            },
 "unmark_esn_uploaded":
 { Args: { "event": string }; Returns: undefined

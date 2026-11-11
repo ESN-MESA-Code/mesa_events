@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import { addMonths, berlinDate, berlinInputToIso } from "@/lib/dates";
+import { semesterFor } from "@/lib/internal";
 import type { EventKey } from "@/lib/staging/content";
 import { EVENTS } from "@/lib/staging/content";
 
@@ -53,6 +54,8 @@ export interface InternalSummary {
   internalEvents: Record<string, number>;
   cashReports: Record<string, number>;
   ledgerEntries: number;
+  /** Imported PayPal payments (round 2026-11-11). */
+  payments: number;
 }
 
 const HOUR = 3_600_000;
@@ -535,17 +538,149 @@ export async function seedInternalStaging(db: Db, ctx: InternalContext): Promise
     "ESN tokens"
   );
 
+  // ── Payments (round 2026-11-11): PayPal links, an import, the queue, a plan ──
+  const payments = await seedPayments(db, { rng, now, finance, treasurer, rows, category, event, today });
+
   const byKind: Record<string, number> = {};
   for (const r of rows) {
     const k = r.status === "cancelled" ? `${r.kind} (cancelled)` : r.kind;
     byKind[k] = (byKind[k] ?? 0) + 1;
   }
-  return { internalEvents: byKind, cashReports: reportStates, ledgerEntries: full.length };
+  return { internalEvents: byKind, cashReports: reportStates, ledgerEntries: full.length + payments.entries, payments: payments.payments };
+}
+
+const REF_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+/**
+ * PayPal links for the office hours around today (ESNcards), a drinks link
+ * of the board game night and a hoodie link; one PayPal import whose
+ * payments are booked by reference, ignored (a withdrawal to the bank) or
+ * wait in "To label" (one with a suggestion by amount); the semester's
+ * plan and a bank balance.
+ */
+export async function seedPayments(
+  db: Db,
+  c: {
+    rng: Random;
+    now: number;
+    finance: string;
+    treasurer: string;
+    rows: Array<{ id: string; kind: Kind; starts_at: string; status?: string | null }>;
+    category: (direction: "income" | "expense", name: string) => string;
+    event: (key: EventKey) => EventRef;
+    today: string;
+  }
+): Promise<{ payments: number; entries: number }> {
+  const { rng, now, finance } = c;
+  const reference = () => `MESA-${Array.from({ length: 5 }, () => REF_ALPHABET[rng.int(0, 31)]).join("")}`;
+  check(
+    await db.from("app_settings").upsert(
+      [
+        { key: "paypal_me_handle", value: "mesamunich", updated_by: finance },
+        { key: "paypal_account_name", value: "ESN MESA e.V.", updated_by: finance },
+      ],
+      { onConflict: "key", ignoreDuplicates: true }
+    ),
+    "PayPal settings"
+  );
+  const cards = c.category("income", "ESNcard sales");
+  type Link = Database["public"]["Tables"]["payment_links"]["Insert"] & { id: string; reference: string; title: string; amount_cents: number | null; category_id: string };
+  const links: Link[] = [];
+  const hours = c.rows.filter((r) => r.kind === "office_hour" && r.status !== "cancelled" && Math.abs(Date.parse(r.starts_at) - now) < 21 * DAY);
+  for (const h of hours) {
+    links.push({ id: rng.uuid(), reference: reference(), title: "ESNcard (member)", amount_cents: 1000, category_id: cards, internal_event_id: h.id, preset: "esncard_internal", created_by: finance, created_at: iso(Math.min(now - HOUR, Date.parse(h.starts_at) - 7 * DAY)) });
+    links.push({ id: rng.uuid(), reference: reference(), title: "ESNcard", amount_cents: 1500, category_id: cards, internal_event_id: h.id, preset: "esncard_external", created_by: finance, created_at: iso(Math.min(now - HOUR, Date.parse(h.starts_at) - 7 * DAY)) });
+  }
+  const hoodie: Link = { id: rng.uuid(), reference: reference(), title: "Hoodie navy (members)", amount_cents: 2500, category_id: c.category("income", "Merchandise sales"), note: "Sizes S–XL, pick-up at the office hour.", created_by: finance, created_at: iso(now - 30 * DAY) };
+  const drinks: Link = { id: rng.uuid(), reference: reference(), title: "Drinks", amount_cents: 300, category_id: c.category("income", "Cash box takings"), event_id: c.event("boardGames").id, preset: "drinks", created_by: finance, created_at: iso(now - 10 * DAY) };
+  links.push(hoodie, drinks);
+  const fullLinks = links.map((l) => ({ event_id: null, internal_event_id: null, preset: null, note: "", ...l }));
+  check(await db.from("payment_links").insert(fullLinks), "payment links");
+
+  const pastHour = hours.filter((h) => Date.parse(h.starts_at) < now).sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
+  const hourLink = (preset: string) => links.find((l) => l.internal_event_id === pastHour?.id && l.preset === preset);
+  const importId = rng.uuid();
+  const day = (ms: number) => berlinDate(iso(ms));
+  type Pay = { name: string; email: string; type: string; gross: number; fee: number; note: string; when: number; link?: Link; status: "booked" | "ignored" | "open"; suggest?: Link; reason?: string };
+  const list = ([
+    { name: "Lena Hoffmann", email: "lena.hoffmann@example.org", type: "Zahlung erhalten", gross: 2500, fee: -85, note: `Hoodie M ${hoodie.reference}`, when: now - 12 * DAY, link: hoodie, status: "booked" },
+    { name: "Tom Becker", email: "tom.becker@example.org", type: "Zahlung erhalten", gross: 2500, fee: -85, note: `${hoodie.reference.toLowerCase()} size L`, when: now - 9 * DAY, link: hoodie, status: "booked" },
+    ...(pastHour && hourLink("esncard_external")
+      ? [
+          { name: "Giulia Romano", email: "giulia.romano@example.org", type: "Zahlung erhalten", gross: 1500, fee: -60, note: hourLink("esncard_external")!.reference, when: Date.parse(pastHour.starts_at) + HOUR, link: hourLink("esncard_external"), status: "booked" as const },
+          { name: "Jan Novak", email: "jan.novak@example.org", type: "Zahlung erhalten", gross: 1000, fee: -45, note: "esn card", when: Date.parse(pastHour.starts_at) + 30 * 60_000, status: "open" as const, suggest: hourLink("esncard_internal"), reason: `No reference – same amount as ${hourLink("esncard_internal")!.reference} (ESNcard (member))` },
+        ]
+      : []),
+    { name: "", email: "", type: "Allgemeine Abbuchung", gross: -30000, fee: 0, note: "", when: now - 6 * DAY, status: "ignored" },
+    { name: "Hannah Weber", email: "hannah.weber@example.org", type: "Zahlung erhalten", gross: 4200, fee: 0, note: "Spende Stammtisch :)", when: now - 4 * DAY, status: "open" },
+    { name: "Getränke Hoffmann", email: "info@getraenke-hoffmann.example", type: "Zahlung gesendet", gross: -8640, fee: 0, note: "Rechnung 4471", when: now - 3 * DAY, status: "open" },
+  ] as Pay[]).filter((x) => x.when < now - HOUR);
+
+  let balance = 52000;
+  const payRows: Database["public"]["Tables"]["payments"]["Insert"][] = [];
+  const entries: Database["public"]["Tables"]["finance_entries"]["Insert"][] = [];
+  list.sort((a, b) => a.when - b.when).forEach((x, i) => {
+    balance += x.gross + x.fee;
+    const id = rng.uuid();
+    const txn = `9${rng.hex(4).toUpperCase()}${String(i).padStart(2, "0")}DEMO${rng.hex(4).toUpperCase()}`;
+    payRows.push({
+      id, import_id: importId, source: "paypal", external_id: txn, occurred_at: iso(x.when), booked_on: day(x.when), type: x.type, name: x.name, email: x.email,
+      gross_cents: x.gross, fee_cents: x.fee, note: x.note, status: x.status, link_id: x.link?.id ?? null, matched_by: x.status === "booked" ? "reference" : null,
+      ignore_reason: x.status === "ignored" ? `PayPal: ${x.type}` : "", decided_at: x.status === "open" ? null : iso(now - 2 * HOUR), decided_by: x.status === "open" ? null : finance,
+      suggested_link_id: x.suggest?.id ?? null, suggested_category_id: x.suggest?.category_id ?? null, suggested_internal_event_id: x.suggest?.internal_event_id ?? null, suggestion: x.reason ?? "", checked_at: iso(now - 2 * HOUR),
+    });
+    if (x.status === "booked" && x.link) {
+      const base = { payment_id: id, booked_on: day(x.when), payment_method: "paypal", beleg_ref: `PayPal ${txn}`, event_id: x.link.event_id ?? null, internal_event_id: x.link.internal_event_id ?? null, created_by: finance, created_at: iso(now - 2 * HOUR), note: "" };
+      entries.push({ ...base, id: rng.uuid(), direction: "income", category_id: x.link.category_id, amount_cents: x.gross, description: `${x.link.title} (${x.link.reference})`, counterparty: x.name, beleg_received: true, is_fee: false });
+      if (x.fee) entries.push({ ...base, id: rng.uuid(), direction: "expense", category_id: c.category("expense", "Bank and payment fees"), amount_cents: -x.fee, description: `PayPal fee: ${x.link.title} (${x.link.reference})`, counterparty: "PayPal", beleg_received: true, is_fee: true });
+    }
+  });
+  const days = list.map((x) => day(x.when)).sort();
+  check(
+    await db.from("payment_imports").insert({ id: importId, source: "paypal", filename: "Download-PayPal-demo.csv", period_from: days[0] ?? c.today, period_to: days[days.length - 1] ?? c.today, rows_total: list.length + 1, rows_new: list.length, rows_skipped: 1, balance_cents: balance, balance_on: days[days.length - 1] ?? c.today, created_by: finance, created_at: iso(now - 2 * HOUR) }),
+    "PayPal import"
+  );
+  if (payRows.length) check(await db.from("payments").insert(payRows), "payments");
+  if (entries.length) check(await db.from("finance_entries").insert(entries), "payment ledger lines");
+
+  // The semester's plan and the bank balance of the last statement.
+  const semester = semesterFor(c.today);
+  const plan = (direction: "income" | "expense", name: string, cents: number, extra: { event_id?: string; label?: string } = {}) => ({ id: rng.uuid(), semester: semester.key, category_id: c.category(direction, name), planned_cents: cents, event_id: extra.event_id ?? null, label: extra.label ?? "", created_by: c.treasurer, created_at: iso(now - 40 * DAY) });
+  check(
+    await db.from("budget_lines").insert([
+      plan("income", "Event revenue", 900000),
+      plan("income", "Membership fees", 50000),
+      plan("income", "Sponsoring and grants", 200000),
+      plan("income", "ESNcard sales", 30000),
+      plan("income", "Merchandise sales", 60000, { label: "Hoodies" }),
+      plan("expense", "Event costs", 750000),
+      plan("expense", "Event costs", 190000, { event_id: c.event("prague").id, label: "Hostel and bus" }),
+      plan("income", "Event revenue", 230000, { event_id: c.event("prague").id, label: "Tickets" }),
+      plan("expense", "Merchandise", 50000),
+      plan("expense", "ESNcards", 62500),
+      plan("expense", "Travel and conferences", 60000),
+      plan("expense", "Office and supplies", 15000),
+      plan("expense", "Bank and payment fees", 8000),
+    ]),
+    "budget"
+  );
+  check(await db.from("account_balances").insert({ id: rng.uuid(), account: "bank", as_of: berlinDate(iso(now - 5 * DAY)), cents: 1284312, note: "Statement 11/2026", created_by: finance, created_at: iso(now - 4 * DAY) }), "bank balance");
+  return { payments: payRows.length, entries: entries.length };
 }
 
 /** What seedInternalStaging() made that the event and internal-event removal does not reach. */
 export async function removeInternalStaging(db: Db, demoEmails: string[], demoIds: string[], tags: string[]): Promise<void> {
   const by = [...demoEmails, ...tags];
+  // Payments of the demo imports (their ledger lines go with them), links of their own, the plan, balances.
+  const imports = check(await db.from("payment_imports").select("id").in("created_by", by), "old imports").map((i) => i.id);
+  if (imports.length) {
+    check(await db.from("pretix_orders").delete().in("import_id", imports), "old pretix orders");
+    check(await db.from("payments").delete().in("import_id", imports), "old payments");
+    check(await db.from("payment_imports").delete().in("id", imports), "old imports");
+  }
+  check(await db.from("payment_links").delete().in("created_by", by), "old payment links");
+  check(await db.from("budget_lines").delete().in("created_by", by), "old budget lines");
+  check(await db.from("account_balances").delete().in("created_by", by), "old balances");
   check(await db.from("finance_entries").delete().in("created_by", by), "old ledger entries (demo members)");
   check(await db.from("cash_box_changes").delete().in("created_by", by), "old cash box history");
   const boxes = check(await db.from("cash_boxes").select("id").in("created_by", by).is("default_for", null), "old cash boxes").map((b) => b.id);

@@ -265,16 +265,22 @@ describe("manual channels and the status", () => {
     expect(await status(USERS.member, approved)).toEqual({});
   });
 
-  it("pretix is a tick per event, with its link optionally – not a post on the schedule (round 2026-10-31)", async () => {
+  it("pretix is a tick per event with its link (required since 2026-11-11, Finance matches orders by it) – not a post on the schedule", async () => {
     const status = async (ev: string) => Object.fromEntries(((await (await as(USERS.comms)).rpc("publication_status", { events: [ev] })).data ?? []).map((s) => [s.channel, s]));
     expect(await P.createPost(await actionContext(USERS.comms), { channel: "pretix", day: day(48), event_ids: [approved] })).toMatchObject({ ok: false, message: "This channel is not on the schedule" });
     expect(await P.setPretixReady(await actionContext(USERS.events), { event_id: approved, ready: true })).toMatchObject({ ok: false, error: "forbidden" });
     expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: "pretix.eu/x" })).toMatchObject({ ok: false, error: "invalid_input" });
-    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true })).ok).toBe(true);
-    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: null } });
-    // Ticking again only sets the link; still one pretix post.
-    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: "https://pretix.eu/esnmesa/pub/" })).ok).toBe(true);
-    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: "https://pretix.eu/esnmesa/pub/" } });
+    expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true })).toMatchObject({ ok: false, message: expect.stringContaining("Paste the link") });
+    expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: "https://pretix.eu/" })).toMatchObject({ ok: false, message: expect.stringContaining("not the link of a pretix event") });
+    const slug = `pub-${approved.slice(0, 8)}`;
+    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: `https://pretix.eu/esnmesa/${slug}-old/` })).ok).toBe(true);
+    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: `https://pretix.eu/esnmesa/${slug}-old/` } });
+    // Ticking again only changes the link (and the event's pretix slug); still one pretix post.
+    expect((await P.setPretixReady(await actionContext(USERS.comms), { event_id: approved, ready: true, link: `https://pretix.eu/esnmesa/${slug}/` })).ok).toBe(true);
+    expect(await status(approved)).toMatchObject({ pretix: { state: "published", link: `https://pretix.eu/esnmesa/${slug}/` } });
+    expect((await admin.from("events").select("pretix_slug").eq("id", approved).single()).data).toEqual({ pretix_slug: slug });
+    // Another event cannot take the same pretix page.
+    expect(await P.setPretixReady(await actionContext(USERS.comms), { event_id: free, ready: true, link: `https://pretix.eu/esnmesa/${slug}/` })).toMatchObject({ ok: false, message: expect.stringContaining("Another event") });
     const pretixPosts = async () => (await admin.from("publication_post_events").select("post_id, publication_posts!inner(channel)").eq("event_id", approved).eq("publication_posts.channel", "pretix")).data ?? [];
     expect(await pretixPosts()).toHaveLength(1);
     await runJobs();

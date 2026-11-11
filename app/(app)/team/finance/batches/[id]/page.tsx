@@ -47,7 +47,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       <PageHeader title={`Payouts – ${monthLabel(batch.month)}`} description={`${(claims ?? []).length} claims · ${formatCents(total)}`}>
         <div className="flex items-center gap-3 self-center">
           <Badge tone={batch.status === "paid" ? "purple" : "blue"}>{batch.status === "paid" ? `paid ${batch.paid_at ? formatDate(batch.paid_at) : ""}` : "open"}</Badge>
-          <Link href="/team/finance" className="text-sm text-esn hover:underline">
+          <Link href="/team/finance/claims" className="text-sm text-esn hover:underline">
             ← Finance
           </Link>
           {canAct && batch.status === "open" && (claims ?? []).length > 0 && (

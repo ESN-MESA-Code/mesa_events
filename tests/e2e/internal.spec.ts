@@ -79,16 +79,22 @@ test("the OC counts the office hour's cash box and signs it off", async ({ page,
     await page.getByRole("button", { name: "Start the cash box" }).click();
     await expect(page.getByTestId("cash-box-name")).toContainText("Office hour cash box");
 
-    await page.getByLabel("Before (opening): € 10", { exact: true }).fill("5");
+    // One step at a time (round 2026-11-11 (2)): the start count, then the running box, then the end count.
+    await expect(page.getByTestId("count-closing")).toHaveCount(0);
+    await page.getByLabel("Start (before selling): € 10", { exact: true }).fill("5");
     await expect(page.getByTestId("total-opening")).toHaveText("€ 50.00");
-    await page.getByTestId("count-opening").getByRole("button", { name: "Save the count" }).click();
-    await expect(page.getByTestId("count-opening")).toContainText("Counted by Olga Organiser");
+    await page.getByTestId("count-opening").getByRole("button", { name: /Confirm the start count/ }).click();
+    await expect(page.getByTestId("cash-running")).toContainText("Started with € 50.00, counted by Olga Organiser");
+    await expect(page.getByTestId("cash-status")).toHaveText("Running");
 
     await page.getByRole("button", { name: "One internal ESNcard sold" }).click();
     await expect(page.getByTestId("esncards-internal")).toContainText("1");
+    await expect(page.getByTestId("cash-expected-now")).toContainText("€ 60.00");
 
-    await page.getByLabel("After (closing): € 20", { exact: true }).fill("3");
-    await page.getByTestId("count-closing").getByRole("button", { name: "Save the count" }).click();
+    await page.getByTestId("cash-end").click();
+    await page.getByLabel("End (after selling): € 20", { exact: true }).fill("3");
+    await page.getByTestId("count-closing").getByRole("button", { name: /Confirm the end count/ }).click();
+    await expect(page.getByTestId("cash-summary")).toBeVisible();
     await expect(page.getByTestId("cash-figures")).toContainText("€ 10.00");
 
     page.once("dialog", (d) => d.accept());

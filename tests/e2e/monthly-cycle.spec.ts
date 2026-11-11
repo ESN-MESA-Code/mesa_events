@@ -238,7 +238,7 @@ test("a month from idea to paid reimbursement", async ({ page, context, baseURL,
 
   await test.step("Finance receives the Beleg, checks the claim and pays the month's batch", async () => {
     await as(USERS.finance);
-    await page.goto("/team/finance");
+    await page.goto("/team/finance/claims");
     const row = page.getByTestId(`claim-${vendor}`);
     await row.getByRole("button", { name: "Paper receipt received" }).click();
     await expect(row).toContainText("Paper receipt received");
